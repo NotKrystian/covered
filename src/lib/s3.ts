@@ -57,9 +57,48 @@ async function putJson(key: string, body: unknown): Promise<{ key: string }> {
   return { key };
 }
 
-/** Write a `Receipt` to `receipts/{id}.json`. */
-export async function putReceipt(receipt: Receipt): Promise<{ key: string }> {
-  return putJson(receiptKey(receipt.id), receipt);
+/** Where a receipt landed. "local" means S3 was unreachable and it lives in this server process only. */
+export type ReceiptStore = "s3" | "local";
+
+const LOCAL_RECEIPTS_MAX = 500;
+type ReceiptGlobal = typeof globalThis & { __coveredLocalReceipts?: Map<string, Receipt> };
+/** Survives Next dev HMR module reloads, like the memory store's local Map. */
+const g = globalThis as ReceiptGlobal;
+
+function localReceipts(): Map<string, Receipt> {
+  if (!g.__coveredLocalReceipts) g.__coveredLocalReceipts = new Map<string, Receipt>();
+  return g.__coveredLocalReceipts;
+}
+
+/**
+ * Write a `Receipt` to `receipts/{id}.json`. When S3 is unreachable (no credentials,
+ * no bucket) the receipt is kept in this process instead, so Approve still works on a
+ * laptop without AWS, the same way memory and the judge degrade. Never throws; the
+ * reason is logged and returned.
+ */
+export async function putReceipt(
+  receipt: Receipt,
+): Promise<{ key: string; store: ReceiptStore; reason?: string }> {
+  const key = receiptKey(receipt.id);
+  try {
+    await putJson(key, receipt);
+    return { key, store: "s3" };
+  } catch (err) {
+    const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.warn(`[covered/s3] receipt ${receipt.id} kept in-process, S3 unavailable: ${reason}`);
+    const local = localReceipts();
+    local.set(receipt.id, receipt);
+    if (local.size > LOCAL_RECEIPTS_MAX) {
+      const oldest = local.keys().next().value;
+      if (oldest !== undefined) local.delete(oldest);
+    }
+    return { key, store: "local", reason };
+  }
+}
+
+/** A receipt kept in-process because S3 was unreachable when it was approved. */
+export function getLocalReceipt(id: string): Receipt | null {
+  return localReceipts().get(id) ?? null;
 }
 
 /** Write a search snapshot to `searches/{slug(query)}/{iso}.json`. */

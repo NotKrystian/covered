@@ -4,12 +4,13 @@
  * Debits the demo wallet, writes `receipts/{id}.json` to S3, appends a compact
  * order on the DynamoDB memory item, and records the approve memory event.
  * If the wallet is short, returns 402 and writes nothing.
- * GET /api/approve?id= reads a stored receipt back (demo convenience).
+ * GET /api/approve?id= reads a stored receipt back (demo convenience), including
+ * one kept in-process because S3 was unreachable.
  */
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AWS_REGION, S3_BUCKET, receiptKey } from "@/lib/s3";
+import { AWS_REGION, S3_BUCKET, getLocalReceipt, receiptKey } from "@/lib/s3";
 import { ReceiptSchema, type Receipt } from "@/lib/types";
 import { getUserId } from "@/lib/memory/identity";
 import { fulfillPurchase } from "@/lib/fulfill";
@@ -83,6 +84,9 @@ export async function GET(
       { status: 400 },
     );
   }
+
+  const local = getLocalReceipt(parsedId.data);
+  if (local) return NextResponse.json(local);
 
   try {
     const client = new S3Client({ region: AWS_REGION });

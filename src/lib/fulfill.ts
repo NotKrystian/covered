@@ -1,8 +1,10 @@
 /**
  * Shared approve/debit path: write a receipt, debit the demo wallet, append
  * the order and an approve event. Used by POST /api/approve and limit fills.
+ * If S3 is unreachable the receipt is kept in-process (`receipt_store: "local"`)
+ * and the purchase still goes through, like memory and the judge degrade.
  */
-import { putReceipt } from "@/lib/s3";
+import { putReceipt, type ReceiptStore } from "@/lib/s3";
 import { ReceiptSchema, type Decision, type Listing, type Offer, type Receipt, type ReceiptSection } from "@/lib/types";
 import { formatPence, parsePricePence } from "@/lib/money";
 import { debitAndRecordPurchase, getMemory, publicMemory, saveMemory } from "@/lib/memory";
@@ -18,7 +20,7 @@ export type FulfillInput = {
   chosen_id?: string;
 };
 
-export type FulfillOk = { ok: true; id: string; key: string; balance_pence: number };
+export type FulfillOk = { ok: true; id: string; key: string; balance_pence: number; receipt_store: ReceiptStore };
 export type FulfillErr = { ok: false; error: string; status: number };
 
 function errorMessage(err: unknown): string {
@@ -74,7 +76,7 @@ export async function fulfillPurchase(input: FulfillInput): Promise<FulfillOk | 
   const listingId = input.chosen_id ?? ("id" in receipt.chosen ? receipt.chosen.id : undefined);
 
   try {
-    const { key } = await putReceipt(receipt);
+    const { key, store } = await putReceipt(receipt);
     const paid = await debitAndRecordPurchase(input.userId, {
       pricePence,
       order: {
@@ -109,8 +111,9 @@ export async function fulfillPurchase(input: FulfillInput): Promise<FulfillOk | 
       id: receipt.id,
       key,
       balance_pence: publicMemory(saved).balance_pence,
+      receipt_store: store,
     };
   } catch (err) {
-    return { ok: false, status: 502, error: `S3 write failed: ${errorMessage(err)}` };
+    return { ok: false, status: 502, error: `Approve failed: ${errorMessage(err)}` };
   }
 }
