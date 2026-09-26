@@ -1,7 +1,7 @@
 /**
  * The pound rule and the shortlist shape — owned by the Decision+UI agent.
  *
- * Grok judges identity, mislisting, seller and venue. This file only compares
+ * The Bedrock judge decides identity, mislisting, seller and venue. This file only compares
  * integer pence to the numbers the user set. A mislisting never reaches the sum.
  */
 import type {
@@ -14,7 +14,7 @@ import type {
 } from "@/lib/types";
 import { formatPence, parsePricePence } from "@/lib/money";
 
-/** One row of the shortlist Grok sees and the UI renders. Wraps an `Offer` or a `Listing`. */
+/** One row of the shortlist the judge sees and the UI renders. Wraps an `Offer` or a `Listing`. */
 export type ShortlistItem = {
   id: string;
   title: string;
@@ -30,10 +30,10 @@ export type ShortlistItem = {
   section: ReceiptSection;
   /** "Sale", "£50 off". Never a reason to buy. */
   badge: string | null;
-  /** Fixture hints. Grok still decides. */
+  /** Fixture hints. The judge still decides. */
   venue_hint?: string;
   seller_type_hint?: string;
-  /** Only fixtures carry photos Grok can trust. */
+  /** Only fixtures carry photos the judge can trust. */
   image_urls: string[];
   /** The original record, kept for the receipt. */
   raw: { kind: "offer"; offer: Offer } | { kind: "listing"; listing: Listing };
@@ -42,7 +42,7 @@ export type ShortlistItem = {
 /** One line in the visible tool trace. */
 export type TraceEvent = { t: string; tool: string; detail: string };
 
-export type JudgeMode = "grok" | "mock";
+export type JudgeMode = "bedrock" | "mock";
 
 /** Response body of `POST /api/decide`. */
 export type DecideResponse = {
@@ -50,6 +50,8 @@ export type DecideResponse = {
   decisions: Record<string, Decision>;
   shortlist: ShortlistItem[];
   mode: JudgeMode;
+  /** Short model name when `mode === "bedrock"`, e.g. "claude-sonnet-4-6"; "mock" otherwise. */
+  model: string;
   trace: TraceEvent[];
   /** Pence paid above the cheapest unprotected survivor for rights, or null when no such comparison exists. */
   premium_paid_pence: number | null;
@@ -147,7 +149,7 @@ function cheapest(items: Priced[]): Priced | null {
 }
 
 /**
- * Apply the protection premium to whatever survived Grok.
+ * Apply the protection premium to whatever survived the judge.
  *
  * Drops mislistings and anything that is not the item. Among the rest, finds the
  * cheapest protected and the cheapest unprotected. If the protected one is within

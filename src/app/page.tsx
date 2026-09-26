@@ -166,6 +166,7 @@ export default function Home() {
         <TracePanel
           trace={result?.trace ?? []}
           mode={result?.mode ?? null}
+          model={result?.model ?? null}
           open={traceOpen}
           onToggle={() => setTraceOpen((o) => !o)}
         />

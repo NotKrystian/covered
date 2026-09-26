@@ -5,6 +5,8 @@ import type { JudgeMode, TraceEvent } from "@/lib/decision";
 type Props = {
   trace: TraceEvent[];
   mode: JudgeMode | null;
+  /** Short model name, e.g. "claude-sonnet-4-6", or "mock". */
+  model: string | null;
   open: boolean;
   onToggle: () => void;
 };
@@ -15,7 +17,7 @@ function clock(iso: string): string {
   return d.toLocaleTimeString("en-GB", { hour12: false });
 }
 
-export function TracePanel({ trace, mode, open, onToggle }: Props) {
+export function TracePanel({ trace, mode, model, open, onToggle }: Props) {
   return (
     <aside
       className={`flex h-full min-h-0 flex-col border-l border-line bg-panel transition-[width] duration-150 ${
@@ -34,7 +36,7 @@ export function TracePanel({ trace, mode, open, onToggle }: Props) {
         {open && (
           <div className="flex items-center gap-2 text-xs">
             <span className="uppercase tracking-wide text-muted">Trace</span>
-            {mode && <ModePill mode={mode} />}
+            {mode && <ModePill mode={mode} model={model} />}
           </div>
         )}
       </div>
@@ -54,23 +56,23 @@ export function TracePanel({ trace, mode, open, onToggle }: Props) {
         </ol>
       ) : (
         <div className="flex flex-1 flex-col items-center gap-2 pt-3">
-          {mode && <ModePill mode={mode} vertical />}
+          {mode && <ModePill mode={mode} model={model} vertical />}
         </div>
       )}
     </aside>
   );
 }
 
-function ModePill({ mode, vertical = false }: { mode: JudgeMode; vertical?: boolean }) {
-  const live = mode === "grok";
+function ModePill({ mode, model, vertical = false }: { mode: JudgeMode; model: string | null; vertical?: boolean }) {
+  const live = mode === "bedrock";
   return (
     <span
       className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
         live ? "border-accent text-accent" : "border-line text-muted"
       } ${vertical ? "[writing-mode:vertical-rl]" : ""}`}
-      title={live ? "Decisions from Grok (xAI)" : "Deterministic mock: XAI_API_KEY absent or COVERED_MOCK=1"}
+      title={live ? `Decisions from Amazon Bedrock (${model ?? "model"})` : "Deterministic mock: COVERED_MOCK=1 or Bedrock access failed"}
     >
-      {mode}
+      {live ? (model ?? "bedrock") : "mock"}
     </span>
   );
 }

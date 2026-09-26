@@ -1,6 +1,7 @@
 /**
- * Deterministic stand-in for Grok. Used when `XAI_API_KEY` is absent, when
- * `COVERED_MOCK=1`, or per item when Grok's JSON fails validation twice.
+ * Deterministic stand-in for the Bedrock judge. Used when `COVERED_MOCK=1`, when
+ * Bedrock rejects the call (credentials / model access), or per item when the
+ * model's JSON fails validation twice.
  * Fixtures are keyed by id; live offers get a text heuristic and never a mislisting.
  */
 import type { Decision, UserSettings } from "@/lib/types";

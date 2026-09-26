@@ -2,14 +2,14 @@
  * POST /api/decide — owned by the Decision+UI agent.
  *
  * Body: `{ query, settings?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
- * Builds the shortlist, asks Grok (or the mock), applies the pound rule in code,
+ * Builds the shortlist, asks the Bedrock judge (or the mock), applies the pound rule in code,
  * and returns `DecideResponse` with a visible trace.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OfferSchema, UserSettingsSchema } from "@/lib/types";
 import { FIXTURE_LISTINGS } from "@/lib/fixtures";
-import { judge } from "@/lib/grok";
+import { judge } from "@/lib/judge";
 import {
   applyPremium,
   buildShortlistFromOffers,
@@ -81,6 +81,7 @@ export async function POST(request: Request) {
     decisions: judged.decisions,
     shortlist: items,
     mode: judged.mode,
+    model: judged.model,
     trace,
     premium_paid_pence: premiumPaid(items, judged.decisions, verdict),
   };

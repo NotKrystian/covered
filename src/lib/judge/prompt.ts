@@ -1,8 +1,8 @@
 /**
- * Prompt for the Grok judge. The rights card lives here so the model does not
+ * Prompt for the Bedrock judge. The rights card lives here so the model does not
  * invent statute on stage. Output is JSON only; the pound comparison is code.
  */
-import type OpenAI from "openai";
+import type { ContentBlock, ImageFormat } from "@aws-sdk/client-bedrock-runtime";
 import type { UserSettings } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
@@ -44,8 +44,6 @@ OUTPUT: a single JSON object, no prose, no markdown fences:
 }
 Return exactly one decision per listing id, in the same order.`;
 
-type ContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart;
-
 function describeItem(item: ShortlistItem, index: number): string {
   const lines = [
     `Listing ${index + 1} — id: ${item.id}`,
@@ -68,32 +66,33 @@ function describeItem(item: ShortlistItem, index: number): string {
   return lines.join("\n");
 }
 
+export type ImageLoader = (url: string) => Promise<{ format: ImageFormat; bytes: Uint8Array } | null>;
+
 /**
  * Build the user turn: query, settings, one text block per item, then that item's
- * photos as image parts. `resolveImage` turns a stored URL into something the API can fetch.
+ * photos as image blocks. `loadImage` turns a stored URL into bytes the API accepts.
  */
 export async function buildUserContent(
   query: string,
   settings: UserSettings,
   items: ShortlistItem[],
-  resolveImage: (url: string) => Promise<string | null>,
-): Promise<ContentPart[]> {
-  const parts: ContentPart[] = [
+  loadImage: ImageLoader,
+): Promise<ContentBlock[]> {
+  const blocks: ContentBlock[] = [
     {
-      type: "text",
       text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatPence(settings.protection_premium_pence)}, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.\n\nShortlist of ${items.length}:`,
     },
   ];
   for (const [index, item] of items.entries()) {
-    parts.push({ type: "text", text: describeItem(item, index) });
+    blocks.push({ text: describeItem(item, index) });
     for (const url of item.image_urls) {
-      const resolved = await resolveImage(url);
-      if (resolved) {
-        parts.push({ type: "text", text: `Photo for id ${item.id}:` });
-        parts.push({ type: "image_url", image_url: { url: resolved, detail: "high" } });
+      const loaded = await loadImage(url);
+      if (loaded) {
+        blocks.push({ text: `Photo for id ${item.id}:` });
+        blocks.push({ image: { format: loaded.format, source: { bytes: loaded.bytes } } });
       }
     }
   }
-  parts.push({ type: "text", text: "Return the JSON object now." });
-  return parts;
+  blocks.push({ text: "Return the JSON object now." });
+  return blocks;
 }
