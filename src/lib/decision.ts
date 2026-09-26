@@ -1,18 +1,20 @@
 /**
- * The pound rule and the shortlist shape — owned by the Decision+UI agent.
+ * The rights-premium rule and the shortlist shape — owned by the Decision+UI agent.
  *
- * The Bedrock judge decides identity, mislisting, seller and venue. This file only compares
- * integer pence to the numbers the user set. A mislisting never reaches the sum.
+ * The Bedrock judge decides identity, mislisting, seller and venue. This file compares
+ * the discount off the full-rights listing to `protection_premium_bps`. A mislisting
+ * never reaches that comparison. Do not put a pound `protection_premium_pence` rule back.
  */
-import type {
-  Decision,
-  Listing,
-  Offer,
-  ReceiptSection,
-  UserSettings,
-  Verdict,
+import {
+  DEFAULT_PROTECTION_PREMIUM_BPS,
+  type Decision,
+  type Listing,
+  type Offer,
+  type ReceiptSection,
+  type UserSettings,
+  type Verdict,
 } from "@/lib/types";
-import { formatPence, parsePricePence } from "@/lib/money";
+import { formatBps, formatPence, parsePricePence } from "@/lib/money";
 import type { ProductBrief } from "@/lib/judge/research";
 
 /** One row of the shortlist the judge sees and the UI renders. Wraps an `Offer` or a `Listing`. */
@@ -155,7 +157,7 @@ export function buildShortlistFromOffers(
   return { items: all, all, deduped: offers.length - unique.length };
 }
 
-/** Listings that survived identity and the photo check — the pound rule's input. */
+/** Listings that survived identity and the photo check — the percent rule's input. */
 export function survivorsForPremium(
   items: ShortlistItem[],
   decisions: Record<string, Decision>,
@@ -185,20 +187,46 @@ function cheapest(items: Priced[]): Priced | null {
   return best;
 }
 
+/** Discount as a percent of the full-rights price, rounded for copy (800/3600 → 22). */
+export function discountPercent(discountPence: number, protectedPricePence: number): number {
+  if (protectedPricePence <= 0) return 0;
+  return Math.round((discountPence / protectedPricePence) * 100);
+}
+
+/**
+ * True when the cheaper listing's discount is past the buyer's percent.
+ * Integer form of `discount / protected.price_pence * 10000 > protection_premium_bps`.
+ */
+export function discountBeatsPremium(
+  discountPence: number,
+  protectedPricePence: number,
+  premiumBps: number,
+): boolean {
+  if (discountPence <= 0 || protectedPricePence <= 0) return false;
+  return discountPence * 10_000 > premiumBps * protectedPricePence;
+}
+
+function premiumBpsOf(settings: UserSettings): number {
+  return settings.protection_premium_bps ?? DEFAULT_PROTECTION_PREMIUM_BPS;
+}
+
 /**
  * Apply the protection premium to whatever survived the judge.
  *
  * Drops mislistings and anything that is not the item. Among the rest, finds the
- * cheapest protected and the cheapest unprotected. If the protected one is within
- * `protection_premium_pence` of the unprotected one (or nothing unprotected exists),
- * it is chosen. Otherwise the cheap one wins and the summary says what you give up.
+ * cheapest protected listing (uk_business + shop_checkout or marketplace_protected)
+ * and the cheapest unprotected. Discount is `protected.price − unprotected.price`,
+ * as a ratio of the protected price. If there is no unprotected listing, or the
+ * discount is ≤ 0, or `discount_ratio * 10000` is inside `protection_premium_bps`,
+ * the shop wins. Otherwise the cheap one wins and the summary says what you give up.
+ * Old `protection_premium_pence` is ignored.
  */
 export function applyPremium(
   items: ShortlistItem[],
   decisions: Record<string, Decision>,
   settings: UserSettings,
 ): Verdict {
-  const premium = settings.protection_premium_pence;
+  const premiumBps = premiumBpsOf(settings);
   const survivors: Priced[] = [];
   let dropped = 0;
   for (const item of items) {
@@ -219,24 +247,37 @@ export function applyPremium(
   );
 
   const droppedNote = dropped > 0 ? ` ${dropped} listing${dropped === 1 ? "" : "s"} dropped before price.` : "";
+  const premiumLabel = formatBps(premiumBps);
 
-  if (protectedBest && (!unprotectedBest || protectedBest.price_pence - unprotectedBest.price_pence <= premium)) {
-    const gap = unprotectedBest ? protectedBest.price_pence - unprotectedBest.price_pence : 0;
-    let summary: string;
-    if (!unprotectedBest) {
-      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
-    } else if (gap <= 0) {
-      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}: the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.${droppedNote}`;
-    } else {
-      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. That is ${formatPence(gap)} more than ${unprotectedBest.merchant}, inside your ${formatPence(premium)} for rights: 14-day cancellation and a 30-day fault refund.${droppedNote}`;
+  if (protectedBest) {
+    const discount = unprotectedBest ? protectedBest.price_pence - unprotectedBest.price_pence : 0;
+    const shopWins =
+      !unprotectedBest ||
+      discount <= 0 ||
+      !discountBeatsPremium(discount, protectedBest.price_pence, premiumBps);
+    if (shopWins) {
+      let summary: string;
+      if (!unprotectedBest) {
+        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
+      } else if (discount <= 0) {
+        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}: the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.${droppedNote}`;
+      } else {
+        const off = `${discountPercent(discount, protectedBest.price_pence)}%`;
+        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. ${off} off the shop, inside your ${premiumLabel} (${formatPence(discount)}, ${off} of the shop): 14-day cancellation and a 30-day fault refund.${droppedNote}`;
+      }
+      return { chosen_id: protectedBest.id, per_offer: decisions, summary };
     }
-    return { chosen_id: protectedBest.id, per_offer: decisions, summary };
   }
 
   if (unprotectedBest) {
-    const summary = protectedBest
-      ? `Buying ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)}: cheaper by ${formatPence(protectedBest.price_pence - unprotectedBest.price_pence)} than ${protectedBest.merchant}, which beats your ${formatPence(premium)}, but a break is your problem. No cooling-off, no Consumer Rights Act remedy.${droppedNote}`
-      : `No listing with UK rights survived. ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)} is the item, but a break is your problem.${droppedNote}`;
+    let summary: string;
+    if (protectedBest) {
+      const discount = protectedBest.price_pence - unprotectedBest.price_pence;
+      const off = `${discountPercent(discount, protectedBest.price_pence)}%`;
+      summary = `Buying ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)}: ${off} off, past your ${premiumLabel}, so the private listing wins and a fault is your problem (${formatPence(discount)}, ${off} of the shop). No cooling-off, no Consumer Rights Act remedy.${droppedNote}`;
+    } else {
+      summary = `No listing with UK rights survived. ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)} is the item, but a break is your problem.${droppedNote}`;
+    }
     return { chosen_id: unprotectedBest.id, per_offer: decisions, summary };
   }
 
@@ -244,6 +285,16 @@ export function applyPremium(
     chosen_id: null,
     per_offer: decisions,
     summary: `Nothing to buy. No listing survived the photo and identity check.${droppedNote}`,
+  };
+}
+
+/** Re-run the percent rule on an existing decide response when the slider moves. */
+export function reapplyPremium(result: DecideResponse, settings: UserSettings): DecideResponse {
+  const verdict = applyPremium(result.listings, result.decisions, settings);
+  return {
+    ...result,
+    verdict,
+    premium_paid_pence: premiumPaid(result.listings, result.decisions, verdict),
   };
 }
 

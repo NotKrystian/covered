@@ -8,7 +8,7 @@
 import type { Message } from "@aws-sdk/client-bedrock-runtime";
 import { z } from "zod";
 import type { JudgeMode } from "@/lib/decision";
-import { formatPence } from "@/lib/money";
+import { formatBps, formatPence } from "@/lib/money";
 import { converseText, errorLabel, judgeMode } from "@/lib/judge/bedrock";
 import { SUMMARY_MAX, type Memory, type MemoryEvent } from "./index";
 
@@ -32,8 +32,6 @@ export function templateSummary(memory: Memory): string {
   if (approvals.length === 0) return "";
   const overrides = events.filter((e) => e.kind === "override");
   const queries = [...new Set(events.map((e) => e.query.trim()).filter(Boolean))].slice(-3);
-  const premiums = events.map((e) => e.premium_pence);
-  const premium = premiums.length > 0 ? Math.round(premiums.reduce((a, b) => a + b, 0) / premiums.length) : 0;
   const privatePicks = [...approvals, ...overrides].filter((e) => /private|stranger|marketplace/i.test(`${e.chosen_id ?? ""} ${e.note}`)).length;
   const shopPicks = [...approvals, ...overrides].filter((e) => /shop|retailer|business/i.test(`${e.chosen_id ?? ""} ${e.note}`)).length;
 
@@ -44,7 +42,7 @@ export function templateSummary(memory: Memory): string {
       : privatePicks > shopPicks
         ? "They lean towards private or marketplace bargains and accept weaker rights"
         : "No clear lean between shops and private sellers yet";
-  const second = `${lean}, with a protection premium around ${formatPence(premium)}.`;
+  const second = `${lean}, with a rights premium around ${formatBps(memory.settings.protection_premium_bps)}.`;
   return `${first} ${second}`.slice(0, SUMMARY_MAX);
 }
 
@@ -68,7 +66,7 @@ export async function rewriteSummary(memory: Memory): Promise<SummaryResult> {
       role: "user",
       content: [
         {
-          text: `${memory.display_name ? `Buyer name: ${memory.display_name}\n` : ""}Current settings: premium ${formatPence(memory.settings.protection_premium_pence)}, switch minimum ${formatPence(memory.settings.switch_minimum_pence)}, approval ${memory.settings.approval}.\nEvents (oldest first; only approve is a purchase):\n${describeEvents(events)}\n\nReturn the JSON object now.`,
+          text: `${memory.display_name ? `Buyer name: ${memory.display_name}\n` : ""}Current settings: rights premium ${formatBps(memory.settings.protection_premium_bps)} of the full-rights price, switch minimum ${formatPence(memory.settings.switch_minimum_pence)}, approval ${memory.settings.approval}.\nEvents (oldest first; only approve is a purchase):\n${describeEvents(events)}\n\nReturn the JSON object now.`,
         },
       ],
     },

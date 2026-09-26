@@ -3,9 +3,10 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import { DEFAULT_USER_SETTINGS } from "@/lib/types";
 import type { UserSettings } from "@/lib/types";
-import { formatPence } from "@/lib/money";
+import { formatBps, formatPence } from "@/lib/money";
 import { depositWallet, patchMemory, type MemoryState } from "@/lib/client/shop";
 import { loadOnboarding, saveOnboarding } from "@/lib/client/onboarding-progress";
+import { PercentField } from "@/components/PercentField";
 import { PoundField } from "@/components/PoundField";
 
 type Props = {
@@ -109,13 +110,17 @@ export function Onboarding({ onDone }: Props) {
 
         {step === 2 && (
           <section className="space-y-8">
-            <h1 className="text-4xl font-semibold tracking-tight">Pay up to this much more to keep UK buyer rights</h1>
-            <p className="text-muted">Default £10. Covered will spend this extra to buy from a shop you can actually enforce against.</p>
-            <PoundField
+            <h1 className="text-4xl font-semibold tracking-tight">
+              Pay up to {formatBps(settings.protection_premium_bps)} more to keep UK buyer rights
+            </h1>
+            <p className="text-muted">
+              That&apos;s how far below a UK shop the cheaper listing can be before you take it.
+            </p>
+            <PercentField
               large
-              label="Protection premium in pounds"
-              pence={settings.protection_premium_pence}
-              onPence={(p) => setSettings({ ...settings, protection_premium_pence: p })}
+              label="Protection premium as a percent of the UK shop"
+              bps={settings.protection_premium_bps}
+              onBps={(bps) => setSettings({ ...settings, protection_premium_bps: bps })}
             />
           </section>
         )}
@@ -141,12 +146,13 @@ export function Onboarding({ onDone }: Props) {
           <section className="space-y-8">
             <h1 className="text-4xl font-semibold tracking-tight">In plain English</h1>
             <p className="text-lg leading-relaxed text-foreground">
-              You will pay up to {formatPence(settings.protection_premium_pence)} extra for a UK shop with real returns, and only move
+              You will pay up to {formatBps(settings.protection_premium_bps)} more for a UK shop with real returns, and only move
               after delivery if a cheaper listing still clears {formatPence(settings.switch_minimum_pence)} once postage is paid.
             </p>
             <p className="text-lg leading-relaxed text-muted">
-              If the cheapest fleece is a private seller at £28 and JD Sports has the same jacket at £36, Covered pays the extra £8
-              (inside your £10) so you keep 14-day cancellation and a 30-day fault refund.
+              If the cheapest fleece is a private seller at £28 and JD Sports has the same jacket at £36, that is 22% off the shop.
+              Inside your {formatBps(settings.protection_premium_bps)}, Covered buys the shop so you keep 14-day cancellation and a
+              30-day fault refund.
             </p>
           </section>
         )}

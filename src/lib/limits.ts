@@ -2,7 +2,7 @@
  * Limit-buy: watch a query until a real listing is at or below £X, then
  * approve it through the same debit path as a manual Approve.
  *
- * Qualification is applyPremium (same pound rule as /api/decide), then the
+ * Qualification is applyPremium (same percent-of-shop rule as /api/decide), then the
  * limit: buy only if that chosen listing's price is <= max_price_pence.
  * A private/overseas listing is bought only when the premium would also
  * have allowed it. Mislistings never reach the price comparison.

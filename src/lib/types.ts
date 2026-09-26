@@ -168,7 +168,7 @@ export type Recommendation = z.infer<typeof RecommendationSchema>;
 /**
  * The judge's structured decision for one offer/listing. JSON only.
  * The model judges identity, mislisting, seller, venue and rights.
- * The pound comparison (protection premium, switch minimum) stays in code.
+ * The rights-premium comparison (percent of the full-rights price) stays in code.
  */
 export const DecisionSchema = z.object({
   /** Is this the item the user asked for. */
@@ -214,14 +214,33 @@ export const ReceiptSchema = z.object({
   chosen: z.union([OfferSchema, ListingSchema]),
   decision: DecisionSchema,
   section: ReceiptSectionSchema,
-  /** The premium setting in force when this was approved. */
+  /** Legacy pound premium at approve time. The live rule uses bps, not this. */
   protection_premium_pence: z.number().int(),
 });
 export type Receipt = z.infer<typeof ReceiptSchema>;
 
-/** What the user sets once. Defaults: £10 premium, £8 switch minimum, ask before buying. */
+/** Default rights premium: 25% of the cheapest full-rights listing (2500 bps). */
+export const DEFAULT_PROTECTION_PREMIUM_BPS = 2500;
+/** UI and API cap: 50%. */
+export const MAX_PROTECTION_PREMIUM_BPS = 5000;
+
+/** What the user sets once. Defaults: 25% rights premium, £8 switch minimum, ask before buying. */
 export const UserSettingsSchema = z.object({
-  /** "I will pay up to this much more to keep real buyer rights." Default 1000 (£10). */
+  /**
+   * How far below a UK shop the cheaper listing can be, in basis points of the
+   * full-rights price. 2500 = 25%. Missing on old memory items — those ignore
+   * any leftover `protection_premium_pence` and get 2500. The rule uses bps only.
+   */
+  protection_premium_bps: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_PROTECTION_PREMIUM_BPS)
+    .default(DEFAULT_PROTECTION_PREMIUM_BPS),
+  /**
+   * Kept so old clients that still read a pound premium do not crash.
+   * Ignored by `applyPremium`. Old items that only have this field get 2500 bps.
+   */
   protection_premium_pence: z.number().int().default(1000),
   /** "Inside 14 days, only move me if I clear this after postage." Default 800 (£8). */
   switch_minimum_pence: z.number().int().default(800),

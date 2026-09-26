@@ -3,7 +3,7 @@
  *
  * Body: `{ query, settings?, display_name?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
  * Researches the product once, judges every distinct offer (ads included, batches of 6),
- * loads this buyer's memory (read-only), applies the pound rule to the survivors,
+ * loads this buyer's memory (read-only), applies the percent premium to the survivors,
  * and returns `DecideResponse` with a visible trace.
  * Decide never writes memory. Only approve/override events are purchases.
  */
@@ -22,7 +22,7 @@ import {
   type ShortlistItem,
   type TraceEvent,
 } from "@/lib/decision";
-import { formatPence } from "@/lib/money";
+import { formatBps } from "@/lib/money";
 import { hydrateOfferPhotos } from "@/lib/reader/photos";
 import { resolveUser, unauthorizedResponse } from "@/lib/memory/identity";
 import {
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
   const chosen = listings.find((i) => i.id === verdict.chosen_id);
   log(
     "apply_premium",
-    `${formatPence(settings.protection_premium_pence)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"} (${survivors.length} survivors)`,
+    `${formatBps(settings.protection_premium_bps)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"} (${survivors.length} survivors)`,
   );
 
   const response: DecideResponse = {

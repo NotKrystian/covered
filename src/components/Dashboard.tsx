@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Decision, UserSettings } from "@/lib/types";
-import { isProtected, type DecideResponse, type ShortlistItem } from "@/lib/decision";
-import { formatPence } from "@/lib/money";
+import { isProtected, reapplyPremium, type DecideResponse, type ShortlistItem } from "@/lib/decision";
+import { formatBps, formatPence } from "@/lib/money";
 import type { Limit } from "@/lib/memory";
 import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
 import {
@@ -26,6 +26,7 @@ import { SwitchWatchList } from "@/components/SwitchWatchList";
 import { fetchSwitchWatches, type SwitchWatch } from "@/lib/client/switch";
 import { coolingOffBlock } from "@/lib/switch-rule";
 import { PaySheet } from "@/components/PaySheet";
+import { PercentField } from "@/components/PercentField";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
 import { WalletStrip } from "@/components/WalletStrip";
@@ -249,7 +250,8 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     setWalletError(null);
     setPayError(null);
     try {
-      const done = await approveChosen(query, result, settings);
+      const live = reapplyPremium(result, settings);
+      const done = await approveChosen(query, live, settings);
       if (!done.ok) {
         if (done.status === 402) {
           setWalletError(done.error);
@@ -261,7 +263,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
         return;
       }
       setBalancePence(done.balance_pence);
-      const chosen = result.listings.find((i) => i.id === result.verdict.chosen_id);
+      const chosen = live.listings.find((i) => i.id === live.verdict.chosen_id);
       setPayOpen(false);
       setReceipt(
         `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
@@ -272,20 +274,21 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     }
   }, [result, query, settings, refreshWatches]);
 
+  const live = useMemo(() => (result ? reapplyPremium(result, settings) : null), [result, settings]);
   const rows = useMemo(
     () =>
       sortListings(
-        result?.listings ?? [],
+        live?.listings ?? [],
         sort,
-        result?.decisions ?? {},
-        result?.brief_brand ?? "",
-        result?.verdict.chosen_id ?? null,
+        live?.decisions ?? {},
+        live?.brief_brand ?? "",
+        live?.verdict.chosen_id ?? null,
       ),
-    [result, sort],
+    [live, sort],
   );
-  const chosenId = result?.verdict.chosen_id ?? null;
+  const chosenId = live?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
-  const paidSwitchBlock = coolingOffBlock(chosenId ? result?.decisions[chosenId]?.seller_type : undefined);
+  const paidSwitchBlock = coolingOffBlock(chosenId ? live?.decisions[chosenId]?.seller_type : undefined);
 
   return (
     <div className="min-h-full bg-background text-foreground">
@@ -323,14 +326,17 @@ export function Dashboard({ memoryState, onMemory }: Props) {
         {prefsOpen && (
           <section className="mb-10 rounded-xl border border-line bg-panel px-5 py-5">
             <h2 className="text-sm font-semibold">Preferences</h2>
-            <p className="mt-1 text-sm text-muted">The two pound rules. Reset memory lives on the quiet dev screen.</p>
+            <p className="mt-1 text-sm text-muted">
+              Pay up to {formatBps(settings.protection_premium_bps)} more to keep UK buyer rights. That&apos;s how far
+              below a UK shop the cheaper listing can be before you take it. Reset memory lives on the quiet dev screen.
+            </p>
             <div className="mt-4 flex flex-wrap items-center gap-6 text-sm">
               <label className="flex items-center gap-2 text-muted">
                 Pay up to
-                <PoundField
-                  label="Protection premium in pounds"
-                  pence={settings.protection_premium_pence}
-                  onPence={(p) => setSettings({ ...settings, protection_premium_pence: p })}
+                <PercentField
+                  label="Protection premium as a percent of the UK shop"
+                  bps={settings.protection_premium_bps}
+                  onBps={(bps) => setSettings({ ...settings, protection_premium_bps: bps })}
                 />
                 more for rights
               </label>
@@ -454,16 +460,16 @@ export function Dashboard({ memoryState, onMemory }: Props) {
             </div>
           )}
 
-          {!running && result && (
+          {!running && live && (
             <div className="space-y-6">
               <p
                 className={`text-base leading-relaxed ${
-                  chosenId && result.decisions[chosenId] && isProtected(result.decisions[chosenId])
+                  chosenId && live.decisions[chosenId] && isProtected(live.decisions[chosenId])
                     ? "text-accent"
                     : "text-foreground"
                 }`}
               >
-                {result.verdict.summary}
+                {live.verdict.summary}
               </p>
               {walletError && (
                 <div className="rounded-xl border border-danger/40 bg-danger-soft px-5 py-4 text-sm">
@@ -509,7 +515,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                       <OfferRow
                         key={item.id}
                         item={item}
-                        decision={result.decisions[item.id]}
+                        decision={live.decisions[item.id]}
                         chosen={item.id === chosenId}
                         approving={approving}
                         onApprove={() => {
@@ -544,7 +550,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           pricePence={chosenItem.price_pence}
           priceLabel={chosenItem.price_label}
           balancePence={balancePence}
-          rights={result?.decisions[chosenItem.id]?.rights ?? []}
+          rights={live?.decisions[chosenItem.id]?.rights ?? []}
           paying={approving}
           error={payError}
           onPay={() => void approve()}

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { UserSettings } from "@/lib/types";
+import { PercentField } from "@/components/PercentField";
 import { PoundField } from "@/components/PoundField";
 
 type Props = {
@@ -48,10 +49,10 @@ export function SettingsStrip({ settings, onChange, displayName, onDisplayName, 
         <span className="text-line">·</span>
         <span className="flex items-center gap-1.5 text-muted">
           Pay up to
-          <PoundField
-            label="Protection premium in pounds"
-            pence={settings.protection_premium_pence}
-            onPence={(p) => onChange({ ...settings, protection_premium_pence: p })}
+          <PercentField
+            label="Protection premium as a percent of the UK shop"
+            bps={settings.protection_premium_bps}
+            onBps={(bps) => onChange({ ...settings, protection_premium_bps: bps })}
             onEnter={onRun}
           />
           more for rights

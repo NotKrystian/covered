@@ -1,11 +1,11 @@
 /**
  * Prompt for the Bedrock judge. The rights card lives here so the model does not
- * invent statute on stage. Output is JSON only; the pound comparison is code.
+ * invent statute on stage. Output is JSON only; the percent premium is code.
  */
 import type { ContentBlock, ImageFormat } from "@aws-sdk/client-bedrock-runtime";
 import type { UserSettings } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
-import { formatPence } from "@/lib/money";
+import { formatBps, formatPence } from "@/lib/money";
 import type { ProductBrief } from "./research";
 
 export const SYSTEM_PROMPT = `You are the judge inside Covered, a UK shopping bot. You look at a shortlist of listings for one request and return JSON only.
@@ -107,7 +107,7 @@ export async function buildUserContent(
 ): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = [
     {
-      text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatPence(settings.protection_premium_pence)}, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.`,
+      text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatBps(settings.protection_premium_bps)} of the full-rights price, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.`,
     },
   ];
   if (brief) blocks.push({ text: describeBrief(brief) });

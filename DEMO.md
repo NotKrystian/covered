@@ -23,7 +23,7 @@ curl -s localhost:3000/api/search -H 'content-type: application/json' \
   -d '{"query":"black fleece jacket medium"}' | jq '{ok, source: .result.source, n: (.result.offers|length)}'
 ```
 
-In the app, click **Reset memory** (bottom right) so the Memory card reads "Nothing learned yet". Leave **Pay up to** at £10 and the query at `black fleece jacket medium`.
+In the app, click **Reset memory** (bottom right) so the Memory card reads "Nothing learned yet". Leave **Pay up to** at 25% and the query at `black fleece jacket medium`.
 
 ## The run
 
@@ -43,7 +43,7 @@ Point at: the badge over the shortlist; the **Ad** chips with the merchant domai
 
 > "Twelve rows go to the judge on Bedrock. No photos here, so it is told it cannot call a mislisting; it judges who the seller is and which right applies. Amazon.co.uk at £7.98 is the cheapest, it is the item, and it is a UK shop checkout, so no premium is needed. The ads are marked, never preferred."
 
-### 2. The photo beat — fixtures at £10 (40 s)
+### 2. The photo beat — fixtures at 25% (40 s)
 
 Click **Fixtures**.
 
@@ -51,23 +51,23 @@ Click **Fixtures**.
 
 Point at: the struck-through first row with the red `Mislisting:` line.
 
-> "Then the rights beat. Private seller on Facebook at £28 against JD Sports at £36. The gap is £8, inside my £10 for rights, so it buys the shop and says what the £8 buys: 14-day cancellation and a 30-day fault refund. The overseas stall at £34 gets nothing: a business badge is not protection."
+> "Then the rights beat. Private seller on Facebook at £28 against JD Sports at £36. That is 22% off the shop, inside my 25%, so it buys the shop and says what the 22% buys: 14-day cancellation and a 30-day fault refund. The overseas stall at £34 gets nothing: a business badge is not protection."
 
 Point at: JD Sports row glowing green, the chat bubble.
 
-### 3. The flip — £10 → £5 (30 s)
+### 3. The flip — 25% → 15% (30 s)
 
-Change **Pay up to** to `5`, click **Re-run**.
+Change **Pay up to** to `15`. The winner flips without a new judge call.
 
-> "Same photos, same judgements. Only my number changed. Now the £8 gap beats my £5, so it buys the private listing and tells me plainly: a break is my problem. The model never sees the premium as something to apply; a few lines of code compare the pence."
+> "Same photos, same judgements. Only my number changed. Now 22% is past my 15%, so it buys the private listing and tells me plainly: a fault is my problem. The model never sees the premium as something to apply; a few lines of code compare the percent."
 
-Point at: the red chat bubble, `apply_premium → £5.00 → private-28` in the trace.
+Point at: the red chat bubble, `apply_premium → 15% → private-28` in the trace if you Re-run.
 
-Set **Pay up to** back to `10`.
+Set **Pay up to** back to `25`.
 
 ### 4. Memory (30 s)
 
-Click **Re-run** (fixtures, £10, JD Sports chosen again), then **Approve** in the chat.
+Click **Re-run** (fixtures, 25%, JD Sports chosen again), then **Approve** in the chat.
 
 > "Approve writes a receipt to S3, nothing else — no card, no checkout. And it teaches the memory: the card fills with a summary Bedrock wrote about how I buy."
 
@@ -75,7 +75,7 @@ Point at: the receipt line in the chat, the Memory card summary and the `approve
 
 Click **Re-run** once more.
 
-> "Next run, the trace shows `learned`, and the judge's sentences lean towards my proven choice. The pound rule never reads memory; it only shapes the words and the lean."
+> "Next run, the trace shows `learned`, and the judge's sentences lean towards my proven choice. The percent premium never reads memory; it only shapes the words and the lean."
 
 Point at: `learned →` in the trace (bold), the JD Sports reason mentioning the past approval.
 

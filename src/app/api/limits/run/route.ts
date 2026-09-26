@@ -1,6 +1,6 @@
 /**
  * POST /api/limits/run `{ id, offers }` — judge the offered grid (ads included),
- * apply the same pound rule as /api/decide, and buy if the chosen listing is
+ * apply the same percent premium as /api/decide, and buy if the chosen listing is
  * at or below the limit and the wallet covers it.
  */
 import { NextResponse } from "next/server";

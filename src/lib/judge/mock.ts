@@ -4,10 +4,9 @@
  * model's JSON fails validation twice.
  * Fixtures are keyed by id; live offers get a text heuristic and never a mislisting.
  */
-import type { Decision, UserSettings } from "@/lib/types";
-import type { ShortlistItem } from "@/lib/decision";
-import { isProtected } from "@/lib/decision";
-import { formatPence } from "@/lib/money";
+import { DEFAULT_PROTECTION_PREMIUM_BPS, type Decision, type UserSettings } from "@/lib/types";
+import { discountBeatsPremium, isProtected, type ShortlistItem } from "@/lib/decision";
+import { formatBps, formatPence } from "@/lib/money";
 import { identityFromBrief, type ProductBrief } from "./research";
 
 const UK_RETAILERS = [
@@ -46,7 +45,11 @@ function fixtureDecision(item: ShortlistItem, items: ShortlistItem[], settings: 
       const gap = protectedShop && protectedShop.price_pence !== null && item.price_pence !== null
         ? protectedShop.price_pence - item.price_pence
         : null;
-      const cheapEnough = gap !== null && gap > settings.protection_premium_pence;
+      const premiumBps = settings.protection_premium_bps ?? DEFAULT_PROTECTION_PREMIUM_BPS;
+      const cheapEnough =
+        gap !== null &&
+        protectedShop?.price_pence != null &&
+        discountBeatsPremium(gap, protectedShop.price_pence, premiumBps);
       return {
         same_item: true,
         mislisting: false,
@@ -57,7 +60,7 @@ function fixtureDecision(item: ShortlistItem, items: ShortlistItem[], settings: 
         rights: ["as described only", "no cooling-off", "no CRA fault remedy"],
         recommendation: cheapEnough ? "buy" : "skip",
         reason: cheapEnough
-          ? `Private seller, collection only: it is the fleece, and the saving${gap !== null ? ` of ${formatPence(gap)}` : ""} beats your premium, but a break is your problem.`
+          ? `Private seller, collection only: it is the fleece, and the saving${gap !== null ? ` of ${formatPence(gap)}` : ""} beats your ${formatBps(premiumBps)} premium, but a break is your problem.`
           : "Private seller, collection only: no returns and no Consumer Rights Act, so it only wins if the gap beats your premium.",
       };
     }

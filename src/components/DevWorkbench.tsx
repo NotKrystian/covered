@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_USER_SETTINGS } from "@/lib/types";
 import type { SearchResult, UserSettings } from "@/lib/types";
-import { isProtected, type DecideResponse } from "@/lib/decision";
+import { isProtected, reapplyPremium, type DecideResponse } from "@/lib/decision";
 import { FIXTURE_LISTINGS, FIXTURE_QUERY, isFixtureQuery } from "@/lib/fixtures";
 import { formatPence } from "@/lib/money";
 import { coolingOffBlock } from "@/lib/switch-rule";
@@ -202,20 +202,39 @@ export function DevWorkbench() {
     [query, running, settings, displayName, push, refreshMemory],
   );
 
+  const liveResult = useMemo(() => (result ? reapplyPremium(result, settings) : null), [result, settings]);
+
+  useEffect(() => {
+    if (!liveResult) return;
+    setMessages((prev) => {
+      const idx = prev.findLastIndex((m) => m.verdict);
+      if (idx === -1) return prev;
+      const chosen =
+        liveResult.listings.find((i) => i.id === liveResult.verdict.chosen_id) ??
+        liveResult.shortlist.find((i) => i.id === liveResult.verdict.chosen_id);
+      const chosenDecision = chosen ? liveResult.decisions[chosen.id] : undefined;
+      const tone: ChatMessage["tone"] = chosenDecision && isProtected(chosenDecision) ? "good" : "warn";
+      if (prev[idx].text === liveResult.verdict.summary && prev[idx].tone === tone) return prev;
+      const next = prev.slice();
+      next[idx] = { ...next[idx], text: liveResult.verdict.summary, tone };
+      return next;
+    });
+  }, [liveResult]);
+
   const approve = useCallback(async () => {
-    if (!result || result.verdict.chosen_id === null) return;
+    if (!liveResult || liveResult.verdict.chosen_id === null) return;
     setApproving(true);
     setPayError(null);
     try {
-      const done = await approveChosen(query, result, settings);
+      const done = await approveChosen(query, liveResult, settings);
       if (!done.ok) {
         setPayError(done.error);
         return;
       }
       setBalancePence(done.balance_pence);
-      const premium = result.premium_paid_pence ?? 0;
-      const chosen = result.listings.find((i) => i.id === result.verdict.chosen_id)
-        ?? result.shortlist.find((i) => i.id === result.verdict.chosen_id);
+      const premium = liveResult.premium_paid_pence ?? 0;
+      const chosen = liveResult.listings.find((i) => i.id === liveResult.verdict.chosen_id)
+        ?? liveResult.shortlist.find((i) => i.id === liveResult.verdict.chosen_id);
       setPayOpen(false);
       setPaid(true);
       setReceiptLine(
@@ -227,15 +246,15 @@ export function DevWorkbench() {
       setApproving(false);
       setMemoryBusy(false);
     }
-  }, [result, query, settings, refreshMemory]);
+  }, [liveResult, query, settings, refreshMemory]);
 
   const chosenItem =
-    result?.listings.find((i) => i.id === result.verdict.chosen_id)
-    ?? result?.shortlist.find((i) => i.id === result.verdict.chosen_id)
+    liveResult?.listings.find((i) => i.id === liveResult.verdict.chosen_id)
+    ?? liveResult?.shortlist.find((i) => i.id === liveResult.verdict.chosen_id)
     ?? null;
-  const chosenRights = chosenItem ? (result?.decisions[chosenItem.id]?.rights ?? []) : [];
+  const chosenRights = chosenItem ? (liveResult?.decisions[chosenItem.id]?.rights ?? []) : [];
   const chosenSwitchable =
-    coolingOffBlock(chosenItem ? result?.decisions[chosenItem.id]?.seller_type : undefined) === null;
+    coolingOffBlock(chosenItem ? liveResult?.decisions[chosenItem.id]?.seller_type : undefined) === null;
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-background text-foreground">
@@ -256,7 +275,7 @@ export function DevWorkbench() {
           onRun={run}
           source={source}
           running={running}
-          canApprove={result !== null && result.verdict.chosen_id !== null}
+          canApprove={liveResult !== null && liveResult.verdict.chosen_id !== null}
           onApprove={() => {
             setPayError(null);
             setPayOpen(true);
@@ -267,13 +286,13 @@ export function DevWorkbench() {
         />
         <main className="min-h-0 min-w-0 overflow-x-auto">
           <Shortlist
-            items={result?.shortlist ?? []}
-            listings={result?.listings ?? []}
-            decisions={result?.decisions ?? {}}
-            chosenId={result?.verdict.chosen_id ?? null}
+            items={liveResult?.shortlist ?? []}
+            listings={liveResult?.listings ?? []}
+            decisions={liveResult?.decisions ?? {}}
+            chosenId={liveResult?.verdict.chosen_id ?? null}
             loading={running}
             source={shortlistSource}
-            briefBrand={result?.brief_brand ?? ""}
+            briefBrand={liveResult?.brief_brand ?? ""}
           />
         </main>
         <TracePanel

@@ -1,6 +1,6 @@
 /**
- * Money helpers. All arithmetic in the app is on integer pence.
- * The pound comparison is code, never the model.
+ * Money helpers. All arithmetic in the app is on integer pence or basis points.
+ * The rights-premium comparison is code, never the model.
  */
 
 /**
@@ -30,4 +30,9 @@ export function formatPence(pence: number): string {
   const pounds = Math.floor(abs / 100);
   const rem = abs % 100;
   return `${sign}£${pounds.toLocaleString("en-GB")}.${String(rem).padStart(2, "0")}`;
+}
+
+/** Format integer basis points as a percent label: 2500 → "25%". */
+export function formatBps(bps: number): string {
+  return `${Math.round(bps / 100)}%`;
 }
