@@ -18,18 +18,54 @@ import type { OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
 
 export const SWITCH_WINDOW_DAYS = 14;
-const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+const UK_TIME_ZONE = "Europe/London";
 /** A typical UK tracked return label for a small parcel. Always shown as an estimate. */
 export const RETURN_POSTAGE_PENCE = 399;
 /** How far the labelled demo simulation drops the price. */
 export const SIMULATED_DROP = 0.35;
 
+const ukParts = new Intl.DateTimeFormat("en-GB", {
+  timeZone: UK_TIME_ZONE,
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  hourCycle: "h23",
+});
+
+function ukWallClock(instant: number): { y: number; m: number; d: number; hour: number } {
+  const parts = ukParts.formatToParts(new Date(instant));
+  const pick = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  return { y: pick("year"), m: pick("month"), d: pick("day"), hour: pick("hour") };
+}
+
+/** 00:00 UK time on a calendar day. UK clocks change at 01:00 UTC, so midnight is 23:00 UTC (BST) or 00:00 UTC (GMT). */
+function ukMidnight(y: number, m: number, d: number): number {
+  const utcMidnight = Date.UTC(y, m - 1, d);
+  const bst = ukWallClock(utcMidnight - HOUR_MS);
+  return bst.d === d && bst.hour === 0 ? utcMidnight - HOUR_MS : utcMidnight;
+}
+
 /**
- * End of the switch window. The legal clock starts the day after delivery; counting
- * from purchase ends it earlier, so Covered never offers a switch the buyer cannot make.
+ * End of the switch window (exclusive): midnight UK time after the 14th UK calendar
+ * day from the order date. The legal clock runs 14 days from the day after delivery,
+ * and delivery is never before the order day, so counting from the order date ends at
+ * or before the legal window and Covered never offers a switch the buyer cannot make.
  */
 export function switchWindowEnds(order: Pick<OrderRecord, "t">): Date {
-  return new Date(new Date(order.t).getTime() + SWITCH_WINDOW_DAYS * DAY_MS);
+  const placed = new Date(order.t).getTime();
+  if (!Number.isFinite(placed)) return new Date(Number.NaN);
+  const day = ukWallClock(placed);
+  const after = new Date(Date.UTC(day.y, day.m - 1, day.d + SWITCH_WINDOW_DAYS + 1));
+  return new Date(ukMidnight(after.getUTCFullYear(), after.getUTCMonth() + 1, after.getUTCDate()));
+}
+
+/** Last UK calendar day of the window, e.g. "10 Oct". */
+export function switchLastDayLabel(endsAt: string): string {
+  const ends = Date.parse(endsAt);
+  if (!Number.isFinite(ends)) return "";
+  return new Date(ends - 1).toLocaleDateString("en-GB", { timeZone: UK_TIME_ZONE, day: "numeric", month: "short" });
 }
 
 /** Why an order bought from this seller has no 14-day switch, or null when the right applies. */

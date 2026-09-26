@@ -10,6 +10,7 @@ import {
   isSwitchWatching,
   returnPostagePence,
   simulatedDropOffers,
+  switchLastDayLabel,
   switchWindowEnds,
 } from "./switch-rule";
 
@@ -60,12 +61,32 @@ const protectedDecision: Decision = {
 
 const settings = { switch_minimum_pence: 800 };
 
-test("the window is 14 days from purchase, and a cancelled order stops watching", () => {
-  const o = order();
-  assert.equal(switchWindowEnds(o).getTime() - new Date(o.t).getTime(), 14 * DAY);
-  assert.equal(isSwitchWatching(o, new Date(new Date(o.t).getTime() + 13 * DAY)), true);
-  assert.equal(isSwitchWatching(o, new Date(new Date(o.t).getTime() + 15 * DAY)), false);
+function endsAt(t: string): string {
+  return switchWindowEnds({ t }).toISOString();
+}
+
+test("the window runs to the end of the 14th UK day after the order date", () => {
+  const o = order(); // 13:00 BST, Sat 26 Sep 2026
+  assert.equal(switchWindowEnds(o).toISOString(), "2026-10-10T23:00:00.000Z"); // midnight BST after 10 Oct
+  assert.equal(switchLastDayLabel(switchWindowEnds(o).toISOString()), "10 Oct");
+  assert.equal(isSwitchWatching(o, new Date("2026-10-10T22:59:59Z")), true);
+  assert.equal(isSwitchWatching(o, new Date("2026-10-10T23:00:00Z")), false);
   assert.equal(isSwitchWatching({ ...o, cancelled_at: o.t }, new Date(o.t)), false);
+});
+
+test("the order date is the UK date, not the UTC date, near midnight", () => {
+  // 23:30 UTC on 26 Sep is 00:30 BST on 27 Sep in the UK.
+  assert.equal(endsAt("2026-09-26T23:30:00Z"), "2026-10-11T23:00:00.000Z");
+  // 22:30 UTC on 26 Sep is still 23:30 BST on 26 Sep.
+  assert.equal(endsAt("2026-09-26T22:30:00Z"), "2026-10-10T23:00:00.000Z");
+});
+
+test("clock changes never push the window past the UK calendar day", () => {
+  // Late on 20 Mar 2027 (GMT); the window ends at midnight BST after 3 Apr, not 00:30 BST on 4 Apr.
+  assert.equal(endsAt("2027-03-20T23:30:00Z"), "2027-04-03T23:00:00.000Z");
+  // 20 Oct 2026 (BST); the window ends at midnight GMT after 3 Nov.
+  assert.equal(endsAt("2026-10-20T12:00:00Z"), "2026-11-04T00:00:00.000Z");
+  assert.equal(Number.isNaN(switchWindowEnds({ t: "not a date" }).getTime()), true);
 });
 
 test("only an order from a UK business has a 14-day switch", () => {

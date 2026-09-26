@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatPence } from "@/lib/money";
 import { acceptSwitch, checkSwitchNow, simulateSwitch, type SwitchWatch } from "@/lib/client/switch";
+import { switchLastDayLabel } from "@/lib/switch-rule";
 import { PaySheet } from "@/components/PaySheet";
 
 type Props = {
@@ -14,11 +15,6 @@ type Props = {
   /** One line for the page after a switch goes through. */
   onSwitched?: (message: string) => void;
 };
-
-function day(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
 
 function clock(iso: string): string {
   const d = new Date(iso);
@@ -77,7 +73,7 @@ export function SwitchWatchList({ watches, balancePence, onBalance, onRefresh, o
         <h2 className="text-sm font-semibold">14-day price-drop watch</h2>
         <p className="text-xs text-muted">
           Moves you only to a UK shop that keeps your rights, and only if you clear your switch amount after return
-          postage.
+          postage. Counted from your order date; your legal window runs from delivery, so it is never shorter.
         </p>
       </div>
       <ul className="mt-3 divide-y divide-line rounded-xl border border-line bg-panel">
@@ -116,7 +112,8 @@ export function SwitchWatchList({ watches, balancePence, onBalance, onRefresh, o
                 <div className="min-w-0">
                   <p className="truncate font-medium">{order.title}</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    {order.merchant} · paid {formatPence(order.price_pence)} · watching until {day(watch.ends_at)} ·{" "}
+                    {order.merchant} · paid {formatPence(order.price_pence)} · watching until{" "}
+                    {switchLastDayLabel(watch.ends_at)} ·{" "}
                     {watch.postage_pence > 0 ? `est. ${formatPence(watch.postage_pence)} return postage` : "free returns"}
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
