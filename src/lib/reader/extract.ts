@@ -243,6 +243,69 @@ export function extractGrid(): GridExtraction {
     if (dataUrl) offer.image_data_url = dataUrl;
   };
 
+  const toPence = (pounds: string, frac: string | undefined): number =>
+    Number(pounds.replace(/,/g, "")) * 100 + Number((frac ?? "").padEnd(2, "0"));
+
+  const firstPoundAmount = (text: string | null | undefined): number | null => {
+    if (!text) return null;
+    const m = text.match(/£\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?/);
+    return m ? toPence(m[1], m[2]) : null;
+  };
+
+  const monthlyMark =
+    /\/\s*mo(?:nth)?s?\b|per\s+month|\ba\s+month\b|\bp\s*\/\s*m\b|(?:^|[^\w/])pm(?:$|[^\w])|\bmonthly\b/i;
+  const contractMark = /\bcontract\b|\bpay\s+monthly\b|\btariff\b|\bwith\s+airtime\b|\bsim\s+plan\b/i;
+  const monthlyAmount =
+    /£\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*(?:\/\s*mo(?:nth)?s?|per\s+month|a\s+month|p\s*\/\s*m|pm\b|monthly)/i;
+  const dualCashMonthly =
+    /£\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s+(?:or|\/)\s+(?:from\s+)?£\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*(?:\/\s*mo(?:nth)?s?|per\s+month|a\s+month|p\s*\/\s*m|pm\b|monthly)/i;
+
+  const applyOfferPriceKind = (offer: Offer): void => {
+    const hay = [offer.price, offer.title, offer.summary, offer.badge, offer.delivery]
+      .concat(offer.specs ?? [])
+      .filter((part): part is string => Boolean(part && part.trim()))
+      .join(" ");
+    const termM = hay.match(/\b(\d{1,2})\s*-?\s*months?\b/i);
+    const termMonths = termM ? Number(termM[1]) : null;
+    const upM = hay.match(/(?:from\s+)?£\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{1,2}))?\s*upfront/i);
+    const upfrontPence = upM ? toPence(upM[1], upM[2]) : null;
+    const dual = hay.match(dualCashMonthly);
+    const moM = hay.match(monthlyAmount);
+    const monthlyFromText = moM ? toPence(moM[1], moM[2]) : null;
+    const priceLooksMonthly = monthlyMark.test(offer.price);
+    const priceIsUpfront = /upfront/i.test(offer.price);
+    const displayedAmount = firstPoundAmount(offer.price);
+    if (termMonths !== null) offer.term_months = termMonths;
+    if (upfrontPence !== null) offer.upfront_pence = upfrontPence;
+    if (dual) {
+      offer.price_kind = "cash";
+      offer.monthly_pence = toPence(dual[3], dual[4]);
+      return;
+    }
+    if (priceLooksMonthly && displayedAmount !== null) {
+      offer.price_kind = "monthly";
+      offer.monthly_pence = displayedAmount;
+      return;
+    }
+    if (monthlyFromText !== null) {
+      const cashLooksOneOff = displayedAmount !== null && displayedAmount !== monthlyFromText && !priceLooksMonthly;
+      offer.price_kind = cashLooksOneOff ? "cash" : "monthly";
+      offer.monthly_pence = monthlyFromText;
+      return;
+    }
+    if (contractMark.test(hay) && monthlyMark.test(hay) && displayedAmount !== null) {
+      offer.price_kind = "monthly";
+      offer.monthly_pence = displayedAmount;
+      return;
+    }
+    if (priceIsUpfront) {
+      offer.price_kind = monthlyMark.test(hay) ? "monthly" : "unknown";
+      if (offer.upfront_pence == null && displayedAmount !== null) offer.upfront_pence = displayedAmount;
+      return;
+    }
+    offer.price_kind = displayedAmount !== null ? "cash" : "unknown";
+  };
+
   // ---- sponsored row ----------------------------------------------------
   const sponsoredHits = seed([
     "data-offer-id",
@@ -382,6 +445,7 @@ export function extractGrid(): GridExtraction {
     if (offerDocid) offer.offer_docid = offerDocid;
     if (productUrl) offer.product_url = productUrl;
     attachCardPhoto(unit, offer);
+    applyOfferPriceKind(offer);
     sponsored.push(offer);
   }
 
@@ -490,6 +554,7 @@ export function extractGrid(): GridExtraction {
     };
     if (productUrl) browseOffer.product_url = productUrl;
     attachCardPhoto(row, browseOffer);
+    applyOfferPriceKind(browseOffer);
     browse.push(browseOffer);
   }
 

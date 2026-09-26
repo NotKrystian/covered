@@ -116,21 +116,39 @@ enum ListingSort {
         return 4
     }
 
-    private static func comparePriceAsc(_ a: ShortlistItem, _ b: ShortlistItem) -> Int {
+    private static func compareCash(_ a: ShortlistItem, _ b: ShortlistItem, desc: Bool) -> Int {
         switch (a.pricePence, b.pricePence) {
         case (nil, nil): return 0
         case (nil, _): return 1
         case (_, nil): return -1
-        case let (x?, y?): return x - y
+        case let (x?, y?): return desc ? y - x : x - y
+        }
+    }
+
+    private static func compareMonthly(_ a: ShortlistItem, _ b: ShortlistItem, desc: Bool) -> Int {
+        switch (a.monthlyPence, b.monthlyPence) {
+        case (nil, nil): return 0
+        case (nil, _): return 1
+        case (_, nil): return -1
+        case let (x?, y?): return desc ? y - x : x - y
+        }
+    }
+
+    private static func comparePriceAsc(_ a: ShortlistItem, _ b: ShortlistItem) -> Int {
+        switch (isMonthlyOnly(a), isMonthlyOnly(b)) {
+        case (true, false): return 1
+        case (false, true): return -1
+        case (true, true): return compareMonthly(a, b, desc: false)
+        case (false, false): return compareCash(a, b, desc: false)
         }
     }
 
     private static func comparePriceDesc(_ a: ShortlistItem, _ b: ShortlistItem) -> Int {
-        switch (a.pricePence, b.pricePence) {
-        case (nil, nil): return 0
-        case (nil, _): return 1
-        case (_, nil): return -1
-        case let (x?, y?): return y - x
+        switch (isMonthlyOnly(a), isMonthlyOnly(b)) {
+        case (true, false): return 1
+        case (false, true): return -1
+        case (true, true): return compareMonthly(a, b, desc: true)
+        case (false, false): return compareCash(a, b, desc: true)
         }
     }
 
@@ -138,8 +156,10 @@ enum ListingSort {
         guard let chosenId, let index = items.firstIndex(where: { $0.id == chosenId }), index > 0 else {
             return items
         }
+        let chosen = items[index]
+        if isMonthlyOnly(chosen) { return items }
         var next = items
-        let chosen = next.remove(at: index)
+        next.remove(at: index)
         next.insert(chosen, at: 0)
         return next
     }
@@ -152,6 +172,9 @@ enum ListingSort {
         chosenId: String? = nil
     ) -> [ShortlistItem] {
         let sorted = items.sorted { a, b in
+            let aMo = isMonthlyOnly(a)
+            let bMo = isMonthlyOnly(b)
+            if aMo != bMo { return !aMo }
             let cmp: Int
             switch key {
             case .priceAsc:

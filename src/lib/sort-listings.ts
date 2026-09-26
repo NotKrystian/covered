@@ -4,7 +4,7 @@
  * Buyer-protection rank uses the decision when present, else the listing text.
  */
 import type { Decision } from "@/lib/types";
-import type { ShortlistItem } from "@/lib/decision";
+import { isMonthlyOnlyItem, type ShortlistItem } from "@/lib/decision";
 
 export const SORT_KEYS = ["price_asc", "price_desc", "brand", "shipping", "protections"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
@@ -112,22 +112,42 @@ export function protectionRank(item: ShortlistItem, decision: Decision | undefin
   return 4;
 }
 
-function comparePriceAsc(a: ShortlistItem, b: ShortlistItem): number {
+function monthlyPenceOf(item: ShortlistItem): number | null {
+  return item.monthly_pence ?? null;
+}
+
+function compareCashPrice(a: ShortlistItem, b: ShortlistItem, desc: boolean): number {
   const aMissing = a.price_pence === null;
   const bMissing = b.price_pence === null;
   if (aMissing && bMissing) return 0;
   if (aMissing) return 1;
   if (bMissing) return -1;
-  return (a.price_pence as number) - (b.price_pence as number);
+  return desc
+    ? (b.price_pence as number) - (a.price_pence as number)
+    : (a.price_pence as number) - (b.price_pence as number);
+}
+
+function compareMonthlyPrice(a: ShortlistItem, b: ShortlistItem, desc: boolean): number {
+  const aMo = monthlyPenceOf(a);
+  const bMo = monthlyPenceOf(b);
+  if (aMo === null && bMo === null) return 0;
+  if (aMo === null) return 1;
+  if (bMo === null) return -1;
+  return desc ? bMo - aMo : aMo - bMo;
+}
+
+function comparePriceAsc(a: ShortlistItem, b: ShortlistItem): number {
+  const aMo = isMonthlyOnlyItem(a);
+  const bMo = isMonthlyOnlyItem(b);
+  if (aMo !== bMo) return aMo ? 1 : -1;
+  return aMo ? compareMonthlyPrice(a, b, false) : compareCashPrice(a, b, false);
 }
 
 function comparePriceDesc(a: ShortlistItem, b: ShortlistItem): number {
-  const aMissing = a.price_pence === null;
-  const bMissing = b.price_pence === null;
-  if (aMissing && bMissing) return 0;
-  if (aMissing) return 1;
-  if (bMissing) return -1;
-  return (b.price_pence as number) - (a.price_pence as number);
+  const aMo = isMonthlyOnlyItem(a);
+  const bMo = isMonthlyOnlyItem(b);
+  if (aMo !== bMo) return aMo ? 1 : -1;
+  return aMo ? compareMonthlyPrice(a, b, true) : compareCashPrice(a, b, true);
 }
 
 /**
@@ -138,8 +158,10 @@ export function pinChosen(items: ShortlistItem[], chosenId: string | null | unde
   if (!chosenId) return items;
   const idx = items.findIndex((item) => item.id === chosenId);
   if (idx <= 0) return items;
+  const chosen = items[idx];
+  if (isMonthlyOnlyItem(chosen)) return items;
   const next = items.slice();
-  const [chosen] = next.splice(idx, 1);
+  next.splice(idx, 1);
   return [chosen, ...next];
 }
 
@@ -152,6 +174,9 @@ export function sortListings(
 ): ShortlistItem[] {
   const copy = items.slice();
   copy.sort((a, b) => {
+    const aMo = isMonthlyOnlyItem(a);
+    const bMo = isMonthlyOnlyItem(b);
+    if (aMo !== bMo) return aMo ? 1 : -1;
     switch (key) {
       case "price_asc":
         return comparePriceAsc(a, b);

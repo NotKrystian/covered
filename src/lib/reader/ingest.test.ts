@@ -31,6 +31,21 @@ test("ingestClientOffers marks a live browser read and parses pence", () => {
   assert.equal(result.offers[0]?.price_pence, 129900);
 });
 
+test("ingestClientOffers classifies a monthly payload that omitted price_kind", () => {
+  const result = ingestClientOffers("iphone 16", [
+    offer({
+      section: "browse",
+      title: "iPhone 16 24 months",
+      price: "£30/month",
+      merchant: "EE",
+    }),
+  ]);
+  assert.equal(result.offers[0]?.price_kind, "monthly");
+  assert.equal(result.offers[0]?.price_pence, null);
+  assert.equal(result.offers[0]?.monthly_pence, 3000);
+  assert.equal(result.offers[0]?.term_months, 24);
+});
+
 test("ingestClientOffers drops duplicate browse rows", () => {
   const row = offer({
     section: "browse",

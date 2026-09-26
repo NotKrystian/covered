@@ -5,12 +5,15 @@
 import type { ContentBlock, ImageFormat } from "@aws-sdk/client-bedrock-runtime";
 import type { UserSettings } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
+import { isMonthlyOnlyItem } from "@/lib/decision";
 import { formatBps, formatPence } from "@/lib/money";
 import type { ProductBrief } from "./research";
 
 export const SYSTEM_PROMPT = `You are the judge inside Covered, a UK shopping bot. You look at a shortlist of listings for one request and return JSON only.
 
 You decide what a sort cannot: is each listing the item the user asked for, is it a mislisting, who is selling, how enforceable the venue is, and which UK buyer rights apply. You do NOT compare prices against the user's premium; code does that afterwards. Price never changes your identity or mislisting call.
+
+MONTHLY TARIFF: A listing may be a pay-monthly contract, not a cash/handset price. If the listing is marked monthly (e.g. £30/month, 24 months, an upfront), that figure is a tariff, not the cost of the phone. Do not call it cheaper than a cash listing. Set same_item true if it is the same handset on a contract. Say so in the reason ("£30/month, not a cash price"). Do not set mislisting because it is monthly. Code excludes monthly-only rows from the cash comparison.
 
 RIGHTS CARD (UK):
 - A seller acting in the course of a business is a trader even if they are a reseller, refurbisher, or second-hand shop. Consumer Rights Act 2015 and the 14-day distance-selling cooling-off period still apply. "Reseller" is not "private".
@@ -54,10 +57,13 @@ OUTPUT: a single JSON object. Start your answer with "{" and end with "}". No pr
 Return exactly one decision per listing id, in the same order.`;
 
 function describeItem(item: ShortlistItem, index: number, attached: number): string {
+  const monthly = isMonthlyOnlyItem(item);
   const lines = [
     `Listing ${index + 1} — id: ${item.id}`,
     `  title: ${item.title}`,
-    `  price: ${item.price_label}${item.price_pence !== null ? ` (${item.price_pence}p)` : ""}`,
+    monthly
+      ? `  price: ${item.price_label}${item.monthly_pence != null ? ` (${item.monthly_pence}p/month, not a cash/handset price)` : ""}${item.term_months ? `; term ${item.term_months} months` : ""}${item.upfront_pence != null ? `; ${formatPence(item.upfront_pence)} upfront` : ""}`
+      : `  price: ${item.price_label}${item.price_pence !== null ? ` (${item.price_pence}p)` : ""}`,
     `  merchant: ${item.merchant}`,
     `  section: ${item.section}${item.section === "sponsored" ? " (this row is an ad)" : ""}`,
     `  delivery: ${item.delivery ?? "not shown"}`,

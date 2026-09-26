@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test extension/extract.test.js && npx tsx --test src/lib/reader/ingest.test.ts src/lib/reader/snapshots.test.ts src/lib/photo-safety.test.ts src/lib/judge/research.test.ts src/lib/judge/judge.test.ts src/lib/decision.test.ts src/lib/sort-listings.test.ts src/lib/limit-status.test.ts src/lib/switch-rule.test.ts src/lib/returns.test.ts src/lib/client/device.test.ts"
+    "test": "node --test extension/extract.test.js && npx tsx --test src/lib/reader/ingest.test.ts src/lib/reader/snapshots.test.ts src/lib/photo-safety.test.ts src/lib/judge/research.test.ts src/lib/judge/judge.test.ts src/lib/decision.test.ts src/lib/sort-listings.test.ts src/lib/limit-status.test.ts src/lib/switch-rule.test.ts src/lib/returns.test.ts src/lib/client/device.test.ts src/lib/price-kind.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1141.0",

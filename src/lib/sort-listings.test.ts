@@ -14,6 +14,7 @@ function item(partial: Partial<ShortlistItem> & Pick<ShortlistItem, "id" | "titl
   return {
     price_pence: 1000,
     price_label: "£10.00",
+    price_kind: "cash",
     merchant: "Shop",
     delivery: null,
     returns: null,
@@ -162,6 +163,40 @@ test("sortListings: shipping unknown last, protections strongest first", () => {
   assert.deepEqual(
     sortListings([unknown, paid, collect, free], "protections", decisions).map((i) => i.id),
     ["free", "collect", "paid", "unk"],
+  );
+});
+
+test("sortListings: monthly-only rows sort after cash and never pin as the cash winner", () => {
+  const cashDear = item({ id: "cash-dear", title: "iPhone cash", price_pence: 89900, price_kind: "cash" });
+  const cashCheap = item({ id: "cash-cheap", title: "iPhone used", price_pence: 64900, price_kind: "cash" });
+  const monthlyCheap = item({
+    id: "mo-30",
+    title: "iPhone 24 months",
+    price_pence: null,
+    price_kind: "monthly",
+    monthly_pence: 3000,
+    price_label: "£30/mo",
+  });
+  const monthlyDear = item({
+    id: "mo-45",
+    title: "iPhone 24 months EE",
+    price_pence: null,
+    price_kind: "monthly",
+    monthly_pence: 4500,
+    price_label: "£45/mo",
+  });
+
+  assert.deepEqual(
+    sortListings([monthlyCheap, cashDear, monthlyDear, cashCheap], "price_asc").map((i) => i.id),
+    ["cash-cheap", "cash-dear", "mo-30", "mo-45"],
+  );
+  assert.deepEqual(
+    sortListings([monthlyCheap, cashDear, monthlyDear, cashCheap], "price_desc").map((i) => i.id),
+    ["cash-dear", "cash-cheap", "mo-45", "mo-30"],
+  );
+  assert.deepEqual(
+    sortListings([monthlyCheap, cashDear, cashCheap], "price_asc", {}, "", "mo-30").map((i) => i.id),
+    ["cash-cheap", "cash-dear", "mo-30"],
   );
 });
 

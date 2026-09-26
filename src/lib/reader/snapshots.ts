@@ -8,8 +8,8 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { parsePricePence } from "@/lib/money";
 import { SearchResultSchema, type Offer, type SearchResult } from "@/lib/types";
+import { normalizeOfferPrice } from "@/lib/price-kind";
 import { dedupeBrowse, dedupeSponsored } from "./dedupe";
 import type { GridExtraction } from "./extract";
 import { MAX_PER_SECTION } from "./limits";
@@ -35,7 +35,7 @@ function words(value: string): Set<string> {
 
 /** Build the snapshot document from a raw extraction, applying the same dedupe/cap/pence as the live path. */
 export function buildSnapshot(query: string, extraction: GridExtraction, fetchedAt = new Date()): SearchResult {
-  const withPence = (offer: Offer): Offer => ({ ...offer, price_pence: parsePricePence(offer.price) });
+  const withPence = (offer: Offer): Offer => normalizeOfferPrice(offer);
   const sponsored = dedupeSponsored(extraction.sponsored.map(withPence)).slice(0, MAX_PER_SECTION);
   const browse = dedupeBrowse(extraction.browse.map(withPence)).slice(0, MAX_PER_SECTION);
   return {

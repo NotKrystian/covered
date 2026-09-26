@@ -136,7 +136,7 @@ struct ShopView: View {
                 rejectedStrip
             }
             InkPillButton(
-                title: "Approve · \(chosen.priceLabel)",
+                title: "Approve · \(listingPriceLabel(chosen))",
                 identifier: "shop.approve"
             ) {
                 shop.resetReceipt()
@@ -174,6 +174,9 @@ struct ShopView: View {
             }
             .accessibilityIdentifier("shop.results")
             rejectedStrip
+        } else if !monthlyRows.isEmpty {
+            listingGroup(title: "Pay outright", items: cashRows)
+            listingGroup(title: "Pay monthly", items: monthlyRows)
         } else {
             LazyVStack(spacing: 10) {
                 ForEach(visibleRows) { item in
@@ -326,6 +329,36 @@ struct ShopView: View {
 
     private var visibleRows: [ShortlistItem] {
         shop.rows.filter { !isRejected($0) }
+    }
+
+    private var cashRows: [ShortlistItem] {
+        visibleRows.filter { !isMonthlyOnly($0) }
+    }
+
+    private var monthlyRows: [ShortlistItem] {
+        visibleRows.filter(isMonthlyOnly)
+    }
+
+    @ViewBuilder
+    private func listingGroup(title: String, items: [ShortlistItem]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.secondary)
+            if items.isEmpty {
+                Text("No cash prices in this search.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.secondary)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(items) { item in
+                        listingCard(item)
+                            .transition(.opacity)
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier(title == "Pay outright" ? "shop.results" : "shop.monthly")
     }
 
     private var useTwoUp: Bool {

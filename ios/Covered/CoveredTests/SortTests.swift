@@ -16,6 +16,18 @@ final class SortTests: XCTestCase {
         }
     }
 
+    func testMonthlyRowsSortAfterCashWhenSortingByPrice() {
+        let cash = item(id: "cash", title: "iPhone cash", pence: 89900, delivery: "Free delivery")
+        var monthly = item(id: "mo", title: "iPhone 24 months", pence: 3000, delivery: "Free delivery")
+        monthly.pricePence = nil
+        monthly.priceKind = .monthly
+        monthly.monthlyPence = 3000
+        monthly.priceLabel = "£30/mo"
+        let sorted = ListingSort.sort([monthly, cash], by: .priceAsc)
+        XCTAssertEqual(sorted.map(\.id), ["cash", "mo"])
+        XCTAssertEqual(ListingSort.pinChosen([cash, monthly], chosenId: "mo").map(\.id), ["cash", "mo"])
+    }
+
     func testFreeShippingSortsBeforePaidDelivery() {
         let free = item(id: "free", title: "A", pence: 3600, delivery: "Free delivery")
         let paid = item(id: "paid", title: "B", pence: 2200, delivery: "£4.99 delivery")

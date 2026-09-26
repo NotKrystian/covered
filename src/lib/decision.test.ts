@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Decision, Offer, UserSettings } from "./types";
 import { UserSettingsSchema } from "./types";
-import { applyPremium, buildShortlistFromOffers, listingToItem } from "./decision";
+import { applyPremium, buildShortlistFromOffers, listingToItem, offerToItem } from "./decision";
 import { FIXTURE_LISTINGS } from "./fixtures";
 import { fallbackProductBrief } from "./judge/research";
 
@@ -140,6 +140,51 @@ test("mislisting never reaches the percent comparison", () => {
   );
   assert.equal(onlyMislisting.chosen_id, "shop-36");
   assert.match(onlyMislisting.summary, /dropped before price/);
+});
+
+test("applyPremium ignores a £30/mo offer when a £899 cash shop exists", () => {
+  const shop = offerToItem(
+    offer({
+      section: "browse",
+      title: "iPhone 16 128GB",
+      price: "£899",
+      merchant: "Currys",
+      offer_id: "cash-899",
+    }),
+    0,
+  );
+  const monthly = offerToItem(
+    offer({
+      section: "browse",
+      title: "iPhone 16 24 months",
+      price: "£30/month",
+      merchant: "EE",
+      offer_id: "mo-30",
+    }),
+    1,
+  );
+  assert.equal(shop.price_kind, "cash");
+  assert.equal(shop.price_pence, 89900);
+  assert.equal(monthly.price_kind, "monthly");
+  assert.equal(monthly.price_pence, null);
+  assert.equal(monthly.monthly_pence, 3000);
+  const decisions: Record<string, Decision> = {
+    [shop.id]: decision({
+      same_item: true,
+      mislisting: false,
+      seller_type: "uk_business",
+      venue_trust: "shop_checkout",
+    }),
+    [monthly.id]: decision({
+      same_item: true,
+      mislisting: false,
+      seller_type: "uk_business",
+      venue_trust: "shop_checkout",
+    }),
+  };
+  const verdict = applyPremium([monthly, shop], decisions, settings(2500));
+  assert.equal(verdict.chosen_id, shop.id);
+  assert.notEqual(verdict.chosen_id, monthly.id);
 });
 
 test("old pence-only settings are ignored and default to 2500 bps", () => {

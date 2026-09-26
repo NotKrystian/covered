@@ -8,8 +8,8 @@
  * `{ ok: false, error: { kind: "challenge" } }`. No bypass, no paging.
  */
 import type { Page } from "playwright";
-import { parsePricePence } from "@/lib/money";
 import type { Offer, ReaderError, ReaderResponse, SearchResult } from "@/lib/types";
+import { normalizeOfferPrice } from "@/lib/price-kind";
 import { evaluateInPage, newPage, readerMode } from "./browser";
 import { acceptConsentOnce, classifyPage } from "./challenge";
 import { dedupeBrowse, dedupeSponsored } from "./dedupe";
@@ -61,7 +61,7 @@ function logHits(query: string, extraction: GridExtraction): void {
 }
 
 function withPence(offer: Offer): Offer {
-  return { ...offer, price_pence: parsePricePence(offer.price) };
+  return normalizeOfferPrice(offer);
 }
 
 type WaitOutcome =

@@ -138,3 +138,35 @@ test("extractGrid unwraps a browse /goto shop href", () => {
   assert.equal(result.browse.length, 1);
   assert.equal(result.browse[0].product_url, "https://www.jdsports.co.uk/product/fleece");
 });
+
+test("extractGrid classifies a monthly contract from the price and title", () => {
+  const unit = {
+    getAttribute: (name) => {
+      if (name === "data-offer-id") return "mo-1";
+      if (name === "data-dtld") return "ee.co.uk";
+      return null;
+    },
+    querySelector: (selector) => {
+      if (selector === '[role="heading"] div') return { textContent: "iPhone 16 24 months" };
+      if (selector === ".VbBaOe") return { textContent: "£30/month" };
+      if (selector === ".UsGWMe") return { textContent: "EE" };
+      return null;
+    },
+    querySelectorAll: () => [],
+    textContent: "iPhone 16 24 months £30/month EE",
+  };
+  const document = {
+    querySelectorAll: (selector) => {
+      if (selector === "div.ArOTm.top-pla-group-inner div.mnr-c.pla-unit") return [unit];
+      return [];
+    },
+    querySelector: () => null,
+  };
+  const result = runExtract(document);
+  assert.equal(result.sponsored.length, 1);
+  const offer = result.sponsored[0];
+  assert.equal(offer.price_kind, "monthly");
+  assert.equal(offer.monthly_pence, 3000);
+  assert.equal(offer.term_months, 24);
+  assert.equal(offer.price, "£30/month");
+});

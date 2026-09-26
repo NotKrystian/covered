@@ -18,6 +18,43 @@ func formatGBP(_ pence: Int) -> String {
     return "\(sign)£\(poundsText).\(String(format: "%02d", rem))"
 }
 
+/// Monthly tariff as `"£30/mo"` (drop trailing .00).
+func formatMonthlyGBP(_ pence: Int) -> String {
+    if pence % 100 == 0 {
+        let formatted = formatGBP(pence)
+        let trimmed = formatted.hasSuffix(".00") ? String(formatted.dropLast(3)) : formatted
+        return "\(trimmed)/mo"
+    }
+    return "\(formatGBP(pence))/mo"
+}
+
+func isMonthlyOnly(_ item: ShortlistItem) -> Bool {
+    if item.priceKind == .monthly { return true }
+    if item.priceKind == .cash { return false }
+    return item.pricePence == nil && item.monthlyPence != nil
+}
+
+func listingPriceLabel(_ item: ShortlistItem) -> String {
+    if isMonthlyOnly(item), let monthly = item.monthlyPence {
+        return formatMonthlyGBP(monthly)
+    }
+    return item.priceLabel
+}
+
+func listingMonthlyNote(_ item: ShortlistItem) -> String? {
+    var bits: [String] = []
+    if item.priceKind == .cash, let monthly = item.monthlyPence, item.pricePence != nil {
+        bits.append("or \(formatMonthlyGBP(monthly))")
+    }
+    if let term = item.termMonths {
+        bits.append("\(term) months")
+    }
+    if let upfront = item.upfrontPence {
+        bits.append("\(formatGBP(upfront)) upfront")
+    }
+    return bits.isEmpty ? nil : bits.joined(separator: " · ")
+}
+
 /// Parse a displayed price like `"£249.00"`, `"£1,249"`, `"249.00"`, or `"£8.50"` into pence.
 /// Returns nil when there is no single parseable amount (e.g. `"£20 – £30"`, `"Free"`, `""`).
 func parsePricePence(_ input: String) -> Int? {

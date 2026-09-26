@@ -13,7 +13,7 @@
  * seller owes no cooling-off right, and an overseas one is hard to hold to it.
  */
 import type { Decision, Offer, SellerType, UserSettings } from "@/lib/types";
-import { isProtected, type ShortlistItem } from "@/lib/decision";
+import { isMonthlyOnlyItem, isProtected, type ShortlistItem } from "@/lib/decision";
 import type { OrderRecord, SwitchOffer } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
 import { shippingPence } from "@/lib/sort-listings";
@@ -140,7 +140,7 @@ export function evaluateSwitch(
   for (const item of items) {
     const d = decisions[item.id];
     if (!d || !d.same_item || d.mislisting || !isProtected(d)) continue;
-    if (item.price_pence === null) continue;
+    if (isMonthlyOnlyItem(item) || item.price_pence === null) continue;
     const delivery = shippingPence(item.delivery) ?? 0;
     if (item.price_pence + delivery >= order.price_pence) continue;
     if (best === null || item.price_pence + delivery < best.price + best.delivery) {

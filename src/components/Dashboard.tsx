@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Decision, UserSettings } from "@/lib/types";
-import { isProtected, reapplyPremium, type DecideResponse, type ShortlistItem } from "@/lib/decision";
+import { isProtected, monthlyMetaLabel, reapplyPremium, type DecideResponse, type ShortlistItem } from "@/lib/decision";
+import { partitionCashAndMonthly } from "@/lib/listing-display";
 import { formatBps, formatPence } from "@/lib/money";
 import type { Limit } from "@/lib/memory";
 import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
@@ -92,6 +93,7 @@ function OfferRow({
 }) {
   const rejected = Boolean(decision && (decision.mislisting || !decision.same_item));
   const reason = decision ? (decision.mislisting && decision.photo_reason ? decision.photo_reason : decision.reason) : null;
+  const priceNote = monthlyMetaLabel(item);
   return (
     <li
       className={`rounded-xl border px-4 py-4 ${
@@ -124,7 +126,10 @@ function OfferRow({
               </p>
               {decision && <p className="mt-0.5 text-xs text-muted">{sellerLine(decision)}</p>}
             </div>
-            <div className="tnum shrink-0 text-right text-lg font-semibold">{item.price_label}</div>
+            <div className="tnum shrink-0 text-right">
+              <div className="text-lg font-semibold">{item.price_label}</div>
+              {priceNote && <div className="mt-0.5 text-xs font-normal text-muted">{priceNote}</div>}
+            </div>
           </div>
           {reason && (
             <p className={`mt-3 text-sm ${rejected ? "text-danger" : chosen ? "text-accent" : "text-muted"}`}>
@@ -154,6 +159,51 @@ function OfferRow({
         </div>
       </div>
     </li>
+  );
+}
+
+function ResultGroups({
+  groups,
+  decisions,
+  chosenId,
+  approving,
+  onApprove,
+  onLimit,
+}: {
+  groups: { cash: ShortlistItem[]; monthly: ShortlistItem[] };
+  decisions: Record<string, Decision>;
+  chosenId: string | null;
+  approving: boolean;
+  onApprove: () => void;
+  onLimit: (item: ShortlistItem) => void;
+}) {
+  const list = (items: ShortlistItem[]) => (
+    <ul className="space-y-3">
+      {items.map((item) => (
+        <OfferRow
+          key={item.id}
+          item={item}
+          decision={decisions[item.id]}
+          chosen={item.id === chosenId}
+          approving={approving}
+          onApprove={onApprove}
+          onLimit={() => onLimit(item)}
+        />
+      ))}
+    </ul>
+  );
+  if (groups.monthly.length === 0) return list(groups.cash);
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="mb-3 text-sm font-semibold tracking-tight">Pay outright</h2>
+        {groups.cash.length > 0 ? list(groups.cash) : <p className="text-sm text-muted">No cash prices in this search.</p>}
+      </div>
+      <div>
+        <h2 className="mb-3 text-sm font-semibold tracking-tight">Pay monthly</h2>
+        {list(groups.monthly)}
+      </div>
+    </div>
   );
 }
 
@@ -300,6 +350,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   );
   const chosenId = live?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
+  const listingGroups = partitionCashAndMonthly(rows);
 
   return (
     <div className="min-h-full bg-background text-foreground">
@@ -497,27 +548,22 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                   <div className="flex justify-end">
                     <SortControl value={sort} onChange={setSort} />
                   </div>
-                  <ul className="space-y-3">
-                    {rows.map((item) => (
-                      <OfferRow
-                        key={item.id}
-                        item={item}
-                        decision={live.decisions[item.id]}
-                        chosen={item.id === chosenId}
-                        approving={approving}
-                        onApprove={() => {
-                          setPayError(null);
-                          setPayOpen(true);
-                        }}
-                        onLimit={() =>
-                          setLimitDraft({
-                            query: query.trim(),
-                            defaultPence: item.price_pence,
-                          })
-                        }
-                      />
-                    ))}
-                  </ul>
+                  <ResultGroups
+                    groups={listingGroups}
+                    decisions={live.decisions}
+                    chosenId={chosenId}
+                    approving={approving}
+                    onApprove={() => {
+                      setPayError(null);
+                      setPayOpen(true);
+                    }}
+                    onLimit={(item) =>
+                      setLimitDraft({
+                        query: query.trim(),
+                        defaultPence: item.price_pence,
+                      })
+                    }
+                  />
                 </>
               )}
             </div>

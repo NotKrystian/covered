@@ -1,8 +1,21 @@
 /**
  * Client-safe helpers for listing photos and merchant links.
  */
-import type { ShortlistItem } from "@/lib/decision";
+import { isMonthlyOnlyItem, type ShortlistItem } from "@/lib/decision";
 import { isProxyImageUrl, safeImageDataUrl, safeImageUrl } from "@/lib/photo-safety";
+
+export function partitionCashAndMonthly(items: ShortlistItem[]): {
+  cash: ShortlistItem[];
+  monthly: ShortlistItem[];
+} {
+  const cash: ShortlistItem[] = [];
+  const monthly: ShortlistItem[] = [];
+  for (const item of items) {
+    if (isMonthlyOnlyItem(item)) monthly.push(item);
+    else cash.push(item);
+  }
+  return { cash, monthly };
+}
 
 /** Merchant product URL, or null when there is nothing safe to open. */
 export function listingHref(item: ShortlistItem): string | null {

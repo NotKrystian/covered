@@ -14,17 +14,29 @@ import {
   type UserSettings,
   type Verdict,
 } from "@/lib/types";
-import { formatBps, formatPence, parsePricePence } from "@/lib/money";
+import { formatBps, formatPence } from "@/lib/money";
+import {
+  isMonthlyOnlyItem,
+  monthlyMetaLabel,
+  normalizeOfferPrice,
+  offerDisplayPrice,
+  type PriceKind,
+} from "@/lib/price-kind";
 import type { ProductBrief } from "@/lib/judge/research";
 
 /** One row of the shortlist the judge sees and the UI renders. Wraps an `Offer` or a `Listing`. */
 export type ShortlistItem = {
   id: string;
   title: string;
-  /** Integer pence, or null when the displayed price did not parse. */
+  /** Integer pence, or null when the displayed price did not parse (or is monthly-only). */
   price_pence: number | null;
-  /** Price as displayed. */
+  /** Price as displayed. Monthly-only rows use "£30/mo", never a fake handset price. */
   price_label: string;
+  /** Cash vs pay-monthly. Fixtures are cash. */
+  price_kind?: PriceKind;
+  monthly_pence?: number | null;
+  term_months?: number | null;
+  upfront_pence?: number | null;
   merchant: string;
   delivery: string | null;
   returns: string | null;
@@ -81,6 +93,10 @@ export function listingToItem(listing: Listing): ShortlistItem {
     title: listing.title,
     price_pence: listing.price_pence,
     price_label: formatPence(listing.price_pence),
+    price_kind: "cash",
+    monthly_pence: null,
+    term_months: null,
+    upfront_pence: null,
     merchant: listing.merchant,
     delivery: listing.delivery_text,
     returns: listing.returns_text,
@@ -99,31 +115,43 @@ export function listingToItem(listing: Listing): ShortlistItem {
 }
 
 export function offerToItem(offer: Offer, index: number): ShortlistItem {
-  const pence = offer.price_pence ?? parsePricePence(offer.price);
+  const classified = normalizeOfferPrice(offer);
+  const monthlyOnly = isMonthlyOnlyItem({
+    price_kind: classified.price_kind,
+    price_pence: classified.price_pence ?? null,
+    monthly_pence: classified.monthly_pence,
+  });
+  const pence = monthlyOnly ? null : (classified.price_pence ?? null);
   const id =
-    offer.offer_id !== undefined
-      ? `sponsored-${offer.offer_id}`
-      : `${offer.section}-${index + 1}`;
+    classified.offer_id !== undefined
+      ? `sponsored-${classified.offer_id}`
+      : `${classified.section}-${index + 1}`;
   return {
     id,
-    title: offer.title,
+    title: classified.title,
     price_pence: pence,
-    price_label: offer.price,
-    merchant: offer.merchant,
-    delivery: offer.delivery,
-    returns: offer.returns ?? null,
-    rating: offer.rating,
-    rating_count: offer.rating_count,
-    section: offer.section,
-    badge: offer.badge,
-    venue_hint: offer.merchant_domain,
-    image_urls: offer.image_urls ?? [],
-    image_url: offer.image_url ?? null,
-    image_data_url: offer.image_data_url ?? null,
-    product_url: offer.product_url ?? null,
-    raw: { kind: "offer", offer },
+    price_label: offerDisplayPrice(classified),
+    price_kind: classified.price_kind,
+    monthly_pence: classified.monthly_pence ?? null,
+    term_months: classified.term_months ?? null,
+    upfront_pence: classified.upfront_pence ?? null,
+    merchant: classified.merchant,
+    delivery: classified.delivery,
+    returns: classified.returns ?? null,
+    rating: classified.rating,
+    rating_count: classified.rating_count,
+    section: classified.section,
+    badge: classified.badge,
+    venue_hint: classified.merchant_domain,
+    image_urls: classified.image_urls ?? [],
+    image_url: classified.image_url ?? null,
+    image_data_url: classified.image_data_url ?? null,
+    product_url: classified.product_url ?? null,
+    raw: { kind: "offer", offer: classified },
   };
 }
+
+export { isMonthlyOnlyItem, monthlyMetaLabel };
 
 function uniqueOffers(offers: Offer[]): Offer[] {
   const seen = new Set<string>();
@@ -163,6 +191,7 @@ export function survivorsForPremium(
   decisions: Record<string, Decision>,
 ): ShortlistItem[] {
   return items.filter((item) => {
+    if (isMonthlyOnlyItem(item)) return false;
     const d = decisions[item.id];
     return Boolean(d && !d.mislisting && d.same_item);
   });
@@ -235,6 +264,7 @@ export function applyPremium(
       dropped += 1;
       continue;
     }
+    if (isMonthlyOnlyItem(item)) continue;
     if (item.price_pence === null) continue;
     survivors.push({ ...item, price_pence: item.price_pence });
   }
@@ -307,11 +337,13 @@ export function premiumPaid(
   if (verdict.chosen_id === null) return null;
   const chosen = items.find((i) => i.id === verdict.chosen_id);
   const chosenDecision = chosen ? decisions[chosen.id] : undefined;
-  if (!chosen || !chosenDecision || chosen.price_pence === null) return null;
+  if (!chosen || !chosenDecision || chosen.price_pence === null || isMonthlyOnlyItem(chosen)) {
+    return null;
+  }
   if (!isProtected(chosenDecision)) return 0;
   const unprotected = cheapest(
     items
-      .filter((i): i is Priced => i.price_pence !== null)
+      .filter((i): i is Priced => i.price_pence !== null && !isMonthlyOnlyItem(i))
       .filter((i) => {
         const d = decisions[i.id];
         return d && !d.mislisting && d.same_item && !isProtected(d);

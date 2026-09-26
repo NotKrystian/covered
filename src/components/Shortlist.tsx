@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
-import type { ShortlistItem } from "@/lib/decision";
+import { monthlyMetaLabel, type ShortlistItem } from "@/lib/decision";
+import { partitionCashAndMonthly } from "@/lib/listing-display";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
 import { SortControl } from "@/components/SortControl";
 import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
@@ -97,6 +98,104 @@ function rowState(item: ShortlistItem, decision: Decision | undefined, chosenId:
   return "neutral";
 }
 
+function ShortlistRows({
+  rows,
+  decisions,
+  chosenId,
+}: {
+  rows: ShortlistItem[];
+  decisions: Record<string, Decision>;
+  chosenId: string | null;
+}) {
+  return (
+    <ul className="divide-y divide-line">
+      {rows.map((item) => {
+        const d = decisions[item.id];
+        const state = rowState(item, d, chosenId);
+        const rowClass =
+          state === "chosen"
+            ? "chosen-glow bg-accent-soft ring-1 ring-accent"
+            : state === "rejected"
+              ? "opacity-80"
+              : "";
+        const strike = state === "rejected" ? "line-through decoration-danger/70" : "";
+        const reason = d ? (d.mislisting && d.photo_reason ? d.photo_reason : d.reason) : null;
+        const priceNote = monthlyMetaLabel(item);
+        return (
+          <li key={item.id} className={`px-5 py-3 ${rowClass}`}>
+            <div className="grid grid-cols-[5rem_minmax(0,1fr)_5.5rem_9rem_9rem_9rem_3.5rem] items-start gap-3 text-sm">
+              <ListingThumb item={item} dim={state === "rejected"} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ListingTitle item={item} className={`truncate font-medium ${strike}`} />
+                  {state === "chosen" && (
+                    <span className="rounded border border-accent px-1 text-[10px] uppercase tracking-wide text-accent">
+                      Recommended
+                    </span>
+                  )}
+                  {item.section === "sponsored" && (
+                    <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
+                      Ad
+                    </span>
+                  )}
+                  {item.badge && (
+                    <span className="rounded border border-line px-1 text-[10px] text-muted">{item.badge}</span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-xs text-muted">
+                  <span className="font-mono">{item.id}</span>
+                  {d && <span> · {sellerLabel(d)}</span>}
+                </div>
+                {d && d.rights.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {d.rights.map((r) => (
+                      <span key={r} className="rounded bg-panel-raised px-1.5 py-0.5 text-[11px] text-muted">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className={`tnum text-right font-semibold ${strike}`}>
+                <div>{item.price_label}</div>
+                {priceNote && <div className="mt-0.5 text-[10px] font-normal text-muted">{priceNote}</div>}
+              </div>
+              <div className="min-w-0 text-muted">
+                <div className="truncate">{item.merchant}</div>
+                {item.section === "sponsored" && item.venue_hint && (
+                  <div className="truncate font-mono text-[10px]" title="Merchant domain from the ad unit">
+                    {item.venue_hint}
+                  </div>
+                )}
+              </div>
+              <div className="truncate text-muted">{item.delivery ?? "—"}</div>
+              <div className="truncate text-muted">{item.returns ?? "—"}</div>
+              <div className="tnum text-right text-muted">
+                {item.rating ?? "—"}
+                {item.rating_count && <span className="block text-[10px]">({item.rating_count})</span>}
+              </div>
+            </div>
+            {reason && (
+              <p
+                className={`mt-2 pl-[5.75rem] text-sm ${
+                  state === "rejected"
+                    ? "text-danger"
+                    : state === "chosen"
+                      ? "text-accent"
+                      : "text-muted"
+                }`}
+              >
+                {state === "rejected" && d?.mislisting ? "Mislisting: " : ""}
+                {reason}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function sellerLabel(d: Decision): string {
   const seller: Record<Decision["seller_type"], string> = {
     uk_business: "UK business",
@@ -142,6 +241,7 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
   }
 
   const rows = rowsForTab(tab, sortedItems, sortedAll);
+  const groups = partitionCashAndMonthly(rows);
   const countLabel =
     tab === "all" ? `${all.length}` : source ? `${items.length} of ${source.offers}` : `${items.length}`;
 
@@ -181,87 +281,20 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
           <span className="text-right">Rating</span>
         </div>
       </div>
-      <ul className="divide-y divide-line">
-        {rows.map((item) => {
-          const d = decisions[item.id];
-          const state = rowState(item, d, chosenId);
-          const rowClass =
-            state === "chosen"
-              ? "chosen-glow bg-accent-soft ring-1 ring-accent"
-              : state === "rejected"
-                ? "opacity-80"
-                : "";
-          const strike = state === "rejected" ? "line-through decoration-danger/70" : "";
-          const reason = d ? (d.mislisting && d.photo_reason ? d.photo_reason : d.reason) : null;
-          return (
-            <li key={item.id} className={`px-5 py-3 ${rowClass}`}>
-              <div className="grid grid-cols-[5rem_minmax(0,1fr)_5.5rem_9rem_9rem_9rem_3.5rem] items-start gap-3 text-sm">
-                <ListingThumb item={item} dim={state === "rejected"} />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <ListingTitle item={item} className={`truncate font-medium ${strike}`} />
-                    {state === "chosen" && (
-                      <span className="rounded border border-accent px-1 text-[10px] uppercase tracking-wide text-accent">
-                        Recommended
-                      </span>
-                    )}
-                    {item.section === "sponsored" && (
-                      <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
-                        Ad
-                      </span>
-                    )}
-                    {item.badge && (
-                      <span className="rounded border border-line px-1 text-[10px] text-muted">{item.badge}</span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-xs text-muted">
-                    <span className="font-mono">{item.id}</span>
-                    {d && <span> · {sellerLabel(d)}</span>}
-                  </div>
-                  {d && d.rights.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {d.rights.map((r) => (
-                        <span key={r} className="rounded bg-panel-raised px-1.5 py-0.5 text-[11px] text-muted">
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className={`tnum text-right font-semibold ${strike}`}>{item.price_label}</div>
-                <div className="min-w-0 text-muted">
-                  <div className="truncate">{item.merchant}</div>
-                  {item.section === "sponsored" && item.venue_hint && (
-                    <div className="truncate font-mono text-[10px]" title="Merchant domain from the ad unit">
-                      {item.venue_hint}
-                    </div>
-                  )}
-                </div>
-                <div className="truncate text-muted">{item.delivery ?? "—"}</div>
-                <div className="truncate text-muted">{item.returns ?? "—"}</div>
-                <div className="tnum text-right text-muted">
-                  {item.rating ?? "—"}
-                  {item.rating_count && <span className="block text-[10px]">({item.rating_count})</span>}
-                </div>
-              </div>
-              {reason && (
-                <p
-                  className={`mt-2 pl-[5.75rem] text-sm ${
-                    state === "rejected"
-                      ? "text-danger"
-                      : state === "chosen"
-                        ? "text-accent"
-                        : "text-muted"
-                  }`}
-                >
-                  {state === "rejected" && d?.mislisting ? "Mislisting: " : ""}
-                  {reason}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {groups.monthly.length === 0 ? (
+        <ShortlistRows rows={rows} decisions={decisions} chosenId={chosenId} />
+      ) : (
+        <>
+          <div className="border-b border-line px-5 py-2 text-[11px] uppercase tracking-wide text-muted">
+            Pay outright
+          </div>
+          <ShortlistRows rows={groups.cash} decisions={decisions} chosenId={chosenId} />
+          <div className="border-y border-line px-5 py-2 text-[11px] uppercase tracking-wide text-muted">
+            Pay monthly
+          </div>
+          <ShortlistRows rows={groups.monthly} decisions={decisions} chosenId={chosenId} />
+        </>
+      )}
     </section>
   );
 }

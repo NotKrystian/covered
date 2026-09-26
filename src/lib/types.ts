@@ -32,6 +32,17 @@ export const OfferSchema = z.object({
   price: z.string(),
   /** Parsed pence, or null if the displayed price did not parse. */
   price_pence: z.number().int().nullable().optional(),
+  /**
+   * How to read the displayed figure. A monthly tariff is never a cash/handset
+   * price. Omitted on old payloads — the server classifies from title + price text.
+   */
+  price_kind: z.enum(["cash", "monthly", "unknown"]).optional(),
+  /** Monthly tariff in pence when the listing is (or also has) a pay-monthly deal. */
+  monthly_pence: z.number().int().nullable().optional(),
+  /** Contract length when stated, e.g. 24 from "24 months". */
+  term_months: z.number().int().nullable().optional(),
+  /** Upfront / "from £X upfront" in pence. Not the cash/handset price. */
+  upfront_pence: z.number().int().nullable().optional(),
   /** Struck-through / "was" price. Often has no "£". */
   compare_at: z.string().nullable(),
   merchant: z.string(),

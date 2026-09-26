@@ -79,7 +79,7 @@ struct ListingCard: View {
     }
 
     private var compactPrice: some View {
-        Text(item.priceLabel)
+        Text(listingPriceLabel(item))
             .filmMoney(20, weight: .bold, tracking: -0.6)
             .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
             .overlay(alignment: .center) {
@@ -171,22 +171,29 @@ struct ListingCard: View {
     }
 
     private var priceRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Text(item.priceLabel)
-                .filmMoney(29, weight: .bold, tracking: -0.9)
-                .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
-                .overlay(alignment: .center) {
-                    if rejected {
-                        Rectangle()
-                            .fill(Color.mutedLine)
-                            .frame(height: 2.5)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(listingPriceLabel(item))
+                    .filmMoney(29, weight: .bold, tracking: -0.9)
+                    .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
+                    .overlay(alignment: .center) {
+                        if rejected {
+                            Rectangle()
+                                .fill(Color.mutedLine)
+                                .frame(height: 2.5)
+                        }
                     }
+                if let compare = itemCompare {
+                    Text("was \(compare)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.tertiary)
+                        .strikethrough(true, color: Color.tertiary)
                 }
-            if let compare = itemCompare {
-                Text("was \(compare)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.tertiary)
-                    .strikethrough(true, color: Color.tertiary)
+            }
+            if let note = listingMonthlyNote(item) {
+                Text(note)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.secondary)
             }
         }
     }

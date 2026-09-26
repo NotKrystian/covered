@@ -12,6 +12,7 @@ func survivorsForPremium(
     decisions: [String: Decision]
 ) -> [ShortlistItem] {
     items.filter { item in
+        if isMonthlyOnly(item) { return false }
         guard let decision = decisions[item.id] else { return false }
         return !decision.mislisting && decision.sameItem
     }
@@ -55,6 +56,7 @@ func applyPremium(
             dropped += 1
             continue
         }
+        if isMonthlyOnly(item) { continue }
         guard item.pricePence != nil else { continue }
         survivors.append(item)
     }

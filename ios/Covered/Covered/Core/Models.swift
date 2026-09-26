@@ -7,6 +7,12 @@ enum OfferSection: String, Codable, Sendable, Hashable {
     case browse
 }
 
+enum PriceKind: String, Codable, Sendable, Hashable {
+    case cash
+    case monthly
+    case unknown
+}
+
 enum SearchSource: String, Codable, Sendable, Hashable {
     case live
     case fixture
@@ -25,6 +31,10 @@ struct Offer: Codable, Sendable, Hashable {
     var title: String
     var price: String
     var pricePence: Int?
+    var priceKind: PriceKind?
+    var monthlyPence: Int?
+    var termMonths: Int?
+    var upfrontPence: Int?
     var compareAt: String?
     var merchant: String
     var merchantDomain: String?
@@ -47,7 +57,7 @@ struct Offer: Codable, Sendable, Hashable {
     var imageDataUrl: String?
 
     enum CodingKeys: String, CodingKey {
-        case section, position, title, price, pricePence, compareAt, merchant
+        case section, position, title, price, pricePence, priceKind, monthlyPence, termMonths, upfrontPence, compareAt, merchant
         case merchantDomain, merchantId, offerId, offerDocid, location
         case badge, delivery, returns, energy, rating, ratingCount
         case specs, productUrl, moreMerchants, summary
@@ -63,6 +73,10 @@ struct Offer: Codable, Sendable, Hashable {
         try container.encode(title, forKey: .title)
         try container.encode(price, forKey: .price)
         try container.encodeIfPresent(pricePence, forKey: .pricePence)
+        try container.encodeIfPresent(priceKind, forKey: .priceKind)
+        try container.encodeIfPresent(monthlyPence, forKey: .monthlyPence)
+        try container.encodeIfPresent(termMonths, forKey: .termMonths)
+        try container.encodeIfPresent(upfrontPence, forKey: .upfrontPence)
         try container.encode(compareAt, forKey: .compareAt)
         try container.encode(merchant, forKey: .merchant)
         try container.encodeIfPresent(merchantDomain, forKey: .merchantDomain)
@@ -242,6 +256,10 @@ struct ShortlistItem: Codable, Sendable, Hashable, Identifiable {
     var title: String
     var pricePence: Int?
     var priceLabel: String
+    var priceKind: PriceKind?
+    var monthlyPence: Int?
+    var termMonths: Int?
+    var upfrontPence: Int?
     var merchant: String
     var delivery: String?
     var returns: String?
@@ -262,6 +280,10 @@ struct ShortlistItem: Codable, Sendable, Hashable, Identifiable {
         title: String,
         pricePence: Int?,
         priceLabel: String,
+        priceKind: PriceKind? = nil,
+        monthlyPence: Int? = nil,
+        termMonths: Int? = nil,
+        upfrontPence: Int? = nil,
         merchant: String,
         delivery: String? = nil,
         returns: String? = nil,
@@ -281,6 +303,10 @@ struct ShortlistItem: Codable, Sendable, Hashable, Identifiable {
         self.title = title
         self.pricePence = pricePence
         self.priceLabel = priceLabel
+        self.priceKind = priceKind
+        self.monthlyPence = monthlyPence
+        self.termMonths = termMonths
+        self.upfrontPence = upfrontPence
         self.merchant = merchant
         self.delivery = delivery
         self.returns = returns

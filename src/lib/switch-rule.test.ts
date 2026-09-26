@@ -182,6 +182,22 @@ test("never switches to a private seller, a mislisting, or a different item, how
   assert.equal(result.note, "nothing cheaper yet");
 });
 
+test("evaluateSwitch ignores a monthly-only listing however cheap the tariff looks", () => {
+  const monthly = offerToItem(
+    {
+      ...offer("iPhone 16 24 months", 3000, "EE"),
+      price: "£30/month",
+      price_pence: null,
+      price_kind: "monthly",
+      monthly_pence: 3000,
+    },
+    0,
+  );
+  const result = evaluateSwitch(order(), [monthly], { [monthly.id]: protectedDecision }, settings);
+  assert.equal(result.ok, false);
+  assert.equal(result.note, "nothing cheaper yet");
+});
+
 test("the demo market cuts the shop's own price once, 30 seconds after purchase, at a shop-style price", () => {
   const bought = order();
   const at = new Date(bought.t).getTime();
