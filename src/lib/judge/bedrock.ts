@@ -18,9 +18,10 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { JudgeMode } from "@/lib/decision";
 
-export const BEDROCK_REGION = process.env.BEDROCK_REGION ?? process.env.AWS_REGION ?? "eu-west-2";
+// `||`, not `??`: .env.example ships these keys empty, and an empty string must fall back too.
+export const BEDROCK_REGION = process.env.BEDROCK_REGION || process.env.AWS_REGION || "eu-west-2";
 export const BEDROCK_MODEL_ID =
-  process.env.BEDROCK_MODEL_ID ?? "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
+  process.env.BEDROCK_MODEL_ID || "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 /** "eu.anthropic.claude-haiku-4-5-20251001-v1:0" → "claude-haiku-4-5-20251001-v1:0". */
 export function shortModelName(modelId: string): string {
