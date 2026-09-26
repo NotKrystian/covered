@@ -16,7 +16,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
-import { ReceiptSectionSchema, UserSettingsSchema } from "@/lib/types";
+import { DecisionSchema, ListingSchema, OfferSchema, ReceiptSectionSchema, UserSettingsSchema } from "@/lib/types";
 import type { UserSettings } from "@/lib/types";
 import { BEDROCK_REGION } from "@/lib/judge/bedrock";
 
@@ -70,6 +70,39 @@ export const AftercareEntrySchema = z.object({
 });
 export type AftercareEntry = z.infer<typeof AftercareEntrySchema>;
 
+/**
+ * A cheaper protected listing found for an order inside its 14-day window (see
+ * `src/lib/switch.ts`). Holds what Accept needs to buy it: the listing, the
+ * judge's decision, and the pound maths that justified it.
+ */
+export const SwitchOfferSchema = z.object({
+  /** ISO 8601 timestamp. */
+  found_at: z.string(),
+  /** True when the grid was the labelled demo simulation, not a real read. */
+  simulated: z.boolean(),
+  chosen_id: z.string().max(80),
+  chosen: z.union([OfferSchema, ListingSchema]),
+  decision: DecisionSchema,
+  section: ReceiptSectionSchema,
+  title: z.string().max(TITLE_MAX),
+  merchant: z.string().max(MERCHANT_MAX),
+  price_pence: z.number().int().nonnegative(),
+  /** Estimated cost to send the first order back (0 when it had free returns). */
+  postage_pence: z.number().int().nonnegative(),
+  /** Old price − new price − postage: what the buyer keeps by switching. */
+  clear_pence: z.number().int(),
+});
+export type SwitchOffer = z.infer<typeof SwitchOfferSchema>;
+
+/** The last 14-day price check on an order. */
+export const SwitchCheckSchema = z.object({
+  /** ISO 8601 timestamp. */
+  checked_at: z.string(),
+  note: z.string().max(NOTE_MAX),
+  offer: SwitchOfferSchema.nullable(),
+});
+export type SwitchCheck = z.infer<typeof SwitchCheckSchema>;
+
 export const OrderRecordSchema = z.object({
   id: z.string().max(80),
   /** ISO 8601 timestamp. */
@@ -81,6 +114,18 @@ export const OrderRecordSchema = z.object({
   section: ReceiptSectionSchema,
   /** Returns and fault requests on this order. Capped at AFTERCARE_MAX. */
   aftercare: z.array(AftercareEntrySchema).max(AFTERCARE_MAX).default([]),
+  /** Returns text shown when it was bought. Free returns mean no postage on a switch. */
+  returns: z.string().max(NOTE_MAX).nullable().optional(),
+  /** Last 14-day price check (price-drop switch). */
+  switch_check: SwitchCheckSchema.optional(),
+  /** Set when this order was cancelled under the 14-day right to switch. */
+  cancelled_at: z.string().optional(),
+  /** Wallet refund for the cancellation (price minus return postage). */
+  refund_pence: z.number().int().nonnegative().optional(),
+  /** Order bought in its place. */
+  switched_to: z.string().max(80).optional(),
+  /** Order this one replaced. */
+  switched_from: z.string().max(80).optional(),
 });
 export type OrderRecord = z.infer<typeof OrderRecordSchema>;
 
@@ -227,6 +272,10 @@ export function capMemory(memory: Memory): Memory {
         ...entry,
         note: entry.note.slice(0, NOTE_MAX),
       })),
+      returns: o.returns?.slice(0, NOTE_MAX) ?? o.returns,
+      switch_check: o.switch_check
+        ? { ...o.switch_check, note: o.switch_check.note.slice(0, NOTE_MAX) }
+        : undefined,
     })),
     deposits: memory.deposits.slice(-DEPOSITS_MAX),
     limits: (memory.limits ?? []).slice(-LIMITS_MAX).map((limit) => ({

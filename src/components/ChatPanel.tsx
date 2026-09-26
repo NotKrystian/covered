@@ -25,7 +25,7 @@ type Props = {
   onApprove: () => void;
   approving: boolean;
   receiptLine: string | null;
-  /** Set after a paid order: the 14-day price-drop watch, shown as not built yet. */
+  /** Set after a paid order: points at the 14-day price-drop watch on the home page. */
   watchTeaser?: { switchMinimumPence: number } | null;
 };
 
@@ -99,16 +99,16 @@ export function ChatPanel({
         )}
         {receiptLine && watchTeaser && (
           <div className="flex justify-start">
-            <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-dashed border-line px-3.5 py-2 text-sm text-muted">
+            <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-line px-3.5 py-2 text-sm text-muted">
               <p className="flex flex-wrap items-center gap-2 text-foreground">
                 14-day price-drop watch
-                <span className="rounded-full border border-line px-1.5 py-px text-[10px] uppercase tracking-wide text-muted">
-                  Coming next
+                <span className="rounded-full border border-accent/40 px-1.5 py-px text-[10px] uppercase tracking-wide text-accent">
+                  On
                 </span>
               </p>
               <p className="mt-1 text-xs leading-relaxed">
-                Inside your cooling-off window, Covered will re-check this price and move you if you would clear{" "}
-                {formatPence(watchTeaser.switchMinimumPence)} after postage. Not built yet.
+                For your cooling-off window, Covered re-checks this price and offers a switch if you would clear{" "}
+                {formatPence(watchTeaser.switchMinimumPence)} after return postage. Manage it on the home page.
               </p>
             </div>
           </div>

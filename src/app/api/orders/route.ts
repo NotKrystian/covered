@@ -19,6 +19,7 @@ export async function GET(): Promise<NextResponse<OrdersResponse>> {
   const { userId } = await getUserId();
   const memory = await getMemory(userId);
   const orders = [...memory.orders].reverse();
-  const total_pence = memory.orders.reduce((sum, o) => sum + o.price_pence, 0);
+  // Net of refunds: an order cancelled under the 14-day switch only cost its return postage.
+  const total_pence = memory.orders.reduce((sum, o) => sum + o.price_pence - (o.refund_pence ?? 0), 0);
   return NextResponse.json({ orders, total_pence, count: memory.orders.length });
 }

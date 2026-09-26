@@ -10,6 +10,10 @@
  * Limit buys: alarm "covered-limits" re-reads each watching query and POSTs
  * offers to /api/limits/run. Demo cadence is DEMO_CHECKS_PER_DAY (24 → every
  * 60 minutes). Production would be once a day: periodInMinutes: 1440.
+ *
+ * 14-day price-drop switch: the same alarm re-reads the query of each order still
+ * inside its window (GET /api/switch) and POSTs offers to /api/switch/run. The
+ * server judges them and only stores a switch offer; buying still needs the user.
  */
 
 // Firefox exposes promise-based `browser`; Chrome MV3's `chrome` also returns promises.
@@ -240,6 +244,40 @@ async function checkOneLimit(origin, limit) {
   });
 }
 
+async function switchWatchesFrom(origin) {
+  const res = await fetch(`${origin}/api/switch`, { credentials: "include" });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json && json.ok && Array.isArray(json.watches) ? json.watches : [];
+}
+
+async function checkOneSwitch(origin, watch) {
+  const result = await runSearch(watch.order.query);
+  if (!result || result.error || !Array.isArray(result.offers)) return;
+  await fetch(`${origin}/api/switch/run`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ order_id: watch.order.id, offers: result.offers }),
+  });
+}
+
+async function runSwitchChecks(origin) {
+  let watching = [];
+  try {
+    watching = (await switchWatchesFrom(origin)).filter((watch) => watch && watch.watching && watch.order);
+  } catch {
+    return;
+  }
+  for (const watch of watching) {
+    try {
+      await checkOneSwitch(origin, watch);
+    } catch {
+      // One order failed; keep going so the rest still get a chance.
+    }
+  }
+}
+
 let limitsBusy = false;
 
 async function runLimitChecks() {
@@ -260,6 +298,7 @@ async function runLimitChecks() {
           // One query failed; keep going so the rest still get a chance.
         }
       }
+      await runSwitchChecks(origin);
     }
   } finally {
     limitsBusy = false;

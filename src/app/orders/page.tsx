@@ -116,7 +116,13 @@ export default function OrdersPage() {
                           {o.query}
                         </td>
                         <td className="max-w-[16rem] truncate px-4 py-2.5" title={o.title}>
-                          {o.title}
+                          {o.cancelled_at ? (
+                            <span className="text-muted">
+                              <span className="line-through">{o.title}</span> · switched
+                            </span>
+                          ) : (
+                            o.title
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-muted">{o.merchant}</td>
                         <td className="px-4 py-2.5 text-muted">{o.section}</td>

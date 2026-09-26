@@ -16,6 +16,10 @@ type Props = {
   error: string | null;
   onPay: () => void;
   onClose: () => void;
+  /** Money coming back first, e.g. the refund for an order cancelled to switch. */
+  credit?: { pence: number; label: string };
+  /** Verb on the double-click target: "pay" (default) or "switch". */
+  action?: "pay" | "switch";
 };
 
 /** Two presses of Enter/Space inside this window count as the double-click. */
@@ -37,12 +41,15 @@ export function PaySheet({
   error,
   onPay,
   onClose,
+  credit,
+  action = "pay",
 }: Props) {
   const targetRef = useRef<HTMLButtonElement | null>(null);
   const lastPress = useRef(0);
   const [hint, setHint] = useState(false);
 
-  const shortBy = pricePence === null ? null : Math.max(0, pricePence - balancePence);
+  const available = balancePence + (credit?.pence ?? 0);
+  const shortBy = pricePence === null ? null : Math.max(0, pricePence - available);
   const canPay = pricePence !== null && shortBy === 0 && !paying;
 
   const pay = useCallback(() => {
@@ -58,8 +65,8 @@ export function PaySheet({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, paying]);
 
-  let targetLabel = "Double-click to pay";
-  if (paying) targetLabel = "Paying from wallet…";
+  let targetLabel = `Double-click to ${action}`;
+  if (paying) targetLabel = action === "switch" ? "Switching…" : "Paying from wallet…";
   else if (pricePence === null) targetLabel = "No price to pay";
   else if (shortBy !== null && shortBy > 0) targetLabel = "Not enough in the wallet";
   else if (hint) targetLabel = "Double-click to confirm";
@@ -111,12 +118,21 @@ export function PaySheet({
             <dt className="text-muted">Pay from</dt>
             <dd>Covered demo wallet</dd>
           </div>
+          {credit && (
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-muted">Refund</dt>
+              <dd className="text-right">
+                <span className="tnum text-accent">+{formatPence(credit.pence)}</span>
+                <span className="block text-xs text-muted">{credit.label}</span>
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between gap-4">
             <dt className="text-muted">Balance</dt>
             <dd className="tnum">
               {formatPence(balancePence)}
               {pricePence !== null && shortBy === 0 && (
-                <span className="text-muted"> → {formatPence(balancePence - pricePence)}</span>
+                <span className="text-muted"> → {formatPence(available - pricePence)}</span>
               )}
             </dd>
           </div>
@@ -130,7 +146,7 @@ export function PaySheet({
 
         {shortBy !== null && shortBy > 0 && (
           <p className="mt-3 text-sm text-danger">
-            Short by {formatPence(shortBy)}. Deposit into the wallet (top bar), then approve again.
+            Short by {formatPence(shortBy)}. Deposit into the wallet (top bar), then try again.
           </p>
         )}
         {error && <p className="mt-3 text-sm text-danger">{error}</p>}

@@ -36,6 +36,12 @@ function chosenMerchant(chosen: Offer | Listing): string {
   return chosen.merchant;
 }
 
+/** Returns text as shown when bought; the 14-day switch reads it to price return postage. */
+function chosenReturns(chosen: Offer | Listing): string | null {
+  if ("returns_text" in chosen) return chosen.returns_text;
+  return chosen.returns ?? null;
+}
+
 export function chosenPricePence(chosen: Offer | Listing): number | null {
   if ("price_pence" in chosen && typeof chosen.price_pence === "number") return chosen.price_pence;
   if ("price" in chosen && typeof chosen.price === "string") return parsePricePence(chosen.price);
@@ -88,6 +94,7 @@ export async function fulfillPurchase(input: FulfillInput): Promise<FulfillOk | 
         price_pence: pricePence,
         section: receipt.section,
         aftercare: [],
+        returns: chosenReturns(receipt.chosen),
       },
       event: {
         kind: "approve",

@@ -21,6 +21,8 @@ import {
 } from "@/lib/client/shop";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
 import { ActiveLimits, LimitEditor } from "@/components/LimitControls";
+import { SwitchWatchList } from "@/components/SwitchWatchList";
+import { fetchSwitchWatches, type SwitchWatch } from "@/lib/client/switch";
 import { PaySheet } from "@/components/PaySheet";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
@@ -150,15 +152,24 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [limits, setLimits] = useState<Limit[]>(memory.limits ?? []);
   const [limitDraft, setLimitDraft] = useState<{ query: string; defaultPence: number | null } | null>(null);
+  const [watches, setWatches] = useState<SwitchWatch[]>([]);
+  const [switchNote, setSwitchNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetchLimits().then((next) => {
       if (!cancelled) setLimits(next);
     });
+    fetchSwitchWatches().then((next) => {
+      if (!cancelled) setWatches(next);
+    });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const refreshWatches = useCallback(async () => {
+    setWatches(await fetchSwitchWatches());
   }, []);
 
   const saveLimit = useCallback(async (pence: number, forQuery: string) => {
@@ -232,10 +243,11 @@ export function Dashboard({ memoryState, onMemory }: Props) {
       setReceipt(
         `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
       );
+      void refreshWatches();
     } finally {
       setApproving(false);
     }
-  }, [result, query, settings]);
+  }, [result, query, settings, refreshWatches]);
 
   const rows = useMemo(
     () =>
@@ -356,6 +368,16 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           </div>
         )}
         <ActiveLimits limits={limits} onRemove={(id) => void cancelLimit(id)} />
+        {switchNote && (
+          <p className="mt-8 rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{switchNote}</p>
+        )}
+        <SwitchWatchList
+          watches={watches}
+          balancePence={balancePence}
+          onBalance={setBalancePence}
+          onRefresh={refreshWatches}
+          onSwitched={setSwitchNote}
+        />
 
         <div className="mt-10">
           {running && (
@@ -418,16 +440,17 @@ export function Dashboard({ memoryState, onMemory }: Props) {
               {receipt && (
                 <>
                   <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
-                  <div className="rounded-xl border border-dashed border-line px-5 py-4">
+                  <div className="rounded-xl border border-line px-5 py-4">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                       14-day price-drop watch
-                      <span className="rounded-full border border-line px-2 py-px text-[10px] font-normal uppercase tracking-wide text-muted">
-                        Coming next
+                      <span className="rounded-full border border-accent/40 px-2 py-px text-[10px] font-normal uppercase tracking-wide text-accent">
+                        On
                       </span>
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-muted">
-                      Inside your cooling-off window, Covered will re-check this price and move you if you would clear{" "}
-                      {formatPence(settings.switch_minimum_pence)} after postage. Not built yet.
+                      For your 14-day cooling-off window, Covered re-checks this price and offers a switch if a UK shop has
+                      it for less and you would clear {formatPence(settings.switch_minimum_pence)} after return postage. See
+                      the watch above.
                     </p>
                   </div>
                 </>
