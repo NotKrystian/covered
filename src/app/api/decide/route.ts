@@ -24,7 +24,7 @@ import {
 } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
 import { hydrateOfferPhotos } from "@/lib/reader/photos";
-import { getUserId } from "@/lib/memory/identity";
+import { resolveUser, unauthorizedResponse } from "@/lib/memory/identity";
 import {
   DISPLAY_NAME_MAX,
   getMemory,
@@ -115,7 +115,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { userId, isNew } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId, isNew } = identity;
   const stored = await getMemory(userId);
   const memory = publicMemory(stored);
   const memoryBlock = memoryPromptBlock(memory);

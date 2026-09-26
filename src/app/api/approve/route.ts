@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AWS_REGION, S3_BUCKET, getLocalReceipt, receiptKey } from "@/lib/s3";
 import { ReceiptSchema, type Receipt } from "@/lib/types";
-import { getUserId } from "@/lib/memory/identity";
+import { resolveUser, unauthorizedResponse } from "@/lib/memory/identity";
 import { fulfillPurchase } from "@/lib/fulfill";
 
 export const runtime = "nodejs";
@@ -55,7 +55,15 @@ export async function POST(
     );
   }
 
-  const { userId } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const done = await fulfillPurchase({
     userId,
     query: parsed.data.query,

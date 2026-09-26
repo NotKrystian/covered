@@ -18,6 +18,8 @@ export BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-eu.anthropic.claude-haiku-4-5-20251
 
 # DynamoDB table used by src/lib/memory (created by the Judge+Memory agent, not here).
 export MEMORY_TABLE="${MEMORY_TABLE:-covered-memory}"
+# DynamoDB table for remote-reader jobs + pair-code index (src/lib/jobs/create-table.sh).
+export JOBS_TABLE="${JOBS_TABLE:-covered-jobs}"
 
 # Extra `-e KEY=VALUE` pairs for the container, space-separated (e.g. "COVERED_MOCK=1").
 export EXTRA_CONTAINER_ENV="${EXTRA_CONTAINER_ENV:-}"

@@ -17,6 +17,7 @@ import {
   patchMemory,
   readLiveGrid,
   removeLimit,
+  type LiveGridPhase,
   type MemoryState,
 } from "@/lib/client/shop";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
@@ -34,6 +35,24 @@ type Props = {
 };
 
 type SearchError = { kind: "no_extension" | "challenge" | "other"; message: string };
+type SearchPhase = LiveGridPhase | "judging";
+
+function phaseLine(phase: SearchPhase): string {
+  switch (phase) {
+    case "extension":
+      return "Reading Google Shopping in this browser…";
+    case "remote_reader":
+      return "Reading Google Shopping on your paired browser…";
+    case "server":
+      return "Reading the shelf…";
+    case "judging":
+      return "Judging every listing…";
+    default: {
+      const never: never = phase;
+      return String(never);
+    }
+  }
+}
 
 function sellerLine(d: Decision): string {
   const seller: Record<Decision["seller_type"], string> = {
@@ -141,6 +160,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [settings, setSettings] = useState<UserSettings>(memory.settings);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [phase, setPhase] = useState<SearchPhase>("extension");
   const [approving, setApproving] = useState(false);
   const [result, setResult] = useState<DecideResponse | null>(null);
   const [error, setError] = useState<SearchError | null>(null);
@@ -202,12 +222,14 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     setPayOpen(false);
     setPayError(null);
     setResult(null);
+    setPhase("extension");
     try {
-      const attempt = await readLiveGrid(q);
+      const attempt = await readLiveGrid(q, setPhase);
       if (!attempt.ok) {
         setError({ kind: liveGridErrorKind(attempt.reason), message: liveGridErrorLine(attempt.reason) });
         return;
       }
+      setPhase("judging");
       const data = await decide(q, settings, memory.display_name ?? "", attempt.result);
       setResult(data);
     } catch (err) {
@@ -382,7 +404,12 @@ export function Dashboard({ memoryState, onMemory }: Props) {
         <div className="mt-10">
           {running && (
             <div className="rounded-xl border border-line bg-panel px-6 py-16 text-center">
-              <p className="text-sm text-muted">Reading the shelf and judging every listing…</p>
+              <p className="text-sm text-muted">{phaseLine(phase)}</p>
+              {phase === "remote_reader" && (
+                <p className="mt-2 text-xs text-muted">
+                  The Covered reader is not in this browser, so the job went to the Brave you paired. Up to 45 seconds.
+                </p>
+              )}
             </div>
           )}
 
@@ -401,7 +428,12 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                   <Link href="/ext" className="text-accent hover:underline">
                     Install the Covered reader
                   </Link>{" "}
-                  in Brave, Chrome or Firefox, then reload this page and try again.
+                  in Brave, Chrome or Firefox, then reload this page and try again. Or pair this device to a browser that
+                  already has it: open the extension popup there and enter its code on{" "}
+                  <Link href="/ext#pair" className="text-accent hover:underline">
+                    /ext
+                  </Link>
+                  .
                 </p>
               )}
               {error.kind === "challenge" && (

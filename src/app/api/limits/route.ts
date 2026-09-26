@@ -8,7 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getUserId, peekUserId } from "@/lib/memory/identity";
+import { peekUser, resolveUser, unauthorizedResponse } from "@/lib/memory/identity";
 import {
   LIMITS_MAX,
   LimitSchema,
@@ -30,10 +30,17 @@ const PostSchema = z.object({
   max_price_pence: z.number().int().nonnegative(),
 });
 
-export async function GET(): Promise<NextResponse<LimitsOk>> {
-  const userId = await peekUserId();
-  if (!userId) return NextResponse.json({ ok: true, limits: [] });
-  const memory = publicMemory(await getMemory(userId));
+export async function GET(request: Request): Promise<NextResponse<LimitsOk | LimitsErr>> {
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) return NextResponse.json({ ok: true, limits: [] });
+  const memory = publicMemory(await getMemory(user.userId));
   return NextResponse.json({ ok: true, limits: memory.limits });
 }
 
@@ -48,7 +55,15 @@ export async function POST(request: Request): Promise<NextResponse<LimitsOk | Li
     );
   }
 
-  const { userId } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const current = await getMemory(userId);
   if (current.limits.length >= LIMITS_MAX) {
     return NextResponse.json({ ok: false, error: `At most ${LIMITS_MAX} limits` }, { status: 400 });
@@ -73,10 +88,18 @@ export async function DELETE(request: Request): Promise<NextResponse<LimitsOk | 
   if (!id) {
     return NextResponse.json({ ok: false, error: "Query param `id` is required" }, { status: 400 });
   }
-  const userId = await peekUserId();
-  if (!userId) {
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) {
     return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
   }
+  const userId = user.userId;
   const current = await getMemory(userId);
   if (!current.limits.some((limit) => limit.id === id)) {
     return NextResponse.json({ ok: false, error: "Limit not found" }, { status: 404 });

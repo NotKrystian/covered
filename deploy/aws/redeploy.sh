@@ -37,8 +37,8 @@ TAG="${SHA}-$(date -u +%Y%m%dT%H%M%SZ)"
 log "image tag ${TAG}"
 
 # The env file the container reads. Rewritten every deploy from env.sh.
-ENV_FILE_CONTENT=$(printf 'AWS_REGION=%s\nS3_BUCKET=%s\nBEDROCK_MODEL_ID=%s\nCOVERED_MEMORY_TABLE=%s\n' \
-  "$AWS_REGION" "$S3_BUCKET" "$BEDROCK_MODEL_ID" "$MEMORY_TABLE")
+ENV_FILE_CONTENT=$(printf 'AWS_REGION=%s\nS3_BUCKET=%s\nBEDROCK_MODEL_ID=%s\nCOVERED_MEMORY_TABLE=%s\nCOVERED_JOBS_TABLE=%s\n' \
+  "$AWS_REGION" "$S3_BUCKET" "$BEDROCK_MODEL_ID" "$MEMORY_TABLE" "$JOBS_TABLE")
 for kv in ${EXTRA_CONTAINER_ENV}; do ENV_FILE_CONTENT+=$'\n'"$kv"; done
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then

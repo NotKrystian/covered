@@ -24,6 +24,12 @@ Firefox warns that it ignores `key` and `externally_connectable`; both are Chrom
 
 Firefox has no `externally_connectable`, so `bridge.js` runs on the Covered app (`localhost:3000`, `127.0.0.1:3000`, `covered.kawuc.uk`) and relays `window.postMessage` requests to the background. Chrome and Brave use the same bridge; `externally_connectable` stays as a fallback for older builds of this extension.
 
+## Remote reader: pair a phone or another browser (1.5.0)
+
+The background worker also serves devices that do not have this extension. Click the toolbar icon: the popup shows a **6-character pair code** (from `POST /api/pair/start`, using this browser's `covered_uid` cookie), connection status, the last remote job, and **Poll now**. Enter the code on the phone (`POST /api/pair/claim`) or at `covered.kawuc.uk/ext#pair` in another browser; that device becomes the same Covered user.
+
+How work flows: a client `POST`s `{ query }` to `/api/reader/jobs`. Alarm `covered-reader-poll` fires every minute and wakes the worker; while awake it holds a 20-second long-poll on `GET /api/reader/jobs/next?wait=20` (production host, then `localhost:3000` if a dev server is up). A job opens the same inactive `udm=28` tab, extracts offers with photos, `POST`s them to `/api/reader/jobs/:id/result`, and closes the tab. A Google check posts `{ error: "challenge" }`. One job at a time; nothing needs the Covered page open. Codes live 10 minutes and work once; at most 5 devices per user.
+
 ## What Live grid does
 
 Covered sends `{ type: "search", query }` to this extension. A background tab opens `https://www.google.com/search?q=QUERY&udm=28&hl=en&gl=uk`, the content script waits for `product-viewer-entrypoint` or `div.mnr-c.pla-unit` (or a challenge), then the tab closes. The page POSTs the offers to `/api/search` as a live read.

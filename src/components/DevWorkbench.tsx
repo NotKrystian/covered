@@ -129,6 +129,8 @@ export function DevWorkbench() {
         balance_pence: 0,
         deposits: [],
         limits: [],
+        pair_codes: [],
+        device_tokens: [],
         onboarded: false,
         updated_at: new Date().toISOString(),
       },

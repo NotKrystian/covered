@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BrowserIcon } from "./BrowserIcon";
 import { CopyText } from "./CopyText";
+import { PairForm } from "./PairForm";
 import { COVERED_READER_EXTENSION_ID } from "./id";
 
 export const metadata: Metadata = {
@@ -139,6 +140,36 @@ export default function ExtPage() {
           <p className="mt-4 text-sm text-muted">
             Firefox removes temporary add-ons when it restarts; load it again the same way. Its warnings about{" "}
             <code>key</code> and <code>externally_connectable</code> are Chrome-only settings and harmless.
+          </p>
+        </section>
+
+        <section id="pair" className={CARD}>
+          <h2 className="text-base font-semibold tracking-tight">Pair your phone (or another browser) to this reader</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            The extension keeps working with the laptop page closed. Once paired, a search on your phone, in
+            Safari, or on any browser without the extension queues a job; the Brave with the reader picks it up
+            within a minute (usually seconds), reads Google Shopping in your own session, and posts the offers
+            back. Both devices are the same Covered user: same wallet, memory, limits and orders.
+          </p>
+          <ol className={STEPS}>
+            <li>
+              In Brave, click the <strong>Covered reader</strong> icon in the toolbar. The popup shows a 6-character
+              pair code and whether the reader is connected. Codes last 10 minutes and work once.
+            </li>
+            <li>
+              On the phone, open the Covered app and enter the code under <strong>Pair</strong>. On another browser,
+              type it here:
+              <PairForm />
+            </li>
+            <li>
+              Search as normal. The dashboard says <em>Reading Google Shopping on your paired browser…</em> while the
+              job runs. If Google asks the Brave for a check, pass it once in a normal tab there and search again.
+            </li>
+          </ol>
+          <p className="mt-4 text-sm text-muted">
+            Keep Brave running (it can be minimised). The reader polls every minute even when no Covered tab is open,
+            and holds a 20-second long-poll while it is awake. Up to 5 devices can pair; the oldest drops off when a
+            sixth joins.
           </p>
         </section>
       </main>

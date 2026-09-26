@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OfferSchema } from "@/lib/types";
-import { peekUserId } from "@/lib/memory/identity";
+import { peekUser, unauthorizedResponse } from "@/lib/memory/identity";
 import { type Limit } from "@/lib/memory";
 import { runLimitAgainstOffers } from "@/lib/limits";
 
@@ -33,12 +33,19 @@ export async function POST(request: Request): Promise<NextResponse<RunOk | RunEr
     );
   }
 
-  const userId = await peekUserId();
-  if (!userId) {
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) {
     return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
   }
 
-  const result = await runLimitAgainstOffers(userId, body.id, body.offers);
+  const result = await runLimitAgainstOffers(user.userId, body.id, body.offers);
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error, limit: result.limit },

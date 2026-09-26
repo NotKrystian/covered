@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getUserId } from "@/lib/memory/identity";
+import { resolveUser, unauthorizedResponse } from "@/lib/memory/identity";
 import { depositWallet, getMemory, memoryStore } from "@/lib/memory";
 
 export const runtime = "nodejs";
@@ -23,8 +23,16 @@ type WalletOk = {
   store: "dynamodb" | "local";
 };
 
-export async function GET(): Promise<NextResponse<WalletOk>> {
-  const { userId } = await getUserId();
+export async function GET(request: Request): Promise<NextResponse<WalletOk | { ok: false; error: string }>> {
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const memory = await getMemory(userId);
   return NextResponse.json({
     ok: true,
@@ -42,7 +50,15 @@ export async function POST(request: Request): Promise<NextResponse<WalletOk | { 
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
   }
 
-  const { userId } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const result = await depositWallet(userId, body.amount_pence);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400 });

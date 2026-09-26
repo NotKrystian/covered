@@ -57,7 +57,8 @@ aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name covered-app --pol
   --arg receipts "arn:aws:s3:::${S3_BUCKET}" \
   --arg deploy "arn:aws:s3:::${DEPLOY_BUCKET}" \
   --arg ecr "arn:aws:ecr:${AWS_REGION}:${ACCOUNT_ID}:repository/${ECR_REPO}" \
-  --arg memory "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${MEMORY_TABLE}" '
+  --arg memory "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${MEMORY_TABLE}" \
+  --arg jobs "arn:aws:dynamodb:${AWS_REGION}:${ACCOUNT_ID}:table/${JOBS_TABLE}" '
 {
   Version: "2012-10-17",
   Statement: [
@@ -69,6 +70,9 @@ aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name covered-app --pol
     { Sid: "Memory", Effect: "Allow",
       Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"],
       Resource: $memory },
+    { Sid: "Jobs", Effect: "Allow",
+      Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
+      Resource: $jobs },
     { Sid: "DeployArtifacts", Effect: "Allow",
       Action: ["s3:GetObject", "s3:PutObject"], Resource: ($deploy + "/*") },
     { Sid: "DeployArtifactsList", Effect: "Allow", Action: ["s3:ListBucket"], Resource: $deploy },
@@ -138,6 +142,7 @@ AWS_REGION=${AWS_REGION}
 S3_BUCKET=${S3_BUCKET}
 BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
 COVERED_MEMORY_TABLE=${MEMORY_TABLE}
+COVERED_JOBS_TABLE=${JOBS_TABLE}
 ENV
 for kv in ${EXTRA_CONTAINER_ENV}; do echo "\$kv" >>/opt/covered/env; done
 cat >/opt/covered/run.sh <<'RUN'

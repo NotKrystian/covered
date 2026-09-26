@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { UserSettingsSchema } from "@/lib/types";
-import { clearUserId, getUserId, setOnboardedCookie } from "@/lib/memory/identity";
+import { clearUserId, resolveUser, setOnboardedCookie, unauthorizedResponse } from "@/lib/memory/identity";
 import {
   DISPLAY_NAME_MAX,
   NOTE_MAX,
@@ -46,8 +46,16 @@ type MemoryResponse = {
   notes?: string[];
 };
 
-export async function GET(): Promise<NextResponse<MemoryResponse>> {
-  const { userId } = await getUserId();
+export async function GET(request: Request): Promise<NextResponse<MemoryResponse | { ok: false; error: string }>> {
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const memory = publicMemory(await getMemory(userId));
   return NextResponse.json({ ok: true, memory, store: memoryStore().store });
 }
@@ -60,7 +68,15 @@ export async function POST(request: Request): Promise<NextResponse<MemoryRespons
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
   }
 
-  const { userId } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const defaultNote =
     body.kind === "approve"
       ? `user approved ${body.chosen_id ?? "the pick"}`
@@ -89,8 +105,16 @@ export async function POST(request: Request): Promise<NextResponse<MemoryRespons
   });
 }
 
-export async function DELETE(): Promise<NextResponse<{ ok: true; store: "dynamodb" | "local" }>> {
-  const { userId } = await getUserId();
+export async function DELETE(request: Request): Promise<NextResponse<{ ok: true; store: "dynamodb" | "local" } | { ok: false; error: string }>> {
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   await deleteMemory(userId);
   await clearUserId();
   return NextResponse.json({ ok: true, store: memoryStore().store });
@@ -111,7 +135,15 @@ export async function PATCH(request: Request): Promise<NextResponse<MemoryRespon
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
   }
 
-  const { userId } = await getUserId();
+  let identity;
+  try {
+    identity = await resolveUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  const { userId } = identity;
   const current = await getMemory(userId);
   const next = await saveMemory(userId, {
     ...current,

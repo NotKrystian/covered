@@ -39,6 +39,13 @@ export const WALLET_DEPOSIT_MAX_PENCE = 50_000;
 export const WALLET_BALANCE_MAX_PENCE = 200_000;
 /** Watch-and-buy limits on the memory item. */
 export const LIMITS_MAX = 10;
+/** Live pair codes on the memory item (the phone claims one to join this user). */
+export const PAIR_CODES_MAX = 3;
+/** A pair code is valid for 10 minutes. */
+export const PAIR_CODE_TTL_MS = 10 * 60 * 1000;
+/** Device tokens (hashed) on the memory item: phones paired to this user. */
+export const DEVICE_TOKENS_MAX = 5;
+export const DEVICE_LABEL_MAX = 40;
 
 export const MemoryEventKindSchema = z.enum(["decision", "approve", "override"]);
 export type MemoryEventKind = z.infer<typeof MemoryEventKindSchema>;
@@ -150,6 +157,24 @@ export const LimitSchema = z.object({
 });
 export type Limit = z.infer<typeof LimitSchema>;
 
+/** A 6-character code shown in the extension popup. Claimed once, then removed. */
+export const PairCodeSchema = z.object({
+  code: z.string().min(6).max(6),
+  /** ISO 8601 timestamp after which the code is dead. */
+  expires_at: z.string(),
+});
+export type PairCode = z.infer<typeof PairCodeSchema>;
+
+/** One paired device. Only the sha256 of the token secret is stored. */
+export const DeviceTokenSchema = z.object({
+  /** sha256 hex of the secret half of `<user_id>.<secret>`. */
+  hash: z.string().length(64),
+  /** ISO 8601 timestamp. */
+  created_at: z.string(),
+  label: z.string().max(DEVICE_LABEL_MAX).optional(),
+});
+export type DeviceToken = z.infer<typeof DeviceTokenSchema>;
+
 export const MemorySchema = z.object({
   user_id: z.string().min(1).max(64),
   /** Optional name the user typed into the settings strip. */
@@ -167,6 +192,13 @@ export const MemorySchema = z.object({
   deposits: z.array(DepositSchema).max(DEPOSITS_MAX).default([]),
   /** Watch-and-buy limits. Capped at LIMITS_MAX. */
   limits: z.array(LimitSchema).max(LIMITS_MAX).default([]),
+  /**
+   * Unclaimed pair codes, newest last. Capped at PAIR_CODES_MAX; each lives PAIR_CODE_TTL_MS.
+   * Optional (not defaulted) so older `Memory` literals elsewhere keep compiling.
+   */
+  pair_codes: z.array(PairCodeSchema).max(PAIR_CODES_MAX).optional(),
+  /** Paired devices (hashed bearer tokens), newest last. Capped at DEVICE_TOKENS_MAX. */
+  device_tokens: z.array(DeviceTokenSchema).max(DEVICE_TOKENS_MAX).optional(),
   /** True after the first-visit onboarding flow finishes. */
   onboarded: z.boolean().default(false),
   /** ISO 8601 timestamp. */
@@ -184,6 +216,8 @@ export function emptyMemory(userId: string): Memory {
     balance_pence: 0,
     deposits: [],
     limits: [],
+    pair_codes: [],
+    device_tokens: [],
     onboarded: false,
     updated_at: new Date().toISOString(),
   };
@@ -203,9 +237,10 @@ export function hasPurchaseHistory(memory: Memory): boolean {
 }
 
 /**
- * Memory as the card and the judge should see it: decision events stripped.
- * Summary is cleared when there is no approve — old decision-only summaries
- * must not be presented as purchase history.
+ * Memory as the card and the judge should see it: decision events stripped,
+ * pair codes and device-token hashes withheld. Summary is cleared when there is
+ * no approve — old decision-only summaries must not be presented as purchase history.
+ * Never save the result of this function back.
  */
 export function publicMemory(memory: Memory): Memory {
   const events = visibleEvents(memory);
@@ -213,7 +248,40 @@ export function publicMemory(memory: Memory): Memory {
     ...memory,
     events,
     summary: hasPurchaseHistory(memory) ? memory.summary : "",
+    pair_codes: [],
+    device_tokens: [],
   };
+}
+
+/** Pair codes that have not expired yet. */
+export function livePairCodes(memory: Memory, now: number = Date.now()): PairCode[] {
+  return (memory.pair_codes ?? []).filter((c) => Date.parse(c.expires_at) > now);
+}
+
+/** Append a fresh pair code (dropping expired ones), persist, return it. */
+export async function addPairCode(userId: string, code: PairCode): Promise<Memory> {
+  const current = await getMemory(userId);
+  const pair_codes = [...livePairCodes(current), code].slice(-PAIR_CODES_MAX);
+  return saveMemory(userId, { ...current, pair_codes });
+}
+
+/**
+ * Consume `code` on this user: remove it and add the hashed device token in one write.
+ * Returns null when the code is not live on this item (expired, used, or never issued).
+ */
+export async function claimPairCode(
+  userId: string,
+  code: string,
+  token: DeviceToken,
+): Promise<Memory | null> {
+  const current = await getMemory(userId);
+  const live = livePairCodes(current);
+  if (!live.some((c) => c.code === code)) return null;
+  return saveMemory(userId, {
+    ...current,
+    pair_codes: live.filter((c) => c.code !== code),
+    device_tokens: [...(current.device_tokens ?? []), token].slice(-DEVICE_TOKENS_MAX),
+  });
 }
 
 /** Where the last read/write went. Surfaces in the trace so a demo never lies about storage. */
@@ -282,6 +350,11 @@ export function capMemory(memory: Memory): Memory {
       ...limit,
       query: limit.query.slice(0, QUERY_MAX),
       last_result: limit.last_result.slice(0, NOTE_MAX),
+    })),
+    pair_codes: (memory.pair_codes ?? []).slice(-PAIR_CODES_MAX),
+    device_tokens: (memory.device_tokens ?? []).slice(-DEVICE_TOKENS_MAX).map((token) => ({
+      ...token,
+      label: token.label?.slice(0, DEVICE_LABEL_MAX) || undefined,
     })),
     balance_pence: Math.max(0, Math.min(WALLET_BALANCE_MAX_PENCE, Math.round(memory.balance_pence))),
   });

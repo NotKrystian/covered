@@ -14,6 +14,13 @@
  * 14-day price-drop switch: the same alarm re-reads the query of each order still
  * inside its window (GET /api/switch) and POSTs offers to /api/switch/run. The
  * server judges them and only stores a switch offer; buying still needs the user.
+ *
+ * Remote reader: any client (the iPhone app, Safari, a laptop without this
+ * extension) queues `{ query }` at POST /api/reader/jobs. Alarm
+ * "covered-reader-poll" (every minute) wakes this worker; while awake it holds a
+ * 20 s long-poll on GET /api/reader/jobs/next, runs the same inactive-tab read,
+ * POSTs offers (or `{ error: "challenge" }`) to /api/reader/jobs/:id/result and
+ * closes the tab. One job at a time. No Covered page needs to be open.
  */
 
 // Firefox exposes promise-based `browser`; Chrome MV3's `chrome` also returns promises.
@@ -33,6 +40,17 @@ const DEV_ORIGIN = "http://localhost:3000";
 const DEMO_CHECKS_PER_DAY = 24;
 const ALARM_PERIOD_MINUTES = 1440 / DEMO_CHECKS_PER_DAY;
 const LIMITS_ALARM = "covered-limits";
+/** Remote reader: the alarm that wakes the worker; the long-poll keeps it busy while awake. */
+const READER_ALARM = "covered-reader-poll";
+const READER_ALARM_MINUTES = 1;
+/** Server caps the long-poll at 20 s; ask for exactly that. */
+const READER_LONG_POLL_SECONDS = 20;
+/** Stop the in-worker loop after this many consecutive empty polls per origin; the alarm restarts it. */
+const READER_MAX_IDLE_POLLS = 90;
+/** After a network error on an origin, leave it alone for this long. */
+const READER_BACKOFF_MS = 5 * 60 * 1000;
+/** Where the popup reads status from (survives worker sleep). */
+const READER_STATE_KEY = "covered_reader_state";
 
 function gridUrl(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=28&hl=en&gl=uk`;
@@ -305,9 +323,172 @@ async function runLimitChecks() {
   }
 }
 
-ensureLimitsAlarm();
-api.runtime.onInstalled?.addListener(ensureLimitsAlarm);
-api.runtime.onStartup?.addListener(ensureLimitsAlarm);
+// ---- remote reader ---------------------------------------------------------
+
+function ensureReaderAlarm() {
+  if (!api.alarms) return;
+  Promise.resolve(api.alarms.get(READER_ALARM)).then((existing) => {
+    if (!existing) {
+      api.alarms.create(READER_ALARM, { periodInMinutes: READER_ALARM_MINUTES });
+    }
+  }).catch(() => {
+    api.alarms.create(READER_ALARM, { periodInMinutes: READER_ALARM_MINUTES });
+  });
+}
+
+async function readState() {
+  if (!api.storage?.local) return {};
+  try {
+    const out = await api.storage.local.get(READER_STATE_KEY);
+    return (out && out[READER_STATE_KEY]) || {};
+  } catch {
+    return {};
+  }
+}
+
+async function patchState(patch) {
+  if (!api.storage?.local) return;
+  try {
+    const current = await readState();
+    await api.storage.local.set({ [READER_STATE_KEY]: { ...current, ...patch } });
+  } catch {
+    // Storage is best-effort; the popup just shows less.
+  }
+}
+
+/** GET /next with the browser's own cookie. Returns { job } | { empty: true } | { error }. */
+async function fetchNextJob(origin) {
+  const res = await fetch(`${origin}/api/reader/jobs/next?wait=${READER_LONG_POLL_SECONDS}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (res.status === 204) return { empty: true };
+  if (res.status === 401) return { error: "not_connected" };
+  if (!res.ok) return { error: `http_${res.status}` };
+  const json = await res.json();
+  if (!json || !json.ok || !json.job || typeof json.job.job_id !== "string") return { error: "bad_response" };
+  return { job: json.job };
+}
+
+async function postJobResult(origin, jobId, payload) {
+  const res = await fetch(`${origin}/api/reader/jobs/${encodeURIComponent(jobId)}/result`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.ok;
+}
+
+/** Run one queued job: same inactive-tab read as the page path, then report back. */
+async function runReaderJob(origin, job) {
+  const query = typeof job.query === "string" ? job.query.trim().slice(0, QUERY_MAX) : "";
+  await patchState({ last_job_at: new Date().toISOString(), last_job_query: query, last_job_result: "running", last_origin: origin });
+  let payload;
+  if (!query) {
+    payload = { error: "empty_query" };
+  } else {
+    const result = await runSearch(query);
+    if (result && Array.isArray(result.offers) && !result.error) payload = { offers: result.offers };
+    else payload = { error: (result && result.error) || "unknown" };
+  }
+  let posted = false;
+  try {
+    posted = await postJobResult(origin, job.job_id, payload);
+  } catch {
+    posted = false;
+  }
+  const summary = payload.offers ? `${payload.offers.length} offers` : payload.error;
+  await patchState({ last_job_result: posted ? summary : `${summary} (post failed)` });
+}
+
+let readerBusy = false;
+const readerBackoffUntil = { [PRODUCTION_ORIGIN]: 0, [DEV_ORIGIN]: 0 };
+
+/** Any extension API call resets Chrome's 30 s idle timer, so a 20 s long-poll never strands the worker. */
+function keepAlive() {
+  try {
+    return Promise.resolve(api.runtime.getPlatformInfo()).catch(() => undefined);
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Long-poll loop. Alternates between the production host and the dev host; an
+ * origin that errors is skipped for READER_BACKOFF_MS. Exits after a run of empty
+ * polls (or when both origins are backing off) and waits for the next alarm.
+ */
+async function pollReaderJobs(reason) {
+  if (readerBusy) return;
+  readerBusy = true;
+  await patchState({ polling: true, last_poll_at: new Date().toISOString(), last_poll_reason: reason || "alarm" });
+  let idle = 0;
+  try {
+    while (idle < READER_MAX_IDLE_POLLS) {
+      await keepAlive();
+      const now = Date.now();
+      const origins = [PRODUCTION_ORIGIN, DEV_ORIGIN].filter((origin) => readerBackoffUntil[origin] <= now);
+      if (origins.length === 0) break;
+      let sawJob = false;
+      for (const origin of origins) {
+        let next;
+        try {
+          next = await fetchNextJob(origin);
+        } catch {
+          readerBackoffUntil[origin] = Date.now() + READER_BACKOFF_MS;
+          continue;
+        }
+        if (next.job) {
+          sawJob = true;
+          try {
+            await runReaderJob(origin, next.job);
+          } catch (err) {
+            await patchState({ last_job_result: err instanceof Error ? err.message : String(err) });
+          }
+        } else if (next.error) {
+          if (next.error === "not_connected" && origin === PRODUCTION_ORIGIN) {
+            await patchState({ connected: false });
+          }
+          readerBackoffUntil[origin] = Date.now() + READER_BACKOFF_MS;
+        } else if (origin === PRODUCTION_ORIGIN) {
+          await patchState({ connected: true, last_poll_at: new Date().toISOString() });
+        }
+      }
+      idle = sawJob ? 0 : idle + 1;
+    }
+  } finally {
+    readerBusy = false;
+    await patchState({ polling: false });
+  }
+}
+
+/** Popup asks for status / a manual poll. */
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || sender.id !== api.runtime.id) return undefined;
+  if (message.type === "reader-status") {
+    readState().then((state) => sendResponse({ ...state, polling: readerBusy })).catch(() => sendResponse({}));
+    return true;
+  }
+  if (message.type === "reader-poll-now") {
+    for (const origin of Object.keys(readerBackoffUntil)) readerBackoffUntil[origin] = 0;
+    void pollReaderJobs("popup");
+    sendResponse({ ok: true, started: !readerBusy });
+    return undefined;
+  }
+  return undefined;
+});
+
+function onWake() {
+  ensureLimitsAlarm();
+  ensureReaderAlarm();
+  void pollReaderJobs("startup");
+}
+
+onWake();
+api.runtime.onInstalled?.addListener(onWake);
+api.runtime.onStartup?.addListener(onWake);
 api.alarms?.onAlarm.addListener((alarm) => {
   if (alarm.name === LIMITS_ALARM) void runLimitChecks();
+  if (alarm.name === READER_ALARM) void pollReaderJobs("alarm");
 });

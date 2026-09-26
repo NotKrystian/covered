@@ -6,6 +6,7 @@ import type { Offer, Receipt, SearchResult, UserSettings } from "@/lib/types";
 import type { DecideResponse } from "@/lib/decision";
 import type { Limit, Memory } from "@/lib/memory";
 import { isExtensionSearchError, searchViaExtension } from "@/lib/reader/extension";
+import { REMOTE_READER_OFFLINE, readViaRemoteReader } from "@/lib/client/remote-reader";
 
 export type ReceiptBody = Omit<Receipt, "id" | "created_at">;
 export type MemoryState = { memory: Memory; store: string };
@@ -68,13 +69,20 @@ export async function postSearch(
   }
 }
 
+/** No reader anywhere: not in this browser, and no paired browser has polled recently. */
+export const NO_READER = "no_reader";
+
 export function liveGridErrorKind(reason: string): "no_extension" | "challenge" | "other" {
   if (reason === "no_extension" || reason.startsWith("no_extension")) return "no_extension";
+  if (reason === NO_READER) return "no_extension";
   if (reason === "challenge" || reason.startsWith("challenge")) return "challenge";
   return "other";
 }
 
 export function liveGridErrorLine(reason: string): string {
+  if (reason === NO_READER) {
+    return "No reader is connected. Install the Covered reader in Brave, or pair this device to it from the extension popup";
+  }
   const kind = liveGridErrorKind(reason);
   switch (kind) {
     case "no_extension":
@@ -90,11 +98,33 @@ export function liveGridErrorLine(reason: string): string {
   }
 }
 
-export async function readLiveGrid(query: string): Promise<SearchAttempt> {
+/** Where a live read is happening right now, so the UI can say so. */
+export type LiveGridPhase = "extension" | "remote_reader" | "server";
+
+/**
+ * Extension in this browser first. If it is not installed here, queue a job for the
+ * user's paired Brave and poll it. Server Playwright / snapshot is the last resort.
+ */
+export async function readLiveGrid(
+  query: string,
+  onPhase?: (phase: LiveGridPhase) => void,
+): Promise<SearchAttempt> {
+  onPhase?.("extension");
   const ext = await searchViaExtension(query);
   if (!isExtensionSearchError(ext)) {
     return postSearch(query, ext);
   }
+  if (ext.error === "no_extension") {
+    onPhase?.("remote_reader");
+    const remote = await readViaRemoteReader(query);
+    if (remote.ok) return remote;
+    if (remote.reason !== REMOTE_READER_OFFLINE) return remote;
+    onPhase?.("server");
+    const server = await postSearch(query);
+    if (server.ok) return server;
+    return { ok: false, reason: NO_READER };
+  }
+  onPhase?.("server");
   const server = await postSearch(query);
   if (server.ok) return server;
   return { ok: false, reason: ext.error };
