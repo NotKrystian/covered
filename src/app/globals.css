@@ -12,6 +12,33 @@
   --accent-soft: rgba(95, 211, 138, 0.12);
   --danger: #f0555b;
   --danger-soft: rgba(240, 85, 91, 0.12);
+  --scrollbar: #34373f;
+  /* Native controls (scrollbars, date pickers) follow the dark theme instead of the OS light one. */
+  color-scheme: dark;
+}
+
+/* Thin, dark scrollbars on every scroll area. Standard properties for Chrome, Edge and Firefox; the WebKit ones cover Safari. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--scrollbar);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 @theme inline {
