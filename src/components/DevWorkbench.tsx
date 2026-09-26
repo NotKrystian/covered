@@ -14,6 +14,7 @@ import {
   readLiveGrid,
   type MemoryState,
 } from "@/lib/client/shop";
+import { clearOnboarding } from "@/lib/client/onboarding-progress";
 import { SettingsStrip } from "@/components/SettingsStrip";
 import { ChatPanel, type ChatMessage, type SourceKind } from "@/components/ChatPanel";
 import { Shortlist, type ShortlistSource } from "@/components/Shortlist";
@@ -135,6 +136,8 @@ export function DevWorkbench() {
     });
     setBalancePence(0);
     setDisplayName("");
+    // Also forget this browser's saved onboarding, or the home page would restore it.
+    clearOnboarding();
     try {
       await fetch("/api/memory", { method: "DELETE" });
       await refreshMemory();

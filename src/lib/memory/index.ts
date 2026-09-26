@@ -174,7 +174,9 @@ export function publicMemory(memory: Memory): Memory {
 /** Where the last read/write went. Surfaces in the trace so a demo never lies about storage. */
 export type MemoryStore = "dynamodb" | "local";
 
-const local = new Map<string, Memory>();
+type MemoryGlobal = typeof globalThis & { __coveredLocalMemory?: Map<string, Memory> };
+/** On globalThis so Next dev hot reloads do not wipe it (a restart still does). */
+const local: Map<string, Memory> = ((globalThis as MemoryGlobal).__coveredLocalMemory ??= new Map<string, Memory>());
 let docClient: DynamoDBDocumentClient | null = null;
 let storeMode: MemoryStore = "dynamodb";
 let storeReason = "";

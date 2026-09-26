@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { DEFAULT_USER_SETTINGS } from "@/lib/types";
 import type { UserSettings } from "@/lib/types";
 import { formatPence } from "@/lib/money";
 import { depositWallet, patchMemory, type MemoryState } from "@/lib/client/shop";
+import { loadOnboarding, saveOnboarding } from "@/lib/client/onboarding-progress";
 import { PoundField } from "@/components/PoundField";
 
 type Props = {
@@ -14,12 +15,18 @@ type Props = {
 const STEPS = 5;
 
 export function Onboarding({ onDone }: Props) {
-  const [step, setStep] = useState(1);
-  const [name, setName] = useState("");
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [depositPounds, setDepositPounds] = useState("20");
+  // Resume where this browser left off (see onboarding-progress.ts).
+  const [initial] = useState(() => loadOnboarding());
+  const [step, setStep] = useState(() => Math.min(STEPS, initial?.step ?? 1));
+  const [name, setName] = useState(initial?.name ?? "");
+  const [settings, setSettings] = useState<UserSettings>(initial?.settings ?? DEFAULT_USER_SETTINGS);
+  const [depositPounds, setDepositPounds] = useState(initial?.deposit ?? "20");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveOnboarding({ step, name, settings, deposit: depositPounds, done: false });
+  }, [step, name, settings, depositPounds]);
 
   const next = () => setStep((s) => Math.min(STEPS, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -48,8 +55,34 @@ export function Onboarding({ onDone }: Props) {
       balance = deposited.balance_pence;
     }
     setBusy(false);
+    // Keep the answers so a lost server memory can be restored without asking again.
+    saveOnboarding({ step, name, settings, deposit: depositPounds, done: true });
     onDone(saved, balance);
   };
+
+  const saveWithDeposit = () => {
+    const n = Number(depositPounds);
+    if (!Number.isFinite(n) || n < 0) {
+      setError("Enter an amount, or skip with £0.");
+      return;
+    }
+    void finish(Math.round(n * 100));
+  };
+
+  // Enter continues from anywhere on the step (step 4 has no input). A focused button
+  // or link keeps its own Enter so nothing fires twice.
+  const onEnter = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key !== "Enter" || e.isComposing || e.repeat || busy) return;
+    if (e.target instanceof HTMLElement && e.target.closest("button, a")) return;
+    e.preventDefault();
+    if (step < STEPS) next();
+    else saveWithDeposit();
+  });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onEnter(e);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
@@ -68,9 +101,6 @@ export function Onboarding({ onDone }: Props) {
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value.slice(0, 40))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") next();
-              }}
               placeholder="Your name"
               className="w-full border-b border-line bg-transparent py-3 text-2xl outline-none placeholder:text-muted focus:border-accent"
             />
@@ -86,7 +116,6 @@ export function Onboarding({ onDone }: Props) {
               label="Protection premium in pounds"
               pence={settings.protection_premium_pence}
               onPence={(p) => setSettings({ ...settings, protection_premium_pence: p })}
-              onEnter={next}
             />
           </section>
         )}
@@ -106,7 +135,6 @@ export function Onboarding({ onDone }: Props) {
               label="Switch minimum in pounds"
               pence={settings.switch_minimum_pence}
               onPence={(p) => setSettings({ ...settings, switch_minimum_pence: p })}
-              onEnter={next}
             />
           </section>
         )}
@@ -180,14 +208,7 @@ export function Onboarding({ onDone }: Props) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => {
-                  const n = Number(depositPounds);
-                  if (!Number.isFinite(n) || n < 0) {
-                    setError("Enter an amount, or skip with £0.");
-                    return;
-                  }
-                  void finish(Math.round(n * 100));
-                }}
+                onClick={saveWithDeposit}
                 className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
               >
                 {busy ? "Saving…" : "Save and continue"}
