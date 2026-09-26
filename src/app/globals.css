@@ -56,3 +56,35 @@ body {
     box-shadow: 0 0 0 1px var(--accent);
   }
 }
+
+/* Pay sheet: slides up; the side cue pulses like a phone's double-click prompt. */
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-up {
+    animation: sheet-up 180ms ease-out;
+  }
+
+  .side-pulse {
+    animation: side-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes side-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}

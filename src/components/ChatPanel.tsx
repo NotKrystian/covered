@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { formatPence } from "@/lib/money";
 
 export type ChatMessage = {
   id: string;
@@ -24,6 +25,8 @@ type Props = {
   onApprove: () => void;
   approving: boolean;
   receiptLine: string | null;
+  /** Set after a paid order: the 14-day price-drop watch, shown as not built yet. */
+  watchTeaser?: { switchMinimumPence: number } | null;
 };
 
 export function ChatPanel({
@@ -37,11 +40,13 @@ export function ChatPanel({
   onApprove,
   approving,
   receiptLine,
+  watchTeaser = null,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const showWatch = watchTeaser !== null;
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, receiptLine]);
+  }, [messages.length, receiptLine, showWatch]);
 
   const lastBotIndex = messages.map((m) => m.role).lastIndexOf("bot");
 
@@ -89,6 +94,22 @@ export function ChatPanel({
           <div className="flex justify-start">
             <div className="tnum max-w-[92%] rounded-2xl rounded-bl-sm border border-accent/40 bg-accent-soft px-3.5 py-2 text-sm text-foreground">
               {receiptLine}
+            </div>
+          </div>
+        )}
+        {receiptLine && watchTeaser && (
+          <div className="flex justify-start">
+            <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-dashed border-line px-3.5 py-2 text-sm text-muted">
+              <p className="flex flex-wrap items-center gap-2 text-foreground">
+                14-day price-drop watch
+                <span className="rounded-full border border-line px-1.5 py-px text-[10px] uppercase tracking-wide text-muted">
+                  Coming next
+                </span>
+              </p>
+              <p className="mt-1 text-xs leading-relaxed">
+                Inside your cooling-off window, Covered will re-check this price and move you if you would clear{" "}
+                {formatPence(watchTeaser.switchMinimumPence)} after postage. Not built yet.
+              </p>
             </div>
           </div>
         )}

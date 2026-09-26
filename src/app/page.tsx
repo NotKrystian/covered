@@ -14,6 +14,7 @@ import { Shortlist, type ShortlistSource } from "@/components/Shortlist";
 import { TracePanel } from "@/components/TracePanel";
 import { MemoryCard } from "@/components/MemoryCard";
 import { WalletStrip } from "@/components/WalletStrip";
+import { PaySheet } from "@/components/PaySheet";
 
 type ReceiptBody = Omit<Receipt, "id" | "created_at">;
 
@@ -179,6 +180,10 @@ export default function Home() {
   const [memoryState, setMemoryState] = useState<MemoryState | null>(null);
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [balancePence, setBalancePence] = useState(0);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  /** True once this verdict was paid for; shows the price-drop watch teaser. */
+  const [paid, setPaid] = useState(false);
 
   const push = useCallback((m: ChatMessage) => setMessages((prev) => [...prev, m]), []);
 
@@ -237,6 +242,7 @@ export default function Home() {
       setSource(nextSource);
       setRunning(true);
       setReceiptLine(null);
+      setPaid(false);
       push(msg("user", q));
       try {
         let read: SearchResult | undefined;
@@ -288,6 +294,7 @@ export default function Home() {
     const decision = chosen ? result.decisions[chosen.id] : undefined;
     if (!chosen || !decision) return;
     setApproving(true);
+    setPayError(null);
     const body: ReceiptBody & { chosen_id: string } = {
       query,
       chosen: chosen.raw.kind === "offer" ? chosen.raw.offer : chosen.raw.listing,
@@ -302,36 +309,48 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      // Failures stay in the pay sheet so the user can deposit or retry; only a paid order reaches the chat.
       if (res.status === 404) {
-        setReceiptLine("Approved locally. Receipt endpoint not wired yet.");
+        setPayError("Payment endpoint not wired yet.");
         return;
       }
       const json = (await res.json().catch(() => null)) as
         | { ok?: boolean; id?: string; key?: string; error?: string; balance_pence?: number }
         | null;
       if (res.status === 402) {
-        setReceiptLine(json?.error ?? "Wallet is short.");
+        setPayError(json?.error ?? "Wallet is short.");
         return;
       }
       if (!res.ok || !json?.ok || !json.id) {
-        setReceiptLine(`Approve failed (${res.status}${json?.error ? `: ${json.error}` : ""}).`);
+        setPayError(`Payment failed (${res.status}${json?.error ? `: ${json.error}` : ""}).`);
         return;
       }
       if (typeof json.balance_pence === "number") setBalancePence(json.balance_pence);
-      const paid = result.premium_paid_pence ?? 0;
+      const premium = result.premium_paid_pence ?? 0;
+      setPayOpen(false);
+      setPaid(true);
       setReceiptLine(
-        `Bought ${chosen.merchant} ${chosen.price_label} · ${formatPence(paid)} paid for rights · wallet ${formatPence(json.balance_pence ?? 0)} · receipt ${json.id}`,
+        `✓ Paid ${chosen.price_label} to ${chosen.merchant} from your Covered demo wallet · ${formatPence(premium)} paid for rights · wallet ${formatPence(json.balance_pence ?? 0)} · receipt ${json.id}`,
       );
       setMemoryBusy(true);
       await refreshMemory();
       setMemoryBusy(false);
     } catch (err) {
-      setReceiptLine(`Approve failed: ${err instanceof Error ? err.message : String(err)}`);
+      setPayError(`Payment failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setApproving(false);
       setMemoryBusy(false);
     }
   }, [result, query, settings.protection_premium_pence, refreshMemory]);
+
+  const openPay = useCallback(() => {
+    setPayError(null);
+    setPayOpen(true);
+  }, []);
+  const closePay = useCallback(() => setPayOpen(false), []);
+
+  const chosenItem = result?.shortlist.find((i) => i.id === result.verdict.chosen_id) ?? null;
+  const chosenRights = chosenItem ? (result?.decisions[chosenItem.id]?.rights ?? []) : [];
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-background text-foreground">
@@ -353,9 +372,10 @@ export default function Home() {
           source={source}
           running={running}
           canApprove={result !== null && result.verdict.chosen_id !== null}
-          onApprove={approve}
+          onApprove={openPay}
           approving={approving}
           receiptLine={receiptLine}
+          watchTeaser={paid ? { switchMinimumPence: settings.switch_minimum_pence } : null}
         />
         <main className="min-h-0 min-w-0 overflow-x-auto">
           <Shortlist
@@ -383,6 +403,20 @@ export default function Home() {
           }
         />
       </div>
+      {payOpen && chosenItem && (
+        <PaySheet
+          merchant={chosenItem.merchant}
+          title={chosenItem.title}
+          pricePence={chosenItem.price_pence}
+          priceLabel={chosenItem.price_label}
+          balancePence={balancePence}
+          rights={chosenRights}
+          paying={approving}
+          error={payError}
+          onPay={() => void approve()}
+          onClose={closePay}
+        />
+      )}
     </div>
   );
 }
