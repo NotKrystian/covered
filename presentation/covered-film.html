@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Covered — product film</title>
+<style>
+@font-face { font-family: Geist; src: url(assets/fonts/Geist-Variable.woff2) format("woff2"); font-weight: 100 900; font-display: block; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #ebe8e2; }
+body { font-family: Geist, sans-serif; color: #111; -webkit-font-smoothing: antialiased; }
+.num { font-variant-numeric: tabular-nums; }
+.a { position: absolute; left: 0; top: 0; }
+.hid { visibility: hidden; }
+
+#stage { position: absolute; inset: 0; overflow: hidden; }
+.cap { position: absolute; left: 128px; top: 0; width: 690px; height: 1080px; display: flex; align-items: center; }
+.cap > div { font-size: 88px; font-weight: 620; letter-spacing: -0.045em; line-height: 1.0; color: #121212; }
+.w { display: inline-block; margin-right: 0.22em; }
+
+#cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#body { position: absolute; left: -13px; top: -13px; width: 456px; height: 956px; border-radius: 71px; background: #0e0e0e;
+  box-shadow: inset 0 0 0 1.5px #2c2c2c, 0 44px 70px -24px rgba(70, 52, 30, 0.30); }
+.hw { position: absolute; background: #161616; border-radius: 2px; }
+#screen { position: absolute; left: 0; top: 0; width: 430px; height: 930px; border-radius: 58px; overflow: hidden; background: #fff; isolation: isolate; }
+#finger, .ripple { z-index: 50; }
+
+.status { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+#hole { position: absolute; left: 207px; top: 15px; width: 16px; height: 16px; border-radius: 8px; background: #0b0b0b; }
+#brand { position: absolute; left: 24px; top: 58px; font-size: 25px; font-weight: 660; letter-spacing: -0.035em; }
+#brand i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #5fd38a; margin-left: 2px; }
+#wallet { position: absolute; right: 22px; top: 56px; height: 38px; padding: 0 14px; border-radius: 19px; background: #f3f2ef;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+#wallet span:first-child { font-size: 13px; color: #6f6d67; font-weight: 500; }
+#wallet span:last-child { font-size: 18px; font-weight: 620; letter-spacing: -0.01em; }
+
+#surface { position: absolute; overflow: hidden; }
+.sc { position: absolute; left: 0; top: 0; }
+
+.field { position: absolute; left: 16px; top: 792px; width: 330px; height: 56px; border-radius: 28px; background: #f0efec;
+  font-size: 17px; color: #8a877f; padding: 17px 22px; }
+#send { position: absolute; left: 358px; top: 792px; width: 56px; height: 56px; border-radius: 28px; background: #0b0b0b; display: grid; place-items: center; }
+#dots { position: absolute; left: 20px; top: 228px; width: 78px; height: 44px; border-radius: 22px; background: #f0efec; }
+#dots i { position: absolute; top: 18px; width: 8px; height: 8px; border-radius: 4px; background: #8a877f; }
+
+.card { position: absolute; background: #fff; border-radius: 22px; overflow: hidden; }
+.ph { position: absolute; overflow: hidden; background: #e8e6e1; }
+.ph img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+.lt, .ct { position: absolute; white-space: normal; }
+.price { font-size: 32px; font-weight: 650; letter-spacing: -0.03em; line-height: 36px; }
+.was { font-size: 15px; font-weight: 500; color: #8a877f; text-decoration: line-through; letter-spacing: 0; margin-left: 8px; }
+.ttl { font-size: 15px; font-weight: 520; line-height: 20px; margin-top: 8px; }
+.sel { font-size: 14px; color: #6f6d67; line-height: 18px; margin-top: 4px; }
+.chip { position: absolute; font-size: 13px; font-weight: 540; line-height: 17px; padding: 7px 10px; border-radius: 12px; }
+.chip.g { background: #e2f6e9; color: #0e2b19; }
+.chip.n { background: #efeeea; color: #5e5c56; }
+.chip.k { background: #0b0b0b; color: #fff; }
+.strike { position: absolute; height: 2.5px; background: #a3a19b; border-radius: 2px; transform-origin: 0 50%; }
+.pick { position: absolute; left: 16px; top: 16px; height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: #0b0b0b; color: #fff;
+  font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pick i, .dot { display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #5fd38a; }
+.scanband { position: absolute; background: rgba(95, 211, 138, 0.20); }
+.scanline { position: absolute; height: 2px; background: #5fd38a; }
+
+.lbl { font-size: 15px; color: #6f6d67; font-weight: 500; }
+.row2 { position: absolute; display: flex; justify-content: space-between; align-items: baseline; }
+#track { position: absolute; left: 36px; top: 636px; width: 358px; height: 14px; border-radius: 7px; background: #e6e4df; overflow: hidden; }
+#fillG, #fillO { position: absolute; top: 0; height: 14px; }
+#fillG { background: #5fd38a; }
+#fillO { background: #b9b6ae; }
+#marker { position: absolute; top: 628px; width: 2.5px; height: 30px; background: #0b0b0b; border-radius: 2px; }
+#handle { position: absolute; top: 664px; height: 44px; border-radius: 22px; background: #0b0b0b; color: #fff; font-size: 16px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap; width: 152px; }
+.verdict { position: absolute; left: 24px; top: 724px; width: 382px; }
+.verdict .vl { font-size: 19px; font-weight: 640; letter-spacing: -0.015em; }
+.verdict .vs { font-size: 16px; color: #5e5c56; line-height: 21px; margin-top: 6px; }
+
+#overlay { position: absolute; left: 0; top: 0; width: 430px; height: 930px; background: #000; }
+#hint { position: absolute; right: 30px; top: 240px; text-align: right; color: #fff; font-size: 23px; font-weight: 620; line-height: 1.1; letter-spacing: -0.02em; transform-origin: 100% 50%; }
+#hintbar { position: absolute; left: 421px; top: 222px; width: 5px; height: 120px; border-radius: 3px; background: #fff; transform-origin: 100% 50%; }
+
+.tab { position: absolute; top: 885px; font-size: 16px; font-weight: 600; }
+#pill { position: absolute; top: 875px; height: 40px; border-radius: 20px; background: #0b0b0b; overflow: hidden; }
+
+.rowc { position: absolute; border-radius: 24px; overflow: hidden; }
+.thumb { position: absolute; overflow: hidden; border-radius: 14px; background: #e8e6e1; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.t19 { font-size: 19px; font-weight: 640; letter-spacing: -0.02em; white-space: nowrap; }
+.t14 { font-size: 14px; color: #6f6d67; line-height: 18px; }
+.sumrow { position: absolute; left: 20px; width: 366px; display: flex; justify-content: space-between; align-items: baseline; }
+.sumrow b { font-size: 23px; font-weight: 600; letter-spacing: -0.01em; }
+.mchip { position: absolute; height: 34px; padding: 0 12px 0 10px; border-radius: 17px; background: #232323; color: #fff; font-size: 14px; font-weight: 540;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+#finger { position: absolute; left: 0; top: 0; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 22px; background: rgba(128, 126, 121, 0.58);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 6px 16px rgba(0, 0, 0, 0.16); }
+.ripple { position: absolute; left: 0; top: 0; border-radius: 50%; border: 2px solid rgba(128, 126, 121, 0.8); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
+#lbveil { position: absolute; left: 12px; top: 124px; width: 406px; height: 736px; border-radius: 30px; background: rgba(243, 242, 239, 0.92); z-index: 19; }
+.mrow { position: absolute; left: 20px; top: 138px; display: flex; gap: 8px; }
+.mrow .mchip { position: relative; }
+#field, #send, #dots { z-index: 3; }
+.tab, #pill { z-index: 6; }
+#lh0, #lh1, #lh2 { z-index: 8; }
+#gapline, #meterhdr, #track, #marker, #handle, .verdict, #summary, #rowchip { z-index: 9; }
+.card { z-index: 10; }
+#debug { position: absolute; right: 16px; bottom: 12px; font: 600 18px Geist; color: #8a877f; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="caps"></div>
+
+  <div id="cam">
+    <div id="body"></div>
+    <div class="hw" style="left:-17px;top:196px;width:5px;height:58px"></div>
+    <div class="hw" style="left:-17px;top:270px;width:5px;height:58px"></div>
+    <div class="hw" id="sidebtn" style="left:442px;top:220px;width:5px;height:122px"></div>
+
+    <div id="screen">
+      <div class="a status" style="left:34px;top:15px">16:30</div>
+      <div id="hole"></div>
+      <svg class="a" style="left:368px;top:17px" width="30" height="14" viewBox="0 0 30 14"><rect x="1" y="1" width="24" height="12" rx="3.5" fill="none" stroke="#111" stroke-width="1.6"/><rect x="3.4" y="3.4" width="17" height="7.2" rx="1.6" fill="#111"/><rect x="26.6" y="4.6" width="2" height="4.8" rx="1" fill="#111"/></svg>
+      <div id="brand">Covered<i></i></div>
+      <div id="wallet"><span>Wallet</span><span class="num" id="walletv">£2,000.00</span></div>
+
+      <div class="field" id="field">Message Covered</div>
+      <div id="send"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div id="dots"><i style="left:21px"></i><i style="left:35px"></i><i style="left:49px"></i></div>
+
+      <div id="surface">
+        <div class="sc" id="c_msg" style="left:22px;top:14px;width:290px;font-size:19px;font-weight:520;line-height:25px;letter-spacing:-0.01em">iPhone 17 Pro Max, cosmic orange, 256GB</div>
+        <div class="sc" id="c_btn" style="width:382px;height:76px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:640;letter-spacing:-0.01em"><span class="num">Approve · £1,099.00</span></div>
+        <div class="sc" id="c_sheet" style="width:414px;height:436px">
+          <div class="a" style="left:187px;top:10px;width:40px;height:5px;border-radius:3px;background:#d9d7d1"></div>
+          <div class="row2" style="left:24px;top:36px;width:366px"><span class="lbl" style="font-size:16px">Covered wallet</span><span class="num" style="font-size:23px;font-weight:620;letter-spacing:-0.01em">£2,000.00</span></div>
+          <div class="a" style="left:24px;top:84px;width:366px;height:1px;background:#ebe9e4"></div>
+          <div class="thumb" style="left:24px;top:104px;width:72px;height:72px"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.9);transform-origin:50% 22%"></div>
+          <div class="a" style="left:112px;top:106px;width:180px"><div class="t19" style="font-size:18px">iPhone 17 Pro Max</div><div class="t14" style="margin-top:4px">Cosmic Orange · 256GB</div><div class="t14">Brightwell Electrical</div></div>
+          <div class="a num" style="right:24px;left:auto;top:106px;font-size:20px;font-weight:620">£1,099.00</div>
+          <div class="a" style="left:24px;top:196px;width:366px;height:1px;background:#ebe9e4"></div>
+          <div class="chip g" style="left:24px;top:214px;font-size:14px"><svg width="13" height="13" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:5px"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#0e2b19" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>14-day cancellation · 30-day fault refund</div>
+          <div class="row2" style="left:24px;top:276px;width:366px"><span class="lbl" style="font-size:16px">Total</span><span class="num" style="font-size:28px;font-weight:660;letter-spacing:-0.02em">£1,099.00</span></div>
+          <div class="a" style="left:24px;top:334px;width:366px;text-align:center;font-size:15px;color:#8a877f;font-weight:500">Confirm with the side button</div>
+        </div>
+        <svg class="sc" id="c_ring" width="128" height="128" viewBox="0 0 128 128">
+          <circle id="ringtrack" cx="64" cy="64" r="50" fill="none" stroke="#ebe9e4" stroke-width="7"/>
+          <circle id="ringarc" cx="64" cy="64" r="50" fill="none" stroke="#0b0b0b" stroke-width="7" stroke-linecap="round" transform="rotate(-90 64 64)" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+          <path id="check" d="M40 66 L56 81 L89 47" fill="none" stroke="#0b0b0b" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="72" stroke-dashoffset="72"/>
+        </svg>
+        <div class="sc" id="c_row" style="width:382px;height:108px">
+          <div class="thumb" style="left:16px;top:18px;width:72px;height:72px"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.9);transform-origin:50% 22%"></div>
+          <div class="a" style="left:104px;top:24px"><div class="t19 num" style="font-size:20px">#CV-4821 · £1,099.00</div><div class="t14" style="margin-top:6px">Paid · Brightwell Electrical</div></div>
+        </div>
+        <div class="sc" id="c_detail" style="width:406px;height:736px">
+          <div class="thumb" style="left:20px;top:20px;width:100px;height:100px;border-radius:18px"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.9);transform-origin:50% 22%"></div>
+          <div class="a" style="left:136px;top:22px;width:250px">
+            <div class="t14 num" style="font-size:15px">#CV-4821</div>
+            <div class="t19" style="font-size:20px;margin-top:4px">iPhone 17 Pro Max</div>
+            <div class="t14" style="font-size:15px;margin-top:3px">Cosmic Orange · 256GB</div>
+            <div class="num" style="font-size:16px;font-weight:600;margin-top:6px">£1,099.00 <span class="t14" style="font-weight:400">· Brightwell Electrical</span></div>
+          </div>
+          <div class="a" style="left:20px;top:146px;width:366px;height:1px;background:#e2e0da"></div>
+          <div class="a lbl" style="left:20px;top:168px">Delivery</div>
+          <div class="a" style="left:44px;top:212px;width:318px;height:4px;border-radius:2px;background:#dddbd5"></div>
+          <div class="a" id="trkfill" style="left:44px;top:212px;height:4px;border-radius:2px;background:#5fd38a"></div>
+          <div class="a" id="trkn0" style="left:38px;top:208px;width:12px;height:12px;border-radius:6px;background:#dddbd5"></div>
+          <div class="a" id="trkn1" style="left:197px;top:208px;width:12px;height:12px;border-radius:6px;background:#dddbd5"></div>
+          <div class="a" id="trkn2" style="left:356px;top:208px;width:12px;height:12px;border-radius:6px;background:#dddbd5"></div>
+          <div class="a" id="trkpill" style="top:207px;height:14px;border-radius:7px;background:#0b0b0b"></div>
+          <div class="a" id="trkl0" style="left:44px;top:236px;transform:translateX(-50%);font-size:15px;font-weight:560;white-space:nowrap">Placed</div>
+          <div class="a" id="trkl1" style="left:203px;top:236px;transform:translateX(-50%);font-size:15px;font-weight:560;white-space:nowrap">Dispatched</div>
+          <div class="a" id="trkl2" style="left:362px;top:236px;transform:translateX(-50%);font-size:15px;font-weight:560;white-space:nowrap">Delivered</div>
+          <div class="a" style="left:20px;top:290px;width:366px;height:1px;background:#e2e0da"></div>
+          <div class="a lbl" style="left:20px;top:312px">Return window</div>
+          <div class="a lbl" style="left:0;top:544px;width:406px;text-align:center;font-size:14px">14-day cancellation · Brightwell Electrical</div>
+        </div>
+        <div class="sc" id="c_compact" style="width:406px;height:100px">
+          <div class="thumb" style="left:16px;top:16px;width:68px;height:68px"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.9);transform-origin:50% 22%"></div>
+          <div class="a t19 num" style="left:98px;top:18px">#CV-4821 · £1,099.00</div>
+          <div class="a t14" id="c_stA" style="left:98px;top:48px;width:220px">Delivered · <span class="num" id="c_days">8</span> days left</div>
+          <div class="a t14 num" id="c_stB" style="left:98px;top:47px;width:292px">return started · £1,099.00 refund pending</div>
+        </div>
+      </div>
+
+      <div class="a lbl" id="lh0" style="left:28px;top:140px">4 listings</div>
+      <div class="a lbl" id="lh1" style="left:28px;top:140px">3 left</div>
+      <div class="a lbl" id="lh2" style="left:28px;top:140px">2 left</div>
+
+      <!-- listing cards: 0 mislisting, 1 private, 2 overseas, 3 UK shop -->
+      <div class="card" id="card0">
+        <div class="ph"><img src="assets/photos/case-orange-only.png"></div>
+        <div class="scanband" id="scanband"></div><div class="scanline" id="scanline"></div>
+        <div class="lt" style="left:170px;top:14px;width:198px"><div class="price num">£349</div><div class="ttl">iPhone 17 Pro Max · 256GB</div><div class="sel">orange_deals_uk</div></div>
+        <div class="strike" id="strike0" style="left:166px;top:31px;width:84px"></div>
+        <div class="chip n" id="chip0" style="left:170px;top:124px">not the item</div>
+      </div>
+      <div class="card" id="card1">
+        <div class="ph"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.18);transform-origin:50% 50%"></div>
+        <div class="lt" style="left:170px;top:14px;width:198px"><div class="price num">£1,050</div><div class="ttl">iPhone 17 Pro Max · 256GB</div><div class="sel">Facebook Marketplace · Dan R</div></div>
+        <div class="ct" style="left:14px;top:184px;width:160px"><div class="price num">£1,050</div><div class="sel" style="margin-top:6px">Facebook Marketplace · Dan R</div></div>
+        <div class="chip n" id="chip1" style="left:12px;top:296px;width:161px">private sale · as described only</div>
+        <div class="pick" id="pick1"><i></i>Covered pick</div>
+      </div>
+      <div class="card" id="card2">
+        <div class="ph"><img src="assets/photos/phone-orange-overseas.png" style="transform:scale(1.1)"></div>
+        <div class="lt" style="left:170px;top:14px;width:198px"><div class="price num">£1,089</div><div class="ttl">iPhone 17 Pro Max · 256GB</div><div class="sel">HK Mobile Direct</div></div>
+        <div class="chip n" id="chip2" style="left:170px;top:106px;width:200px">ships from Hong Kong · UK rights hard to enforce</div>
+      </div>
+      <div class="card" id="card3">
+        <div class="ph"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.75);transform-origin:50% 24%"></div>
+        <div class="lt" style="left:170px;top:14px;width:208px"><div class="price num">£1,099<span class="was num">was £1,199</span></div><div class="ttl">iPhone 17 Pro Max · 256GB</div><div class="sel">Brightwell Electrical</div></div>
+        <div class="ct" style="left:14px;top:184px;width:160px"><div class="price num">£1,099</div><div class="sel num" style="margin-top:6px;text-decoration:line-through;color:#8a877f">was £1,199</div><div class="sel" style="margin-top:2px">Brightwell Electrical · UK shop</div></div>
+        <div class="chip g" id="chip3" style="left:12px;top:296px;width:161px">14-day cancellation · 30-day fault refund</div>
+        <div class="pick" id="pick3"><i></i>Covered pick</div>
+        <div class="a" id="cbtn" style="width:382px;height:76px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:640;letter-spacing:-0.01em"><span class="num">Approve · £1,099.00</span></div>
+      </div>
+
+      <div id="lbveil"></div>
+      <div class="a" id="lightbox" style="overflow:hidden;background:#fff;box-shadow:0 0 0 1px #e7e5e0">
+        <img src="assets/photos/case-orange-only.png" style="width:100%;height:100%;object-fit:cover;display:block">
+        <div class="chip k" id="lbchip" style="left:18px;top:auto;bottom:18px;font-size:16px;padding:9px 14px;border-radius:16px">case only · no phone</div>
+      </div>
+
+      <div class="row2" id="gapline" style="left:24px;top:566px;width:382px"><span class="lbl">Gap</span><span class="num" style="font-size:18px;font-weight:600">£1,099 − £1,050 = £49</span></div>
+      <div class="row2" id="meterhdr" style="left:24px;top:602px;width:382px"><span class="lbl">Rights premium</span><span class="num" style="font-size:19px;font-weight:640"><span id="mFill">£49</span> <span style="color:#8a877f;font-weight:500">of</span> <span id="mPrem">£60</span></span></div>
+      <div id="track"><div id="fillG"></div><div id="fillO"></div></div>
+      <div id="marker"></div>
+      <div id="handle">Pay up to&nbsp;<span class="num" id="hVal">£60</span></div>
+      <div class="verdict" id="vShop"><div class="vl num" id="vShopL">£49 ≤ £60 · shop wins</div><div class="vs">£49 buys 14-day cancellation and a 30-day fault refund.</div></div>
+      <div class="verdict" id="vPriv"><div class="vl num" id="vPrivL">£49 &gt; £40 · private wins</div><div class="vs">£49 cheaper, but a fault is your problem.</div></div>
+
+      <div class="a" id="summary" style="left:24px;top:430px;width:382px">
+        <div class="thumb" style="left:0;top:0;width:88px;height:88px;border-radius:16px"><img src="assets/photos/phone-orange-back.png" style="transform:scale(1.9);transform-origin:50% 22%"></div>
+        <div class="a" style="left:104px;top:4px;width:278px"><div class="t19" style="font-size:21px">Brightwell Electrical</div><div class="t14" style="font-size:15px;line-height:20px;margin-top:5px">iPhone 17 Pro Max · Cosmic Orange · 256GB</div></div>
+        <div class="chip g" style="left:0;top:112px;font-size:15px;padding:9px 13px"><svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:6px"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#0e2b19" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>14-day cancellation · 30-day fault refund</div>
+      </div>
+
+      <div class="chip g" id="rowchip" style="left:24px;top:262px;font-size:14px;padding:8px 12px"><svg width="13" height="13" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:5px"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#0e2b19" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Rights kept · 14-day cancellation · 30-day fault refund</div>
+
+      <svg class="a" id="rring" width="430" height="930" viewBox="0 0 430 930" style="overflow:visible">
+        <circle id="rrTrack" fill="none" stroke="#e2e0da"/>
+        <circle id="rrArc" fill="none" stroke="#0b0b0b" stroke-linecap="round"/>
+      </svg>
+      <div class="a" id="rrBig" style="width:160px;text-align:center"><div class="num" id="rrNum" style="font-size:46px;font-weight:660;letter-spacing:-0.03em;line-height:46px">14</div><div class="lbl" style="font-size:14px;margin-top:2px">days left</div></div>
+
+      <div class="rowc" id="alert">
+        <div class="sc" id="al_a" style="width:406px;height:196px">
+          <div class="a dot" style="left:20px;top:27px;width:10px;height:10px;border-radius:5px"></div>
+          <div class="a" style="left:38px;top:18px;color:#fff;font-size:19px;font-weight:640;letter-spacing:-0.02em">Clear-out sale</div>
+          <div class="a num" style="left:20px;top:50px;width:282px;color:#dcdad4;font-size:17px;line-height:22px">same phone £899<br>at another UK shop</div>
+          <div class="a" style="left:20px;top:100px;color:#9a978f;font-size:14px">Parkside Tech · UK shop</div>
+          <div class="thumb" style="left:318px;top:18px;width:70px;height:70px"><img src="assets/photos/phone-orange-back.png" style="transform:scaleX(-1) scale(1.25)"></div>
+          <div class="mrow">
+            <div class="mchip" id="mc0"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#5fd38a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>orange</div>
+            <div class="mchip" id="mc1"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#5fd38a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>256GB</div>
+            <div class="mchip" id="mc2"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#5fd38a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>new</div>
+            <div class="mchip" id="mc3"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#5fd38a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>UK trader</div>
+          </div>
+        </div>
+        <div class="sc" id="al_b" style="width:406px;height:100px">
+          <div class="thumb" style="left:16px;top:16px;width:68px;height:68px"><img src="assets/photos/phone-orange-back.png" style="transform:scaleX(-1) scale(1.25)"></div>
+          <div class="a t19 num" style="left:98px;top:18px">New order · £899.00</div>
+          <div class="a t14" style="left:98px;top:48px">Parkside Tech · UK shop</div>
+        </div>
+      </div>
+
+      <div class="rowc" id="sum" style="background:#fff;box-shadow:inset 0 0 0 1.5px #e6e4df">
+        <div class="sc" id="sm_a" style="width:406px;height:284px">
+          <div class="sumrow" id="sr0" style="top:22px"><span class="lbl">Brightwell</span><b class="num">£1,099.00</b></div>
+          <div class="sumrow" id="sr1" style="top:64px"><span class="lbl">Parkside Tech</span><b class="num">− £899.00</b></div>
+          <div class="sumrow" id="sr2" style="top:106px"><span class="lbl">return postage</span><b class="num">− £5.00</b></div>
+          <div class="a" id="sr3" style="left:20px;top:150px;width:366px;height:1.5px;background:#0b0b0b;transform-origin:100% 50%"></div>
+          <div class="sumrow" id="sr4" style="top:162px"><span class="lbl">switch saves</span><b class="num" style="font-size:34px;font-weight:680;letter-spacing:-0.025em">= £195.00</b></div>
+          <div class="chip" id="sr5" style="right:20px;top:220px;background:#5fd38a;color:#0b0b0b;font-size:15px;font-weight:620;padding:8px 13px;border-radius:15px"><svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-1px;margin-right:6px"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="#0b0b0b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>clears your £25</div>
+        </div>
+        <div class="sc" id="sm_b" style="width:406px;height:236px">
+          <div class="a lbl" style="left:24px;top:26px;font-size:16px">Money kept</div>
+          <div class="a num" id="kept" style="left:22px;top:52px;font-size:64px;font-weight:680;letter-spacing:-0.04em;line-height:70px">£195.00</div>
+          <div class="a" id="memchip" style="left:24px;top:152px;height:42px;padding:0 16px 0 14px;border-radius:21px;background:#f3f2ef;display:flex;align-items:center;gap:9px;white-space:nowrap;font-size:17px;font-weight:560"><span class="lbl" style="font-size:14px">Remembered</span><i class="dot"></i>you pay for rights</div>
+        </div>
+      </div>
+
+      <div class="tab" id="tabChat" style="left:120px;color:#8a877f">Chat</div>
+      <div class="tab" id="tabOrd" style="left:262px;color:#8a877f">Orders</div>
+      <div id="pill"><div class="tab" id="pChat" style="top:10px;color:#fff">Chat</div><div class="tab" id="pOrd" style="top:10px;color:#fff">Orders</div></div>
+
+      <div id="overlay"></div>
+      <div id="hint">Double-click<br>to pay</div>
+      <div id="hintbar"></div>
+    </div>
+
+    <div class="ripple" id="rip"></div>
+    <div class="ripple" id="hold"></div>
+    <div id="finger"></div>
+  </div>
+  <div id="debug"></div>
+</div>
+
+<script>
+"use strict";
+const T = 24, BEAT = 0.5;
+const AX = 1275, AY = 540;
+
+// ---------------------------------------------------------------- springs
+// Closed-form step response of a damped harmonic oscillator.
+// ζ = 0.8 overshoots 1.5 %, ζ = 0.9 0.15 %, ζ = 1 none.
+const SP = {
+  ui: [18, 0.8], snap: [26, 0.82], soft: [12.5, 0.84], land: [15, 0.8],
+  enter: [19, 0.8], exit: [30, 0.95], reset: [60, 1],
+  cam: [8.2, 0.9], move: [9.5, 0.9], drag: [14, 1], press: [42, 0.9], unpress: [26, 0.9],
+  money: [16, 1], ring: [12, 1], lead: [26, 0.82], trail: [12, 0.9], merge: [14, 1], back: [14, 0.9],
+};
+function stepS(tau, w, z) {
+  if (tau <= 0) return 0;
+  if (z >= 1) { const e = Math.exp(-w * tau); return 1 - e * (1 + w * tau); }
+  const wd = w * Math.sqrt(1 - z * z), e = Math.exp(-z * w * tau);
+  return 1 - e * (Math.cos(wd * tau) + (z * w / wd) * Math.sin(wd * tau));
+}
+const BAD = [];
+// A value that retargets many times = one spring per change, summed. Events are
+// periodic with period T: the previous cycle's springs are included, so seek(T)
+// equals seek(0) exactly (in position and velocity). v0 = value at t = 0 when settled.
+const cyc = x => ((x % T) + T) % T;
+// The settled value at t = 0 is the last target of the cycle, so every track loops.
+function tr(v0, evs, def = "ui", name = "") {
+  const es = evs.map(e => [cyc(e[0]), e[1], e[2] || def]).sort((a, b) => a[0] - b[0]);
+  if (es.length) v0 = es[es.length - 1][1];
+  let prev = v0; const ds = [];
+  for (const [te, tg, s] of es) { if (tg !== prev) ds.push([te, tg - prev, SP[s][0], SP[s][1]]); prev = tg; }
+  if (Math.abs(prev - v0) > 1e-9) BAD.push(name || JSON.stringify(evs));
+  return t => { let v = v0; for (const [te, d, w, z] of ds) v += d * (stepS(t - te, w, z) + stepS(t + T - te, w, z)); return v; };
+}
+// presence 0..1 over windows [[on, off, sOn?, sOff?], ...]
+function win(ws, sOn = "enter", sOff = "exit", name = "") {
+  const evs = [];
+  for (const w of ws) { evs.push([w[0], 1, w[2] || sOn]); evs.push([w[1], 0, w[3] || sOff]); }
+  return tr(0, evs, sOn, name);
+}
+// vector track: v0 array, events [t, array, spring]
+function trv(v0, evs, def = "ui", name = "") {
+  return v0.map((x, i) => tr(x, evs.map(e => [e[0], e[1][i], e[2] || def]), def, name + i));
+}
+// Money: counts on a critically damped spring (never passes its target), shown in
+// whole pence, and snaps to the exact target once within 0.1 % of the move.
+function moneyTr(evs, s = "money") {
+  const f = tr(0, evs.map(e => [e[0], e[1], s]), s);
+  const es = evs.map(e => [cyc(e[0]), e[1]]).sort((a, b) => a[0] - b[0]);
+  return t => {
+    const tc = cyc(t);
+    let i = es.length - 1; for (let k = 0; k < es.length; k++) if (es[k][0] <= tc) i = k;
+    const target = es[i][1], from = es[(i - 1 + es.length) % es.length][1], v = f(t);
+    return Math.abs(v - target) <= Math.max(0.005, 0.001 * Math.abs(target - from)) ? target : Math.round(v * 100) / 100;
+  };
+}
+const at = (fs, t) => fs.map(f => f(t));
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const mix = (A, B, k) => A.map((x, i) => lerp(x, B[i], k));
+const rgb = c => `rgb(${c.map(x => Math.round(clamp(x, 0, 255))).join(",")})`;
+function money(v) {
+  const p = Math.round(v * 100), neg = p < 0, a = Math.abs(p);
+  const pounds = Math.floor(a / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return (neg ? "−" : "") + "£" + pounds + "." + String(a % 100).padStart(2, "0");
+}
+const $ = id => document.getElementById(id);
+function show(el, p, o = {}) {
+  const q = clamp(p);
+  // opacity too: a child left at visibility:visible would otherwise show through a hidden parent
+  if (q < 0.003) { el.style.visibility = "hidden"; el.style.opacity = "0"; el.style.filter = "none"; el.style.transform = "none"; return false; }
+  el.style.visibility = "visible";
+  el.style.opacity = q.toFixed(4);
+  const b = (o.blur ?? 7) * (1 - q);
+  el.style.filter = (b > 0.05 ? `blur(${b.toFixed(2)}px) ` : "") + (o.filter || "") || "none";
+  const r = 1 - p;
+  el.style.transform = `translate(${((o.dx || 0) * r).toFixed(2)}px,${((o.dy || 0) * r).toFixed(2)}px) scale(${(1 - (o.sc || 0) * r) * (o.scale || 1)})` + (o.tf || "");
+  return true;
+}
+function box(el, x, y, w, h, r) {
+  const s = el.style; s.left = x + "px"; s.top = y + "px"; s.width = Math.max(0, w) + "px"; s.height = Math.max(0, h) + "px";
+  if (r !== undefined) s.borderRadius = Math.max(0, r) + "px";
+}
+
+// ---------------------------------------------------------------- captions
+const CAPS = [
+  [0.0, "Text what you want."], [2.0, "Four listings found."], [4.0, "Just a case. Dropped."],
+  [5.5, "Rights abroad: weak."], [6.0, "£49 buys your rights."], [8.0, "Pay less for rights?"],
+  [10.0, "Approve once."], [12.0, "Double-click to pay."], [14.0, "Bought. Rights kept."],
+  [16.0, "Tracked to your door."], [18.0, "Watching your return window."], [20.0, "Worth £195. Switching."],
+  [22.0, "Money kept: £195."],
+];
+const capEls = [];
+CAPS.forEach(([c, text], i) => {
+  const next = i + 1 < CAPS.length ? CAPS[i + 1][0] : T;
+  const blk = document.createElement("div"); blk.className = "cap";
+  const inner = document.createElement("div"); blk.appendChild(inner);
+  const words = text.split(" ").map((w, j) => {
+    const s = document.createElement("span"); s.className = "w"; s.textContent = w; inner.appendChild(s);
+    // caption swaps lead the beat so they never cross over on the same subframe as phone text
+    const on = c - 0.08 + 0.035 * j, off = next - 0.22 + 0.02 * j;
+    return { el: s,
+      enter: win([[on, next + 0.35, "enter", "reset"]]),
+      exit: win([[off, next + 0.7, "exit", "reset"]]) };
+  });
+  $("caps").appendChild(blk);
+  capEls.push(words);
+});
+
+// ---------------------------------------------------------------- surface
+const C = { comp: [240, 239, 236], ink: [11, 11, 11], panel: [243, 242, 239], white: [255, 255, 255], green: [95, 211, 138] };
+const SF = {
+  S0: [16, 780, 330, 78, 26, ...C.comp, 0],
+  S1: [84, 132, 330, 78, 26, ...C.ink, 1],
+  S2: [12, 124, 406, 736, 30, ...C.panel, 0],
+  Sb: [24, 704, 382, 76, 38, ...C.ink, 1],
+  S3: [8, 494, 414, 436, 36, ...C.white, 0],
+  S4: [151, 386, 128, 128, 64, ...C.white, 0],
+  S4g: [151, 386, 128, 128, 64, ...C.green, 0],
+  S5: [24, 140, 382, 108, 24, ...C.white, 0],
+  S6: [12, 124, 406, 736, 30, ...C.panel, 0],
+  S7: [12, 124, 406, 100, 24, ...C.panel, 0],
+};
+const SURF_EVS = [
+  [0.47, SF.S1, "soft"], [1.5, SF.S2, "soft"], [10.0, SF.Sb, "soft"], [11.0, SF.S3, "ui"],
+  [12.55, SF.S4, "soft"], [13.5, SF.S4g, "ui"], [14.0, SF.S5, "soft"], [15.5, SF.S6, "soft"],
+  [18.5, SF.S7, "soft"], [23.5, SF.S0, "soft"],
+];
+// geometry on the event's spring; colour on a quicker one so a morph never sits mid-grey
+const surf = [
+  ...trv(SF.S0.slice(0, 5), SURF_EVS.map(([t, s, k]) => [t, s.slice(0, 5), k]), "soft", "surfg"),
+  ...trv(SF.S0.slice(5), SURF_EVS.map(([t, s]) => [t, s.slice(5), "snap"]), "snap", "surfc"),
+];
+const surfBorder = win([[14.0, 15.5, "ui", "ui"]]);
+const P = {
+  msg: win([[23.62, 1.5]]), btn: win([[10.1, 11.0]]), sheet: win([[11.12, 12.55]]), ring: win([[12.62, 14.0]]),
+  row: win([[14.1, 15.5]]), detail: win([[15.6, 18.5]]), compact: win([[18.6, 23.5]]),
+  stA: win([[18.6, 22.0]]), stB: win([[22.06, 23.5]]),
+};
+const ringProg = tr(0, [[12.6, 1, "ring"], [14.4, 0, "reset"]]);
+const checkProg = tr(0, [[13.5, 1, "ring"], [14.4, 0, "reset"]]);
+const ringFade = tr(1, [[13.5, 0, "ui"], [14.4, 1, "reset"]]);
+
+// ---------------------------------------------------------------- chat
+const pField = win([[23.55, 1.6]]);
+const pDots = win([[1.0, 1.55]]);
+const pressSend = tr(0, [[0.44, 1, "press"], [0.56, 0, "unpress"]]);
+
+// ---------------------------------------------------------------- listing cards
+const SLOT = i => 178 + 180 * i;
+const land = i => win([[2.0 + 0.045 * i, [5.0, 10.0, 6.0, 10.9][i], "land", ["soft", "exit", "soft", "reset"][i]]]);
+const cards = [0, 1, 2, 3].map(i => ({ el: $("card" + i), pres: land(i) }));
+cards[0].y = tr(SLOT(0), []); cards[0].x = tr(24, []); cards[0].w = tr(382, []);
+cards[0].h = tr(170, [[5.0, 0, "soft"], [1.0, 170, "reset"]]);
+// side-by-side reflow: widths and x settle first, heights and y follow, so the
+// shop card slides into its column before it rises past the private card
+cards[1].y = tr(SLOT(1), [[5.0, SLOT(0), "soft"], [6.0, 172, "ui"], [1.0, SLOT(1), "reset"]]);
+cards[1].x = tr(24, []);
+cards[1].w = tr(382, [[6.0, 185, "snap"], [1.0, 382, "reset"]]);
+cards[1].h = tr(170, [[6.0, 380, "ui"], [1.0, 170, "reset"]]);
+cards[2].y = tr(SLOT(2), [[5.0, SLOT(1), "soft"], [1.0, SLOT(2), "reset"]]);
+cards[2].x = tr(24, []); cards[2].w = tr(382, []);
+cards[2].h = tr(170, [[6.0, 0, "ui"], [1.0, 170, "reset"]]);
+cards[3].y = tr(SLOT(3), [[5.0, SLOT(2), "soft"], [6.06, 172, "ui"], [1.0, SLOT(3), "reset"]]);
+cards[3].x = tr(24, [[6.0, 221, "snap"], [1.0, 24, "reset"]]);
+cards[3].w = tr(382, [[6.0, 185, "snap"], [1.0, 382, "reset"]]);
+cards[3].h = tr(170, [[6.06, 380, "ui"], [1.0, 170, "reset"]]);
+const layoutM = tr(0, [[6.0, 1, "ui"], [1.0, 0, "reset"]]);
+const pLT = win([[2.0, 6.0]]), pCT = win([[6.08, 10.0]]);
+const photoRes = [0, 1, 2, 3].map(i => win([[2.5 + 0.03 * i, 1.0, "soft", "reset"]]));
+const grey = [tr(0, [[4.5, 1, "ui"], [1.0, 0, "reset"]]), tr(0, []), tr(0, [[5.5, 1, "ui"], [1.0, 0, "reset"]]), tr(0, [])];
+const strike0 = tr(0, [[4.52, 1, "soft"], [1.0, 0, "reset"]]);
+const chipP = [win([[4.58, 5.0]]), win([[7.0, 10.0]]), win([[5.56, 6.0]]), win([[6.5, 10.0]])];
+const scanP = win([[2.98, 3.95]]);
+const scanY = tr(-34, [[3.0, 8, "soft"], [3.5, 150, "soft"], [1.0, -34, "reset"]]);
+const merge = tr(0, [[10.0, 1, "merge"], [1.0, 0, "reset"]]);
+const lbRect = trv([38, 192, 142, 142, 16], [[4.0, [24, 150, 382, 382, 26], "soft"], [4.5, [38, 192, 142, 142, 16], "ui"]], "soft", "lb");
+const lbChip = win([[4.1, 4.47]]);
+const lbVeil = win([[4.0, 4.5]], "ui", "ui");
+const lh = [win([[2.05, 5.0]]), win([[5.06, 6.0]]), win([[6.06, 10.0]])];
+
+// ---------------------------------------------------------------- premium meter + drag
+const X0 = 36, PXL = 358 / 80, px = v => X0 + v * PXL;
+const HANDLE_Y = 686;
+const pGap = win([[6.12, 10.0]]), pMeter = win([[7.3, 10.0]]), pHandle = win([[7.56, 10.0]]), pVerdict = win([[7.72, 10.0]]);
+const fill = tr(0, [[7.5, 49, "money"], [1.0, 0, "reset"]]);
+
+// finger: position, opacity, press. The drag moves are critically damped so the
+// premium never dips past £49 before the second move.
+const REST = [396, 1012];
+const fX = tr(REST[0], [
+  [0.72, REST[0], "move"], [7.52, px(60), "move"], [8.06, px(49), "drag"], [8.64, px(40), "drag"],
+  [9.62, 300, "move"], [9.92, 215, "move"], [10.78, 470, "move"], [12.75, 520, "move"],
+  [14.5, 290, "move"], [15.25, REST[0], "move"], [23.58, 386, "move"],
+], "move", "fx");
+const fY = tr(820, [
+  [0.72, REST[1], "move"], [7.52, HANDLE_Y, "move"], [9.62, 640, "move"], [9.92, 742, "move"],
+  [10.78, 281, "move"], [12.75, 330, "move"], [14.5, 895, "move"], [15.25, REST[1], "move"], [23.58, 820, "move"],
+], "move", "fy");
+const fOp = win([[23.5, 0.85], [7.45, 13.0], [14.45, 15.4]], "ui", "ui");
+const pressTimes = [0.47, 7.98, 10.47, 11.97, 12.47, 14.97];
+const fPress = tr(0, [
+  [0.44, 1, "press"], [0.56, 0, "unpress"], [7.95, 1, "press"], [9.5, 0, "unpress"], [10.44, 1, "press"], [10.56, 0, "unpress"],
+  [11.94, 1, "press"], [12.06, 0, "unpress"], [12.44, 1, "press"], [12.56, 0, "unpress"], [14.94, 1, "press"], [15.06, 0, "unpress"],
+], "press", "fpress");
+const pressApprove = tr(0, [[10.44, 1, "press"], [10.56, 0, "unpress"]]);
+const pressSide = tr(0, [[11.94, 1, "press"], [12.06, 0, "unpress"], [12.44, 1, "press"], [12.56, 0, "unpress"]]);
+const pressTab = tr(0, [[14.94, 1, "press"], [15.06, 0, "unpress"]]);
+
+const HOLD_ON = 7.98, RELEASE = 9.5, [RW, RZ] = [14, 0.9];
+function premiumRaw(t) {
+  if (t >= HOLD_ON && t < RELEASE) return clamp((fX(t) - X0) / PXL, 0, 80);
+  if (t >= RELEASE) {
+    // springs back from wherever it was, with the finger's release velocity
+    const x0 = (fX(RELEASE) - X0) / PXL - 60, v0 = (fX(RELEASE) - fX(RELEASE - 1e-3)) / 1e-3 / PXL;
+    const tau = t - RELEASE, wd = RW * Math.sqrt(1 - RZ * RZ), e = Math.exp(-RZ * RW * tau);
+    return 60 + e * (x0 * Math.cos(wd * tau) + ((v0 + RZ * RW * x0) / wd) * Math.sin(wd * tau));
+  }
+  return 60;
+}
+const GAP = 1099 - 1050;
+const premQ = t => Math.round(premiumRaw(t)); // the slider steps in whole pounds
+const shopWins = t => GAP <= premQ(t);        // the real rule: protected wins when gap ≤ premium
+// winner track built from the rule's flips (sampled once from constants, not from frames)
+const flips = [];
+for (let t = 7.9, prev = shopWins(7.9); t < 11; t += 1 / 960) { const s = shopWins(t); if (s !== prev) { flips.push([t, s ? 0 : 1, "snap"]); prev = s; } }
+const privW = tr(0, flips, "snap", "winner");
+
+// ---------------------------------------------------------------- approve, sheet, pay
+const pSummary = win([[10.08, 11.0]]);
+const pOverlay = win([[11.0, 14.0, "ui", "ui"]]);
+const pHint = win([[11.45, 12.58]]);
+const hintPulse = tr(0, [[11.5, 1, "snap"], [11.64, 0, "ui"], [11.97, 0.7, "snap"], [12.1, 0, "ui"], [12.47, 0.7, "snap"], [12.6, 0, "ui"]]);
+
+// ---------------------------------------------------------------- orders
+const pWallet = win([[14.02, 23.5]]);
+const walletV = moneyTr([[14.5, 901], [21.5, 2], [1.0, 2000]]);
+const pRowChip = win([[14.25, 15.5]]);
+const tabL = tr(86, [[14.97, 234, "trail"], [23.5, 86, "lead"]]);
+const tabR = tr(194, [[14.97, 348, "lead"], [23.5, 194, "trail"]]);
+const NODES = [44, 203, 362];
+const trkP = win([[16.0, 18.5]]);
+const trkL = tr(44, [[16.5, 203, "trail"], [17.0, 362, "trail"], [19.0, 44, "reset"]]);
+const trkR = tr(44, [[16.5, 203, "lead"], [17.0, 362, "lead"], [19.0, 44, "reset"]]);
+const pRing = win([[17.45, 22.0]]);
+const ringDraw = tr(0, [[17.5, 1, "ring"], [22.4, 0, "reset"]]);
+const days = tr(14, [[18.0, 8, "money"], [22.4, 14, "reset"]]);
+const ringGeo = trv([215, 574, 64, 12], [[18.5, [372, 174, 22, 5], "soft"], [22.4, [215, 574, 64, 12], "reset"]], "soft", "rg");
+const pRrBig = win([[17.5, 18.5]]);
+
+// ---------------------------------------------------------------- switch
+const pAlert = win([[18.5, 23.5]], "land", "exit");
+const alRect = [
+  ...trv([12, 236, 406, 196, 26], [[21.5, [12, 236, 406, 100, 24], "ui"], [1.0, [12, 236, 406, 196, 26], "reset"]], "ui", "al"),
+  ...trv(C.ink, [[21.5, C.panel, "snap"], [1.0, C.ink, "reset"]], "snap", "alc"),
+];
+const pAlA = win([[18.5, 21.5]]), pAlB = win([[21.6, 23.5]]);
+const pChips = [0, 1, 2, 3].map(i => win([[19.0 + 0.125 * i, 21.5]], "snap"));
+const pSum = win([[19.46, 23.5]], "land", "exit");
+const sumRect = trv([12, 446, 406, 284, 26], [[21.5, [12, 348, 406, 284, 26], "ui"], [22.5, [12, 348, 406, 236, 28], "soft"], [1.0, [12, 446, 406, 284, 26], "reset"]], "soft", "sum");
+const pSmA = win([[19.46, 22.5]]), pSmB = win([[22.58, 23.5]]);
+const pSr = [win([[19.5, 22.5]]), win([[19.56, 22.5]]), win([[20.0, 22.5]]), win([[20.5, 22.5]]), win([[20.52, 22.5]]), win([[21.0, 22.5]], "snap")];
+const keptV = moneyTr([[22.6, 195], [1.0, 0]]);
+const pMem = win([[23.0, 23.5]], "land");
+
+// ---------------------------------------------------------------- camera
+// [cx, cy, s]: phone-screen point that sits at (AX, AY), and zoom
+const CAM0 = [215, 735, 1.55];
+const cam = trv(CAM0, [
+  [0.52, [215, 520, 1.05]], [0.8, [215, 232, 1.6]], [1.5, [215, 470, 1.02]], [1.95, [215, 520, 1.18]],
+  [2.9, [215, 272, 1.75]], [3.95, [215, 341, 1.92]], [4.45, [215, 272, 1.75]], [4.95, [215, 470, 1.3]],
+  [5.45, [215, 440, 1.62]], [5.95, [215, 470, 1.08]], [6.15, [215, 372, 1.55]], [7.35, [215, 560, 1.5]],
+  [8.0, [215, 590, 1.45]], [9.95, [215, 480, 1.05]], [10.2, [215, 610, 1.6]], [10.95, [215, 470, 1.0]],
+  [11.45, [292, 330, 1.45]], [12.55, [215, 450, 1.05]], [12.75, [215, 450, 1.85]], [13.95, [215, 470, 1.05]],
+  [14.15, [215, 170, 1.7]], [14.8, [215, 520, 1.08]], [15.45, [215, 470, 1.04]], [15.9, [215, 300, 1.6]],
+  [17.4, [215, 566, 1.6]], [18.45, [215, 450, 1.05]], [18.7, [215, 290, 1.6]], [19.45, [215, 590, 1.6]],
+  [21.4, [215, 380, 1.25]], [22.45, [215, 470, 1.7]], [23.45, [215, 470, 1.02]], [23.85, CAM0],
+], "cam", "cam");
+
+if (BAD.length) console.error("non-periodic tracks:", BAD);
+
+// ---------------------------------------------------------------- seek
+const E = {};
+["cam", "surface", "c_msg", "c_btn", "c_sheet", "c_ring", "c_row", "c_detail", "c_compact", "c_stA", "c_stB", "c_days",
+ "ringarc", "ringtrack", "check", "field", "send", "dots", "lightbox", "lbchip", "scanband", "scanline", "strike0",
+ "gapline", "meterhdr", "track", "fillG", "fillO", "marker", "handle", "hVal", "mFill", "mPrem", "vShop", "vPriv", "vShopL", "vPrivL",
+ "summary", "overlay", "hint", "hintbar", "sidebtn", "wallet", "walletv", "rowchip", "pill", "pChat", "pOrd", "tabChat", "tabOrd",
+ "trkfill", "trkpill", "trkn0", "trkn1", "trkn2", "trkl0", "trkl1", "trkl2", "rring", "rrTrack", "rrArc", "rrBig", "rrNum",
+ "alert", "al_a", "al_b", "mc0", "mc1", "mc2", "mc3", "sum", "sm_a", "sm_b", "sr0", "sr1", "sr2", "sr3", "sr4", "sr5", "kept", "memchip",
+ "lh0", "lh1", "lh2", "finger", "rip", "hold", "debug", "pick1", "pick3", "chip0", "chip1", "chip2", "chip3", "cbtn", "lbveil"].forEach(id => E[id] = $(id));
+for (const c of cards) { c.ph = c.el.querySelector(".ph"); c.img = c.ph.querySelector("img"); c.lt = c.el.querySelector(".lt"); c.ct = c.el.querySelector(".ct"); }
+const setText = (el, s) => { if (el.textContent !== s) el.textContent = s; };
+const DEBUG = new URLSearchParams(location.search).has("debug");
+
+function seek(t) {
+  // captions
+  for (const words of capEls) for (const w of words) {
+    const e = w.enter(t), x = w.exit(t), q = clamp(e) * (1 - clamp(x));
+    if (q < 0.003) { w.el.style.visibility = "hidden"; w.el.style.opacity = "0"; w.el.style.filter = "none"; w.el.style.transform = "none"; continue; }
+    w.el.style.visibility = "visible";
+    w.el.style.opacity = q.toFixed(4);
+    const b = 10 * (1 - clamp(e)) + 8 * clamp(x);
+    w.el.style.filter = b > 0.05 ? `blur(${b.toFixed(2)}px)` : "none";
+    w.el.style.transform = `translateY(${(46 * (1 - e) - 34 * x).toFixed(2)}px)`;
+  }
+
+  // camera (no will-change anywhere: the camera scales text)
+  const [cx, cy, cs] = at(cam, t);
+  E.cam.style.transform = `translate(${(AX - cx * cs).toFixed(3)}px,${(AY - cy * cs).toFixed(3)}px) scale(${cs.toFixed(5)})`;
+
+  // surface
+  const [sx, sy, sw, sh, sr, R, G, B, dark] = at(surf, t);
+  box(E.surface, sx, sy, sw, sh, sr);
+  E.surface.style.background = rgb([R, G, B]);
+  const bd = clamp(surfBorder(t));
+  E.surface.style.boxShadow = bd > 0.003 ? `inset 0 0 0 1.5px rgba(214,211,204,${bd.toFixed(3)})` : "none";
+  E.surface.style.zIndex = t >= 10.9 && t < 14.6 ? 40 : 5;
+  // the panel dissolves while the shop card flies into the button; the surface takes
+  // over under the card once both have the same rect, colour and label
+  E.surface.style.opacity = t >= 10.0 && t < 10.78 ? clamp(1 - stepS(t - 10.0, 30, 0.95)).toFixed(4) : "1";
+  E.surface.style.transform = `scale(${1 - 0.035 * pressApprove(t)})`;
+  const ink = lerp(17, 255, clamp(dark));
+  E.c_msg.style.color = rgb([ink, ink, ink]);
+  show(E.c_msg, P.msg(t));
+  if (show(E.c_btn, P.btn(t))) { E.c_btn.style.left = (sw - 382) / 2 + "px"; E.c_btn.style.top = (sh - 76) / 2 + "px"; }
+  show(E.c_sheet, P.sheet(t), { dy: 20 });
+  if (show(E.c_ring, P.ring(t), { sc: 0.1 })) {
+    E.c_ring.style.left = (sw - 128) / 2 + "px"; E.c_ring.style.top = (sh - 128) / 2 + "px";
+    E.ringarc.style.strokeDashoffset = (314.16 * (1 - clamp(ringProg(t)))).toFixed(2);
+    const rf = clamp(ringFade(t)); E.ringarc.style.opacity = rf; E.ringtrack.style.opacity = rf;
+    E.check.style.strokeDashoffset = (72 * (1 - clamp(checkProg(t)))).toFixed(2);
+  }
+  show(E.c_row, P.row(t), { dy: 8 });
+  if (show(E.c_detail, P.detail(t), { dy: 12 })) {
+    show(E.trkpill, trkP(t), { sc: 0.6, blur: 0 });
+    const L = trkL(t), Rr = trkR(t);
+    box(E.trkpill, L - 7, 207, Rr - L + 14, 14);
+    box(E.trkfill, 44, 212, Math.max(0, L - 44), 4);
+    NODES.forEach((n, i) => {
+      const reached = clamp((Rr - n + 16) / 16) * clamp(trkP(t));
+      E["trkn" + i].style.background = rgb(mix([221, 219, 213], [95, 211, 138], reached));
+      const c = lerp(160, 17, reached); E["trkl" + i].style.color = rgb([c, c - 3, c - 9]);
+    });
+  }
+  show(E.c_compact, P.compact(t));
+  show(E.c_stA, P.stA(t), { blur: 5 });
+  show(E.c_stB, P.stB(t), { blur: 5, dy: 6 });
+  setText(E.c_days, String(Math.round(days(t))));
+
+  // chat
+  show(E.field, pField(t), { blur: 0 });
+  show(E.send, pField(t), { blur: 0, scale: 1 - 0.08 * pressSend(t) });
+  if (show(E.dots, pDots(t), { sc: 0.3, dy: 10 })) {
+    [...E.dots.children].forEach((d, i) => {
+      const ph = (t - 1.0) * 2 * Math.PI * 2.4 - i * 0.9;
+      d.style.transform = `translateY(${(-4 * Math.max(0, Math.sin(ph))).toFixed(2)}px)`;
+      d.style.opacity = (0.45 + 0.55 * Math.max(0, Math.sin(ph))).toFixed(3);
+    });
+  }
+
+  // list header
+  lh.forEach((f, i) => show(E["lh" + i], f(t), { blur: 5, dy: 6 }));
+
+  // cards
+  const m = clamp(layoutM(t)), mg = clamp(merge(t));
+  const pw = privW(t), gate = pVerdict(t);
+  cards.forEach((c, i) => {
+    let p = c.pres(t);
+    if (i === 3 && t >= 10.78 && t < 23) p = 0; // merged into the surface: identical rect, colour and label
+    if (!show(c.el, p, { dy: 60, sc: 0.04, blur: 6, scale: i === 3 ? 1 - 0.035 * pressApprove(t) : 1 })) return;
+    let x = c.x(t), y = c.y(t), w = c.w(t), h = c.h(t), r = 22;
+    let bg = C.white;
+    if (i === 3 && mg > 0) { x = lerp(x, sx, mg); y = lerp(y, sy, mg); w = lerp(w, sw, mg); h = lerp(h, sh, mg); r = lerp(22, sr, mg); bg = mix(C.white, [R, G, B], mg); }
+    box(c.el, x, y, w, h, r);
+    c.el.style.background = rgb(bg);
+    const pick = i === 1 ? gate * pw : i === 3 ? gate * (1 - pw) : 0;
+    const outline = `inset 0 0 0 ${lerp(1, 2.5, clamp(pick)).toFixed(2)}px ${rgb(mix([231, 229, 224], [11, 11, 11], clamp(pick)))}`;
+    c.el.style.boxShadow = i === 3 && mg > 0 ? `inset 0 0 0 ${(1 - mg).toFixed(3)}px rgba(11,11,11,${(1 - mg).toFixed(3)})` : outline;
+    const mm = i === 1 || i === 3 ? m : 0;
+    const content = i === 3 ? 1 - mg : 1;
+    // photo: list square -> column banner
+    const phx = lerp(14, 8, mm), phy = lerp(14, 8, mm), phw = lerp(142, w - 16, mm), phh = lerp(142, 164, mm);
+    box(c.ph, phx, phy, phw, phh, 16);
+    c.ph.style.opacity = clamp(content * 1.6 - 0.6).toFixed(3);
+    const g = clamp(grey[i](t));
+    const pr = photoRes[i](t);
+    c.img.style.opacity = clamp(pr).toFixed(3);
+    const pb = 14 * (1 - clamp(pr));
+    c.img.style.filter = (pb > 0.05 ? `blur(${pb.toFixed(2)}px) ` : "") + (g > 0.003 ? `grayscale(${g.toFixed(3)}) opacity(${(1 - 0.45 * g).toFixed(3)})` : "") || "none";
+    c.ph.style.transform = `scale(${(1 + 0.04 * (1 - clamp(pr))).toFixed(4)})`;
+    const tc = lerp(17, 163, g);
+    c.lt.style.color = rgb([tc, tc - 2, tc - 8]);
+    show(c.lt, pLT(t), { blur: 6 });
+    if (c.ct) show(c.ct, pCT(t) * content, { blur: 6, dy: 8 });
+    show(E["chip" + i], chipP[i](t) * content, { blur: 5, dy: 6 });
+    if (i === 1 || i === 3) show(E["pick" + i], pick * content, { sc: 0.2, blur: 4 });
+    if (i === 3 && show(E.cbtn, P.btn(t))) { E.cbtn.style.left = (w - 382) / 2 + "px"; E.cbtn.style.top = (h - 76) / 2 + "px"; }
+  });
+  E.strike0.style.transform = `scaleX(${clamp(strike0(t)).toFixed(4)})`;
+  E.strike0.style.visibility = strike0(t) > 0.003 ? "visible" : "hidden";
+  if (show(E.scanline, scanP(t), { blur: 0 })) {
+    const yy = clamp(scanY(t), -34, 156);
+    box(E.scanline, 14, 14 + yy, 142, 2);
+    const top = 14, bot = 14 + clamp(yy, 0, 142);
+    show(E.scanband, scanP(t), { blur: 0 });
+    box(E.scanband, 14, top, 142, Math.max(0, bot - top));
+  } else show(E.scanband, 0);
+  // lightbox: the mislisted photo, zoomed
+  show(E.lbveil, lbVeil(t), { blur: 0 });
+  if (t >= 3.98 && t < 4.9) {
+    const [lx, ly, lw, lhh, lr] = at(lbRect, t);
+    show(E.lightbox, 1, { blur: 0 }); box(E.lightbox, lx, ly, lw, lhh, lr);
+    E.lightbox.style.zIndex = 20;
+    const g = clamp(grey[0](t));
+    E.lightbox.firstElementChild.style.filter = g > 0.003 ? `grayscale(${g.toFixed(3)}) opacity(${(1 - 0.45 * g).toFixed(3)})` : "none";
+    show(E.lbchip, lbChip(t), { dy: 10, blur: 5 });
+  } else show(E.lightbox, 0);
+
+  // premium meter + drag
+  show(E.gapline, pGap(t), { dy: 8 });
+  const pm = pMeter(t);
+  show(E.meterhdr, pm, { dy: 8 }); show(E.track, pm, { blur: 0, sc: 0.02 });
+  const raw = premiumRaw(t), q = premQ(t), f = fill(t);
+  const fillPx = f * PXL, premPx = raw * PXL;
+  box(E.fillG, 0, 0, Math.min(fillPx, premPx), 14);
+  box(E.fillO, premPx, 0, Math.max(0, fillPx - premPx), 14);
+  setText(E.mFill, "£" + Math.round(f));
+  setText(E.mPrem, "£" + q);
+  if (show(E.marker, pHandle(t), { blur: 0 })) E.marker.style.left = (px(raw) - 1.25) + "px";
+  const pressH = t >= HOLD_ON && t < RELEASE + 0.1 ? clamp(fPress(t)) : 0;
+  E.handle.style.left = clamp(px(raw) - 34, 24, 406 - 152) + "px"; // held at "Pay", so the value stays readable
+  show(E.handle, pHandle(t), { dy: 10, scale: 1 - 0.05 * pressH });
+  setText(E.hVal, "£" + q);
+  setText(E.vShopL, `£${GAP} ≤ £${Math.max(q, GAP)} · shop wins`);
+  setText(E.vPrivL, `£${GAP} > £${Math.min(q, GAP - 1)} · private wins`);
+  show(E.vShop, gate * (1 - pw), { dy: 8, blur: 6 });
+  show(E.vPriv, gate * pw, { dy: 8, blur: 6 });
+
+  // approve / sheet / pay
+  show(E.summary, pSummary(t), { dy: 14 });
+  const ov = clamp(pOverlay(t)); E.overlay.style.opacity = (0.38 * ov).toFixed(4); E.overlay.style.visibility = ov > 0.003 ? "visible" : "hidden";
+  E.overlay.style.zIndex = 30;
+  const hp = hintPulse(t);
+  show(E.hint, pHint(t), { dx: -12, scale: 1 + 0.06 * hp }); E.hint.style.zIndex = 45;
+  show(E.hintbar, pHint(t), { blur: 0, tf: ` scaleX(${1 + 0.9 * hp})` }); E.hintbar.style.zIndex = 45;
+  E.sidebtn.style.transform = `translateX(${(-3.5 * pressSide(t)).toFixed(2)}px)`;
+
+  // header wallet, rights chip, tabs
+  show(E.wallet, pWallet(t), { dy: -8, blur: 6 });
+  setText(E.walletv, money(walletV(t)));
+  show(E.rowchip, pRowChip(t), { dy: 8 });
+  const L = tabL(t), Rr = tabR(t);
+  box(E.pill, L, 875, Rr - L, 40, 20);
+  E.pill.style.transform = `scale(${1 - 0.05 * pressTab(t)})`;
+  const chatX = 140 - 19, ordX = 290 - 28;
+  E.tabChat.style.left = chatX + "px"; E.tabOrd.style.left = ordX + "px";
+  E.pChat.style.left = (chatX - L) + "px"; E.pOrd.style.left = (ordX - L) + "px";
+
+  // return ring
+  if (show(E.rring, pRing(t), { blur: 0 })) {
+    const [rcx, rcy, rr, rsw] = at(ringGeo, t);
+    for (const el of [E.rrTrack, E.rrArc]) { el.setAttribute("cx", rcx); el.setAttribute("cy", rcy); el.setAttribute("r", rr); el.setAttribute("stroke-width", rsw); }
+    const circ = 2 * Math.PI * rr, frac = clamp(ringDraw(t)) * clamp(days(t) / 14);
+    E.rrArc.setAttribute("stroke-dasharray", `${circ.toFixed(2)} ${circ.toFixed(2)}`);
+    E.rrArc.setAttribute("stroke-dashoffset", (circ * (1 - frac)).toFixed(2));
+    E.rrArc.setAttribute("transform", `rotate(-90 ${rcx} ${rcy})`);
+    E.rring.style.zIndex = 12;
+    if (show(E.rrBig, pRrBig(t), { blur: 6 })) { box(E.rrBig, rcx - 80, rcy - 34, 160, 70); E.rrBig.style.zIndex = 12; }
+    setText(E.rrNum, String(Math.round(days(t))));
+  } else show(E.rrBig, 0);
+
+  // switch: alert -> new order row, sum -> money kept
+  if (show(E.alert, pAlert(t), { dy: -40, sc: 0.04 })) {
+    const a = at(alRect, t); box(E.alert, a[0], a[1], a[2], a[3], a[4]); E.alert.style.background = rgb(a.slice(5));
+    E.alert.style.zIndex = 14;
+    show(E.al_a, pAlA(t)); show(E.al_b, pAlB(t));
+    for (let i = 0; i < 4; i++) show(E["mc" + i], pChips[i](t), { sc: 0.25, blur: 3, dy: 4 });
+  }
+  if (show(E.sum, pSum(t), { dy: 40, sc: 0.04 })) {
+    const s = at(sumRect, t); box(E.sum, s[0], s[1], s[2], s[3], s[4]); E.sum.style.zIndex = 14;
+    show(E.sm_a, pSmA(t)); show(E.sm_b, pSmB(t), { dy: 10 });
+    for (let i = 0; i < 6; i++) {
+      if (i === 3) { const k = clamp(pSr[3](t)); E.sr3.style.transform = `scaleX(${k.toFixed(4)})`; E.sr3.style.visibility = k > 0.003 ? "visible" : "hidden"; }
+      else show(E["sr" + i], pSr[i](t), { dy: 10, blur: 6, sc: i === 5 ? 0.15 : 0 });
+    }
+    setText(E.kept, money(keptV(t)));
+    show(E.memchip, pMem(t), { dy: -14, blur: 5 });
+  }
+
+  // finger
+  const fo = clamp(fOp(t)), fp = clamp(fPress(t));
+  const fx = fX(t) - (t > 11.5 && t < 12.8 ? 5 * fp : 0), fy = fY(t);
+  E.finger.style.opacity = (fo * (1 + 0.25 * fp)).toFixed(4);
+  E.finger.style.visibility = fo > 0.003 ? "visible" : "hidden";
+  E.finger.style.transform = `translate(${fx.toFixed(2)}px,${fy.toFixed(2)}px) scale(${(1 - 0.14 * fp).toFixed(4)})`;
+  const hr = 30, ho = 0.55 * fp * fo;
+  E.hold.style.visibility = ho > 0.003 ? "visible" : "hidden";
+  box(E.hold, fx - hr, fy - hr, 2 * hr, 2 * hr); E.hold.style.opacity = ho.toFixed(4);
+  let ripple = null;
+  for (const pt of pressTimes) { const tau = t - pt; if (tau >= 0 && tau < 0.7) ripple = tau; }
+  if (ripple !== null && fo > 0.003) {
+    const rr = 24 + 34 * stepS(ripple, 10, 1), ro = 0.6 * (1 - stepS(ripple, 7, 1)) * fo;
+    box(E.rip, fx - rr, fy - rr, 2 * rr, 2 * rr); E.rip.style.opacity = ro.toFixed(4); E.rip.style.visibility = "visible";
+  } else E.rip.style.visibility = "hidden";
+
+  if (DEBUG) { const b = Math.floor(((t % T) + 1e-6) / BEAT); E.debug.textContent = `${Math.floor(b / 4) + 1}.${b % 4 + 1}  t=${t.toFixed(3)}`; }
+}
+window.seek = seek;
+for (const img of document.images) img.decoding = "sync";
+window.filmReady = Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))]).then(() => { seek(0); return BAD; });
+const qt = new URLSearchParams(location.search).get("t");
+window.filmReady.then(() => seek(qt ? parseFloat(qt) : 0));
+</script>
+</body>
+</html>
