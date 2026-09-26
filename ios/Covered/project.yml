@@ -47,6 +47,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
+        NSFaceIDUsageDescription: Confirm purchases from your Covered wallet.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
           NSExceptionDomains:
@@ -58,6 +59,7 @@ targets:
     scheme:
       testTargets:
         - CoveredTests
+        - CoveredUITests
   CoveredTests:
     type: bundle.unit-test
     platform: iOS
@@ -71,12 +73,28 @@ targets:
       GENERATE_INFOPLIST_FILE: YES
       SWIFT_VERSION: "5.10"
       TARGETED_DEVICE_FAMILY: "1"
+  CoveredUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CoveredUITests
+    dependencies:
+      - target: Covered
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: uk.kawuc.covered.uitests
+      GENERATE_INFOPLIST_FILE: YES
+      TEST_TARGET_NAME: Covered
+      SWIFT_VERSION: "5.10"
+      TARGETED_DEVICE_FAMILY: "1"
 schemes:
   Covered:
     build:
       targets:
         Covered: all
         CoveredTests: [test]
+        CoveredUITests: [test]
     test:
       targets:
         - CoveredTests
+        - CoveredUITests

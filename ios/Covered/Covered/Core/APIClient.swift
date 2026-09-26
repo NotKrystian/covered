@@ -46,20 +46,26 @@ actor APIClient {
     static let defaultBaseURL = URL(string: "https://covered.kawuc.uk")!
     static let baseURLDefaultsKey = "covered.baseURL"
 
-    let baseURL: URL
+    /// When set, every request uses this host. Otherwise the Settings value is read live.
+    private let pinnedBaseURL: URL?
     private let session: URLSession
     private let decoder = JSONDecoder.covered
     private let encoder = JSONEncoder.covered
 
-    init(baseURL: URL? = nil, session: URLSession? = nil) {
-        if let baseURL {
-            self.baseURL = baseURL
-        } else if let raw = UserDefaults.standard.string(forKey: Self.baseURLDefaultsKey),
-                  let url = URL(string: raw), !raw.isEmpty {
-            self.baseURL = url
-        } else {
-            self.baseURL = Self.defaultBaseURL
+    var baseURL: URL {
+        pinnedBaseURL ?? Self.resolvedBaseURL()
+    }
+
+    nonisolated static func resolvedBaseURL() -> URL {
+        if let raw = UserDefaults.standard.string(forKey: baseURLDefaultsKey),
+           let url = URL(string: raw), !raw.isEmpty {
+            return url
         }
+        return defaultBaseURL
+    }
+
+    init(baseURL: URL? = nil, session: URLSession? = nil) {
+        self.pinnedBaseURL = baseURL
 
         if let session {
             self.session = session
@@ -81,19 +87,30 @@ actor APIClient {
         query: String,
         settings: UserSettings? = nil,
         source: SearchSource? = nil,
-        offers: [Offer]? = nil
+        offers: [Offer]? = nil,
+        fetchedAt: String? = nil
     ) async throws -> DecideResponse {
+        struct GridMeta: Encodable {
+            var source: SearchSource
+            var fetchedAt: String
+        }
         struct Body: Encodable {
             var query: String
             var settings: UserSettings?
-            var source: SearchSource?
+            var source: String?
             var offers: [Offer]?
+            var grid: GridMeta?
         }
+        let useFixtures = offers == nil && (source == nil || source == .fixture)
         let body = Body(
             query: query,
             settings: settings,
-            source: offers == nil ? (source ?? .fixture) : source,
-            offers: offers
+            source: useFixtures ? "fixture" : nil,
+            offers: offers,
+            grid: useFixtures ? nil : GridMeta(
+                source: source ?? .live,
+                fetchedAt: fetchedAt ?? ISO8601DateFormatter().string(from: Date())
+            )
         )
         return try await send("POST", "/api/decide", body: body)
     }
@@ -221,7 +238,7 @@ actor APIClient {
 
     // MARK: - JSON helpers
 
-    private func send<T: Decodable>(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws -> T {
+    func send<T: Decodable>(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws -> T {
         let (decoded, status): (T, Int) = try await sendRaw(method, path, body: body)
         if status >= 400 {
             throw APIError.http(status: status, message: "Request failed (\(status)).")
@@ -229,7 +246,7 @@ actor APIClient {
         return decoded
     }
 
-    private func sendRaw<T: Decodable>(
+    func sendRaw<T: Decodable>(
         _ method: String,
         _ path: String,
         body: (any Encodable)?
@@ -270,6 +287,9 @@ actor APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = KeychainToken.bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             do {

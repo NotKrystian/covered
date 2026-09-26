@@ -49,6 +49,16 @@
                ReferencedContainer = "container:Covered.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0E13AB065CCED5B84E56D79A"
+               BuildableName = "CoveredUITests.xctest"
+               BlueprintName = "CoveredUITests"
+               ReferencedContainer = "container:Covered.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

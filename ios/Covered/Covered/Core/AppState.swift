@@ -39,8 +39,8 @@ final class AppState {
             async let limitsTask = api.limits()
             let loaded = try await memoryTask
             memory = loaded
-            settings = loaded.settings ?? settings
-            if loaded.onboarded == true {
+            settings = loaded.settings
+            if loaded.onboarded {
                 onboarded = true
             }
             wallet = try await walletTask
@@ -110,12 +110,8 @@ final class AppState {
             onboarded: flag
         )
         memory = loaded
-        if let settings = loaded.settings {
-            self.settings = settings
-        } else if let next {
-            settings = next
-        }
-        if flag == true || loaded.onboarded == true {
+        self.settings = loaded.settings
+        if flag == true || loaded.onboarded {
             onboarded = true
         }
     }

@@ -45,6 +45,45 @@ struct Offer: Codable, Sendable, Hashable {
     var imageUrls: [String]?
     var imageUrl: String?
     var imageDataUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case section, position, title, price, pricePence, compareAt, merchant
+        case merchantDomain, merchantId, offerId, offerDocid, location
+        case badge, delivery, returns, energy, rating, ratingCount
+        case specs, productUrl, moreMerchants, summary
+        case imageUrls, imageUrl, imageDataUrl
+    }
+
+    /// Server zod requires `compare_at`, `badge`, `delivery`, `rating`, and `rating_count`
+    /// as `string | null`. Swift's default encoder omits nil optionals, which fails as undefined.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(section, forKey: .section)
+        try container.encodeIfPresent(position, forKey: .position)
+        try container.encode(title, forKey: .title)
+        try container.encode(price, forKey: .price)
+        try container.encodeIfPresent(pricePence, forKey: .pricePence)
+        try container.encode(compareAt, forKey: .compareAt)
+        try container.encode(merchant, forKey: .merchant)
+        try container.encodeIfPresent(merchantDomain, forKey: .merchantDomain)
+        try container.encodeIfPresent(merchantId, forKey: .merchantId)
+        try container.encodeIfPresent(offerId, forKey: .offerId)
+        try container.encodeIfPresent(offerDocid, forKey: .offerDocid)
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encode(badge, forKey: .badge)
+        try container.encode(delivery, forKey: .delivery)
+        try container.encodeIfPresent(returns, forKey: .returns)
+        try container.encodeIfPresent(energy, forKey: .energy)
+        try container.encode(rating, forKey: .rating)
+        try container.encode(ratingCount, forKey: .ratingCount)
+        try container.encodeIfPresent(specs, forKey: .specs)
+        try container.encodeIfPresent(productUrl, forKey: .productUrl)
+        try container.encodeIfPresent(moreMerchants, forKey: .moreMerchants)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(imageUrls, forKey: .imageUrls)
+        try container.encodeIfPresent(imageUrl, forKey: .imageUrl)
+        try container.encodeIfPresent(imageDataUrl, forKey: .imageDataUrl)
+    }
 }
 
 struct Listing: Codable, Sendable, Hashable, Identifiable {
@@ -126,6 +165,24 @@ struct Decision: Codable, Sendable, Hashable {
     var rights: [String]
     var recommendation: Recommendation
     var reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case sameItem, mislisting, photoReason, sponsored
+        case sellerType, venueTrust, rights, recommendation, reason
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sameItem, forKey: .sameItem)
+        try container.encode(mislisting, forKey: .mislisting)
+        try container.encode(photoReason, forKey: .photoReason)
+        try container.encode(sponsored, forKey: .sponsored)
+        try container.encode(sellerType, forKey: .sellerType)
+        try container.encode(venueTrust, forKey: .venueTrust)
+        try container.encode(rights, forKey: .rights)
+        try container.encode(recommendation, forKey: .recommendation)
+        try container.encode(reason, forKey: .reason)
+    }
 }
 
 struct Verdict: Codable, Sendable, Hashable {
@@ -434,14 +491,55 @@ struct Memory: Codable, Sendable {
     var userId: String?
     var displayName: String?
     var summary: String?
-    var settings: UserSettings?
+    var settings: UserSettings
     var events: [MemoryEvent]?
     var orders: [Order]?
-    var balancePence: Int?
+    var balancePence: Int
     var deposits: [Deposit]?
     var limits: [Limit]?
-    var onboarded: Bool?
+    var onboarded: Bool
     var updatedAt: String?
+
+    init(
+        userId: String? = nil,
+        displayName: String? = nil,
+        summary: String? = nil,
+        settings: UserSettings = .defaults,
+        events: [MemoryEvent]? = nil,
+        orders: [Order]? = nil,
+        balancePence: Int = 0,
+        deposits: [Deposit]? = nil,
+        limits: [Limit]? = nil,
+        onboarded: Bool = false,
+        updatedAt: String? = nil
+    ) {
+        self.userId = userId
+        self.displayName = displayName
+        self.summary = summary
+        self.settings = settings
+        self.events = events
+        self.orders = orders
+        self.balancePence = balancePence
+        self.deposits = deposits
+        self.limits = limits
+        self.onboarded = onboarded
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        settings = try container.decodeIfPresent(UserSettings.self, forKey: .settings) ?? .defaults
+        events = try container.decodeIfPresent([MemoryEvent].self, forKey: .events)
+        orders = try container.decodeIfPresent([Order].self, forKey: .orders)
+        balancePence = try container.decodeIfPresent(Int.self, forKey: .balancePence) ?? 0
+        deposits = try container.decodeIfPresent([Deposit].self, forKey: .deposits)
+        limits = try container.decodeIfPresent([Limit].self, forKey: .limits)
+        onboarded = try container.decodeIfPresent(Bool.self, forKey: .onboarded) ?? false
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
 }
 
 struct MemoryResponse: Codable, Sendable {
