@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Decision, UserSettings } from "@/lib/types";
-import { isProtected, monthlyMetaLabel, reapplyPremium, type DecideResponse, type ShortlistItem } from "@/lib/decision";
+import {
+  isMonthlyOnlyItem,
+  isProtected,
+  monthlyMetaLabel,
+  reapplyPremium,
+  type DecideResponse,
+  type ShortlistItem,
+} from "@/lib/decision";
 import { partitionCashAndMonthly } from "@/lib/listing-display";
 import { formatBps, formatPence } from "@/lib/money";
 import type { Limit } from "@/lib/memory";
@@ -94,6 +101,7 @@ function OfferRow({
   const rejected = Boolean(decision && (decision.mislisting || !decision.same_item));
   const reason = decision ? (decision.mislisting && decision.photo_reason ? decision.photo_reason : decision.reason) : null;
   const priceNote = monthlyMetaLabel(item);
+  const monthlyOnly = isMonthlyOnlyItem(item);
   return (
     <li
       className={`rounded-xl border px-4 py-4 ${
@@ -137,25 +145,29 @@ function OfferRow({
               {reason}
             </p>
           )}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {chosen && (
+          {chosen && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={onApprove}
                 disabled={approving}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
               >
-                {approving ? "Approving…" : "Approve"}
+                {approving ? "Buying…" : "Buy now"}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={onLimit}
-              className="rounded-md border border-line px-3 py-2 text-sm text-muted hover:text-foreground"
-            >
-              Limit
-            </button>
-          </div>
+              {monthlyOnly ? (
+                <span className="text-sm text-muted">Limits are for cash prices</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onLimit}
+                  className="rounded-md border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-accent-soft"
+                >
+                  Set a limit
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </li>
@@ -425,13 +437,6 @@ export function Dashboard({ memoryState, onMemory }: Props) {
               "Search"
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => setLimitDraft({ query: query.trim(), defaultPence: null })}
-            className="rounded-lg border border-line px-5 py-3 text-sm text-muted hover:text-foreground"
-          >
-            Limit
-          </button>
         </form>
         {limitDraft && (
           <div className="mt-3">
@@ -519,7 +524,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           {!running && !error && !result && !receipt && (
             <div className="rounded-xl border border-dashed border-line px-6 py-16 text-center">
               <p className="text-sm text-muted">
-                Search for something. Covered buys the cheapest listing that is actually the item and still has your rights.
+                Buy it now, or set a limit and your laptop checks every hour.
               </p>
             </div>
           )}

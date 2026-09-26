@@ -7,6 +7,8 @@ struct ListingCard: View {
     var twoUp = false
     var compact = false
     let namespace: Namespace.ID
+    var onApprove: (() -> Void)? = nil
+    var limitEnabled = true
     let onLimit: () -> Void
     @State private var showLightbox = false
 
@@ -92,33 +94,43 @@ struct ListingCard: View {
     }
 
     private var listBody: some View {
-        HStack(alignment: .top, spacing: 14) {
-            OfferPhoto(item: item, rejected: rejected)
-                .onTapGesture {
-                    if rejected { showLightbox = true }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                OfferPhoto(item: item, rejected: rejected)
+                    .onTapGesture {
+                        if rejected { showLightbox = true }
+                    }
+                    .accessibilityIdentifier(rejected ? "shop.mislisting" : "")
+                    .accessibilityAddTraits(.isButton)
+                VStack(alignment: .leading, spacing: 4) {
+                    if chosen {
+                        CoveredPickLabel()
+                            .padding(.bottom, 2)
+                    }
+                    priceRow
+                    title
+                    Text(item.merchant)
+                        .font(.system(size: 13))
+                        .foregroundStyle(rejected ? Color.mutedLine : Color.secondary)
+                        .lineLimit(1)
+                    if item.section == .sponsored {
+                        NeutralChip(text: "Ad")
+                    }
+                    if let rejectChip {
+                        NeutralChip(text: rejectChip)
+                    }
                 }
-                .accessibilityIdentifier(rejected ? "shop.mislisting" : "")
-                .accessibilityAddTraits(.isButton)
-            VStack(alignment: .leading, spacing: 4) {
-                if chosen {
-                    CoveredPickLabel()
-                        .padding(.bottom, 2)
-                }
-                priceRow
-                title
-                Text(item.merchant)
-                    .font(.system(size: 13))
-                    .foregroundStyle(rejected ? Color.mutedLine : Color.secondary)
-                    .lineLimit(1)
-                if item.section == .sponsored {
-                    NeutralChip(text: "Ad")
-                }
-                if let rejectChip {
-                    NeutralChip(text: rejectChip)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            cardMenu
+            if chosen {
+                DualBuyActions(
+                    limitEnabled: limitEnabled,
+                    compact: true,
+                    onBuy: { onApprove?() },
+                    onLimit: onLimit
+                )
+                .padding(.top, 10)
+            }
         }
         .padding(13)
         .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
@@ -209,17 +221,6 @@ struct ListingCard: View {
             Link(destination: url) { text }
         } else {
             text
-        }
-    }
-
-    private var cardMenu: some View {
-        Menu {
-            Button("Set a limit…", action: onLimit)
-        } label: {
-            Text("···")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.secondary)
-                .frame(width: 22, height: 22)
         }
     }
 

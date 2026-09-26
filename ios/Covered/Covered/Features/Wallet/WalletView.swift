@@ -7,9 +7,6 @@ struct WalletView: View {
     @State private var depositError: String?
     @State private var depositing = false
     @State private var selectedChip: Int?
-    @State private var limitError: String?
-    @State private var showNewLimit = false
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -17,7 +14,7 @@ struct WalletView: View {
                     balanceBlock
                     depositBlock
                     historyBlock
-                    limitsBlock
+                    shopLimitsLink
                 }
                 .padding(.horizontal, Theme.inset)
                 .padding(.bottom, 24)
@@ -34,9 +31,6 @@ struct WalletView: View {
             }
             .refreshable { await state.refresh() }
             .task { await state.refresh() }
-            .navigationDestination(isPresented: $showNewLimit) {
-                NewLimitView()
-            }
         }
         .tint(Color.ink)
     }
@@ -131,30 +125,18 @@ struct WalletView: View {
         }
     }
 
-    private var limitsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Limits")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.secondary)
-            Text("Your laptop's Covered reader checks each limit every hour.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.secondary)
-            if let limitError {
-                Text(limitError)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.secondary)
-            }
-            if state.limits.isEmpty {
-                Text("No limits yet.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.secondary)
-            } else {
-                ForEach(state.limits) { limit in
-                    LimitRowView(limit: limit)
+    private var shopLimitsLink: some View {
+        Group {
+            if !state.limits.isEmpty {
+                Button {
+                    CoveredTabs.shared.open(.shop)
+                } label: {
+                    Text(state.limits.count == 1 ? "1 limit watching · See on Shop" : "\(state.limits.count) limits watching · See on Shop")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.inkSoft)
                 }
-            }
-            InkPillButton(title: "New limit") {
-                showNewLimit = true
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("wallet.limitsLink")
             }
         }
     }

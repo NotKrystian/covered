@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { OrderRecord } from "@/lib/memory";
+import Link from "next/link";
+import type { Limit, OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
 import { AppHeader } from "@/components/AppHeader";
 import { DepositSheet } from "@/components/DepositSheet";
+import { fetchLimits } from "@/lib/client/shop";
 
 type WalletResponse = { ok: true; balance_pence: number; deposits: { t: string; amount_pence: number }[] };
 type OrdersResponse = { orders: OrderRecord[] };
@@ -43,16 +45,22 @@ function activity(deposits: WalletResponse["deposits"], orders: OrderRecord[]): 
 export default function WalletPage() {
   const [balancePence, setBalancePence] = useState(0);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [limits, setLimits] = useState<Limit[]>([]);
   const [loading, setLoading] = useState(true);
   const [depositing, setDepositing] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [walletRes, ordersRes] = await Promise.all([fetch("/api/wallet"), fetch("/api/orders")]);
+      const [walletRes, ordersRes, nextLimits] = await Promise.all([
+        fetch("/api/wallet"),
+        fetch("/api/orders"),
+        fetchLimits(),
+      ]);
       const wallet = walletRes.ok ? ((await walletRes.json()) as WalletResponse) : null;
       const orders = ordersRes.ok ? ((await ordersRes.json()) as OrdersResponse).orders : [];
       if (wallet?.ok) setBalancePence(wallet.balance_pence);
       setEntries(activity(wallet?.ok ? wallet.deposits : [], orders));
+      setLimits(nextLimits);
     } finally {
       setLoading(false);
     }
@@ -72,7 +80,14 @@ export default function WalletPage() {
           <div>
             <p className="text-sm text-muted">Balance</p>
             <p className="tnum mt-1 text-4xl font-semibold tracking-tight">{formatPence(balancePence)}</p>
-            <p className="mt-2 text-sm text-muted">Covered demo wallet. Approve spends it; refunds come back here.</p>
+            <p className="mt-2 text-sm text-muted">Covered demo wallet. Buy now spends it; refunds come back here.</p>
+            {limits.length > 0 && (
+              <p className="mt-2 text-sm">
+                <Link href="/" className="text-accent hover:underline">
+                  {limits.length === 1 ? "1 limit watching" : `${limits.length} limits watching`}
+                </Link>
+              </p>
+            )}
           </div>
           <button
             type="button"

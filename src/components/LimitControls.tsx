@@ -111,9 +111,9 @@ type ListProps = {
 export function ActiveLimits({ limits, onRemove }: ListProps) {
   if (limits.length === 0) return null;
   return (
-    <section className="mt-8">
-      <h2 className="text-sm font-semibold">Limits</h2>
-      <ul className="mt-3 divide-y divide-line rounded-xl border border-line bg-panel">
+    <section className="mt-4" aria-label="Watching">
+      <h2 className="text-sm font-semibold">Watching</h2>
+      <ul className="mt-2 divide-y divide-line rounded-xl border border-line bg-panel">
         {limits.map((limit) => {
           const status = displayLimitStatus(limit);
           return (
@@ -121,12 +121,20 @@ export function ActiveLimits({ limits, onRemove }: ListProps) {
               <div className="min-w-0">
                 <p className="font-medium">{limit.query}</p>
                 <p className="mt-0.5 text-xs text-muted">
-                  up to {formatPence(limit.max_price_pence)}
-                  <span className="mx-1.5 text-line">·</span>
-                  last checked {lastCheckedLabel(limit.last_checked_at)}
+                  at or under {formatPence(limit.max_price_pence)}
                   <span className="mx-1.5 text-line">·</span>
                   <span className={statusClass(status)}>{status}</span>
-                  {limit.last_result ? ` · ${limit.last_result}` : ""}
+                  {limit.last_result ? (
+                    <>
+                      <span className="mx-1.5 text-line">·</span>
+                      {limit.last_result}
+                    </>
+                  ) : (
+                    <>
+                      <span className="mx-1.5 text-line">·</span>
+                      last checked {lastCheckedLabel(limit.last_checked_at)}
+                    </>
+                  )}
                 </p>
               </div>
               <button

@@ -248,22 +248,82 @@ struct InkPillButton: View {
     let title: String
     var enabled = true
     var identifier: String?
+    var height: CGFloat = Theme.approveHeight
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 18.5, weight: .semibold))
+                .font(.system(size: height < Theme.approveHeight ? 16 : 18.5, weight: .semibold))
                 .tracking(-0.2)
                 .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
-                .frame(height: Theme.approveHeight)
+                .frame(height: height)
                 .background(Color.ink, in: Capsule())
         }
         .buttonStyle(PressScaleStyle(scale: 0.965))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
         .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+struct OutlinePillButton: View {
+    let title: String
+    var enabled = true
+    var identifier: String?
+    var height: CGFloat = Theme.approveHeight
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: height < Theme.approveHeight ? 16 : 18.5, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundStyle(Color.ink)
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .overlay(Capsule().strokeBorder(Color.ink, lineWidth: 2))
+        }
+        .buttonStyle(PressScaleStyle(scale: 0.965))
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+struct DualBuyActions: View {
+    var buyEnabled = true
+    var limitEnabled = true
+    var compact = false
+    var onBuy: () -> Void
+    var onLimit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                InkPillButton(
+                    title: "Buy now",
+                    enabled: buyEnabled,
+                    identifier: compact ? "shop.approve.card" : "shop.approve",
+                    height: compact ? 48 : Theme.approveHeight,
+                    action: onBuy
+                )
+                OutlinePillButton(
+                    title: "Set a limit",
+                    enabled: limitEnabled,
+                    identifier: compact ? "shop.limit.card" : "shop.limit",
+                    height: compact ? 48 : Theme.approveHeight,
+                    action: onLimit
+                )
+            }
+            if !limitEnabled {
+                Text("Limits are for cash prices")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.tertiary)
+                    .accessibilityIdentifier(compact ? "shop.limit.cashOnly.card" : "shop.limit.cashOnly")
+            }
+        }
     }
 }
 

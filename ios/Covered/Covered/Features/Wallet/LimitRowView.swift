@@ -16,12 +16,18 @@ struct LimitRowView: View {
                 Spacer(minLength: 8)
                 LimitChipLabel(chip: chip)
             }
-            Text("buy at or under \(formatGBP(limit.maxPricePence))")
+            Text("at or under \(formatGBP(limit.maxPricePence))")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.secondary)
-            Text(LimitStatusChip.lastCheckedLabel(limit.lastCheckedAt))
-                .font(.system(size: 12))
-                .foregroundStyle(Color.tertiary)
+            if !limit.lastResult.isEmpty {
+                Text(limit.lastResult)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.tertiary)
+            } else {
+                Text(LimitStatusChip.lastCheckedLabel(limit.lastCheckedAt))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.tertiary)
+            }
         }
         .padding(14.5)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -7,8 +7,10 @@ struct ShopView: View {
     @State private var limitPounds = ""
     @State private var limitError: String?
     @State private var savingPremium = false
+    @State private var removeError: String?
     @Namespace private var morph
     @FocusState private var searchFocused: Bool
+    private let state = AppState.shared
 
     var body: some View {
         NavigationStack {
@@ -26,6 +28,8 @@ struct ShopView: View {
                             enabled: !shop.isBusy,
                             onSend: runSearch
                         )
+
+                        watchingStrip
 
                         if isFleeceDemoQuery(shop.query) {
                             Button {
@@ -100,9 +104,7 @@ struct ShopView: View {
             }
             .task {
                 shop.localPremiumBps = AppState.shared.settings.protectionPremiumBps
-                if AppState.shared.wallet == nil {
-                    await AppState.shared.refresh()
-                }
+                await AppState.shared.refresh()
                 if let seeded = LaunchFlags.seededSearchQuery, shop.query.isEmpty {
                     shop.query = seeded
                 }
@@ -135,13 +137,11 @@ struct ShopView: View {
             if !useTwoUp {
                 rejectedStrip
             }
-            InkPillButton(
-                title: "Approve · \(listingPriceLabel(chosen))",
-                identifier: "shop.approve"
-            ) {
-                shop.resetReceipt()
-                withAnimation(Motion.merge) { confirming = true }
-            }
+            DualBuyActions(
+                limitEnabled: !isMonthlyOnly(chosen),
+                onBuy: { openApprove() },
+                onLimit: { openLimit(chosen) }
+            )
             .matchedGeometryEffect(id: "chosen-card", in: morph)
 
             PremiumControl(
@@ -208,8 +208,35 @@ struct ShopView: View {
             twoUp: twoUp,
             compact: compact,
             namespace: morph,
+            onApprove: { openApprove() },
+            limitEnabled: !isMonthlyOnly(item),
             onLimit: { openLimit(item) }
         )
+    }
+
+    @ViewBuilder
+    private var watchingStrip: some View {
+        if !state.limits.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Watching")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.inkSoft)
+                if let removeError {
+                    Text(removeError)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.secondary)
+                }
+                ForEach(state.limits) { limit in
+                    LimitRowView(limit: limit)
+                        .contextMenu {
+                            Button("Remove", role: .destructive) {
+                                Task { await removeLimit(id: limit.id) }
+                            }
+                        }
+                }
+            }
+            .accessibilityIdentifier("shop.watching")
+        }
     }
 
     private func approveSummary(_ item: ShortlistItem) -> some View {
@@ -263,7 +290,7 @@ struct ShopView: View {
     }
 
     private var idleState: some View {
-        Text("Search for something. Covered buys the cheapest listing that is actually the item and still has your rights.")
+        Text("Buy it now, or set a limit and your laptop checks every hour.")
             .font(.system(size: 14.5))
             .foregroundStyle(Color.secondary)
             .padding(.top, 24)
@@ -302,13 +329,14 @@ struct ShopView: View {
                 TextField("0", text: $limitPounds)
                     .keyboardType(.decimalPad)
                     .filmMoney(22, weight: .semibold)
+                    .accessibilityIdentifier("shop.limitPounds")
             }
             if let limitError {
                 Text(limitError)
                     .font(.system(size: 13))
                     .foregroundStyle(Color.secondary)
             }
-            InkPillButton(title: "Save limit") {
+            InkPillButton(title: "Confirm", identifier: "shop.limitConfirm") {
                 Task { await saveLimit(item) }
             }
             Spacer()
@@ -418,10 +446,24 @@ struct ShopView: View {
         return "\(gap) > \(cap) · private wins"
     }
 
+    private func openApprove() {
+        shop.resetReceipt()
+        withAnimation(Motion.merge) { confirming = true }
+    }
+
     private func openLimit(_ item: ShortlistItem) {
         limitPounds = poundsText(item.pricePence)
         limitError = nil
         limitItem = item
+    }
+
+    private func removeLimit(id: String) async {
+        removeError = nil
+        do {
+            try await state.deleteLimit(id: id)
+        } catch {
+            removeError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     private func runSearch() {
