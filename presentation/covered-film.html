@@ -349,6 +349,9 @@ const HITS = Object.values(CUT.hits || {}).map(h => [h.story_beat, h.t - baseT(h
 const tOf = s => baseT(s) + HITS.reduce((a, [sh, d]) => a + d * Math.max(0, 1 - Math.abs(s - sh)), 0);
 const b = (bar, beat = 1, ms = 0) => tOf((bar - 1) * 4 + (beat - 1)) + ms / 1000;
 const T = tOf(STORY_BEATS);
+// faster than 120 story beats a minute, counters speed up with the tempo so a count
+// still settles inside its beat (exactly 1 for the Mixkit cut)
+const TEMPO_K = Math.max(1, 0.5 / (tOf(1) - tOf(0)));
 const OUTRO = CUT.outro;
 const DURATION = OUTRO ? b(OUTRO.end_bar, 1) + OUTRO.tail_s : T;
 const AX = 1275, AY = 540;
@@ -360,7 +363,7 @@ const SP = {
   ui: [18, 0.8], snap: [26, 0.82], soft: [12.5, 0.84], land: [15, 0.8],
   enter: [19, 0.8], exit: [30, 0.95], reset: [60, 1],
   cam: [8.2, 0.9], move: [9.5, 0.9], drag: [14, 1], press: [42, 0.9], unpress: [26, 0.9],
-  money: [16, 1], ring: [12, 1], lead: [26, 0.82], trail: [12, 0.9], merge: [14, 1], back: [14, 0.9],
+  money: [16 * TEMPO_K, 1], ring: [12, 1], lead: [26, 0.82], trail: [12, 0.9], merge: [14, 1], back: [14, 0.9],
 };
 function stepS(tau, w, z) {
   if (tau <= 0) return 0;
@@ -624,7 +627,7 @@ const pSum = win([[b(10, 4, -40), b(12, 4)]], "land", "exit");
 const sumRect = trv([12, 446, 406, 284, 26], [[b(11, 4), [12, 348, 406, 284, 26], "ui"], [b(12, 2), [12, 348, 406, 236, 28], "soft"], [RESET, [12, 446, 406, 284, 26], "reset"]], "soft", "sum");
 const pSmA = win([[b(10, 4, -40), b(12, 2)]]), pSmB = win([[b(12, 2, 80), b(12, 4)]]);
 const pSr = [win([[b(10, 4), b(12, 2)]]), win([[b(10, 4, 60), b(12, 2)]]), win([[b(11, 1), b(12, 2)]]), win([[b(11, 2), b(12, 2)]]), win([[b(11, 2, 20), b(12, 2)]]), win([[b(11, 3), b(12, 2)]], "snap")];
-const keptV = moneyTr([[b(12, 2, 100), 195], [RESET, 0]]);
+const keptV = moneyTr([[b(12, 2, 100 / TEMPO_K), 195], [RESET, 0]]);
 const pMem = win([[b(12, 3), b(12, 4)]], "land");
 const KEEP_CARD3_HIDDEN = [MERGE_ON[1], b(12, 3)];
 
@@ -655,7 +658,8 @@ const OT = OUTRO ? {
   tag2: once(0, [[b(13, 2, -80), 1, "enter"], [b(14, 4, -40), 0, "exit"]]),
   mark: once(0, [[b(15, 1, -150), 1, "land"]]),
   lock: once(0, [[b(15, 2, -120), 1, "soft"]]),
-  fade: once(0, [[b(OUTRO.end_bar, 1), 1, "exit"]]),
+  // the fade leads the final hit so the canvas is fully reached as the hit sounds
+  fade: once(0, [[b(OUTRO.end_bar, 1, -180), 1, "exit"]]),
 } : null;
 
 if (BAD.length) console.error("non-periodic tracks:", BAD);

@@ -491,6 +491,27 @@ def attack_bias(a, period, n=32):
     return float(np.median(devs)) if devs else 0.0
 
 
+def attack_residual(a, start, beat_times):
+    """Median gap between the section's beat grid and its sample-accurate attacks."""
+    y, sr = a["y"], SR_AN
+    lo_s, hi_s = int((start - 0.2) * sr), int((start + beat_times[-1] + 0.2) * sr)
+    seg = y[max(0, lo_s):hi_s]
+    spec = np.fft.rfft(seg)
+    spec[np.fft.rfftfreq(len(seg), 1 / sr) > 1500] = 0
+    low = np.abs(np.fft.irfft(spec, len(seg)))
+    w = int(0.003 * sr)
+    slope = np.diff(np.convolve(low, np.ones(w) / w, mode="same"))
+    origin = max(0, lo_s) / sr
+    devs = []
+    for t in beat_times:
+        c = int((start + t - origin) * sr)
+        lo, hi = c - int(0.06 * sr), c + int(0.06 * sr)
+        if lo > 0 and hi < len(slope):
+            attack = origin + (lo + int(np.argmax(slope[lo:hi]))) / sr
+            devs.append(attack - (start + t))
+    return float(np.median(devs)) if devs else 0.0
+
+
 def measured_beats(a, start, n, period):
     """Beat times from the start downbeat, each nudged to its onset peak (±40 ms) when
     the onset is clear, deviations smoothed so tempo drift is followed but jitter is not."""
@@ -498,30 +519,36 @@ def measured_beats(a, start, n, period):
     grid = start + period * np.arange(n + 1)
     dev = np.zeros(n + 1)
     for i, g in enumerate(grid):
-        lo, hi = max(0, int((g - 0.04) * fps)), int((g + 0.04) * fps) + 1
+        c = g - a.get("bias", 0.0)  # flux peaks sit `bias` before the attacks
+        lo, hi = max(0, int((c - 0.04) * fps)), int((c + 0.04) * fps) + 1
         seg = env[lo:hi]
         if len(seg) and seg.max() > 0.15:
-            dev[i] = (lo + int(np.argmax(seg))) / fps - g
+            dev[i] = (lo + int(np.argmax(seg))) / fps + a.get("bias", 0.0) - g
     sm = np.array([np.median(dev[max(0, i - 2):i + 3]) for i in range(n + 1)])
     t = grid + sm
     return (t - t[0]).tolist()
 
 
 def pin_hits(a, cut, start, names):
-    """Move each big hit onto the strongest onset within ±0.3 beat of where the grid puts it."""
+    """Move each big hit onto the strongest onset within ±0.15 beat of where the grid puts
+    it, weighted towards the grid: wider windows catch syncopated sixteenths instead of
+    the hit itself."""
     env, fps = a["env"], a["fps"]
     spb = 60.0 / cut["bpm"]
+    win = 0.15 * spb
     hits = {}
     for name, (sb, lead) in names.items():
         tg = t_of(dict(cut, hits={}), sb) + lead
-        lo, hi = max(0, int((start + tg - 0.3 * spb) * fps)), int((start + tg + 0.3 * spb) * fps) + 1
+        c = start + tg - a.get("bias", 0.0)  # search the flux where the attack would show
+        lo, hi = max(0, int((c - win) * fps)), int((c + win) * fps) + 1
         seg = env[lo:hi]
         if not len(seg):
             continue
-        k = lo + int(np.argmax(seg))
-        at_grid = env[min(len(env) - 1, int((start + tg) * fps))]
+        dist = np.abs((lo + np.arange(len(seg))) / fps - c)
+        k = lo + int(np.argmax(seg * (1 - 0.5 * dist / win)))
+        at_grid = env[min(len(env) - 1, int(c * fps))]
         if seg.max() > 1.3 * max(at_grid, 0.05):
-            hits[name] = dict(story_beat=sb, t=round(k / fps - start - lead, 4), onset=round(float(seg.max()), 3))
+            hits[name] = dict(story_beat=sb, t=round(k / fps + a.get("bias", 0.0) - start - lead, 4), onset=round(float(seg.max()), 3))
     return hits
 
 
@@ -595,6 +622,7 @@ def cut_cmd(name, path=None, placeholder=False):
     period = 60.0 / a["bpm"]
     bias = attack_bias(a, period)
     a["phase"] = (a["phase"] + bias) % period
+    a["bias"] = bias
     print(f"onset-to-attack bias {bias * 1000:+.1f} ms (grid moved onto the attacks)")
     st = pick_start(a, 8)
     r = st["downbeat_phase"]
@@ -613,6 +641,11 @@ def cut_cmd(name, path=None, placeholder=False):
     print(f"chosen: bar {pick['bar']}  {pick['start']:.3f}-{pick['end']:.3f} s")
     extra = 8 if spec["outro"] else 2
     bt = measured_beats(a, pick["start"], song_beats + extra, period)
+    # last pass: inside the chosen section, line the grid up with the attacks themselves
+    local = attack_residual(a, pick["start"], bt)
+    pick["start"] += local
+    pick["end"] += local
+    print(f"in-section attack residual {local * 1000:+.1f} ms (section start moved onto the attack)")
     cut = dict(name=name, title=spec["title"], placeholder=placeholder, audio_source=os.path.relpath(path, HERE),
                bpm=round(a["bpm"], 3), offset_s=round(pick["start"], 4), beats_per_bar=4, unit=unit,
                stretch_bars=stretch, beat_times=[round(x, 4) for x in bt], loop=spec["loop"], punch=spec["punch"],
@@ -622,12 +655,24 @@ def cut_cmd(name, path=None, placeholder=False):
         cut["hits"] = pin_hits(a, cut, pick["start"], {**HIT_STORY, **(OUTRO_HITS if spec["outro"] else {})})
         print("hits pinned to onsets:", {k: v["t"] for k, v in cut["hits"].items()})
     film_dur = t_of(cut, 48) if spec["loop"] else t_of(cut, (spec["outro"]["end_bar"] - 1) * 4) + spec["outro"]["tail_s"]
+    stretch_k = 1.0
+    if spec["loop"]:
+        # a loop must be a whole number of 60 fps frames, or the seam slips by a fraction
+        # of a frame and the audio loses its crossfaded tail; stretch the section to fit
+        target = round(film_dur * 60) / 60
+        stretch_k = target / film_dur
+        cut["beat_times"] = [round(x * stretch_k, 6) for x in cut["beat_times"]]
+        for h in cut["hits"].values():
+            h["t"] = round(h["t"] * stretch_k, 6)
+        film_dur = t_of(cut, 48)
+        cut["time_stretch"] = round(stretch_k, 8)
+        print(f"loop fitted to {round(film_dur * 60)} frames: time-stretch x{stretch_k:.6f} ({(stretch_k - 1) * 100:+.4f} %)")
     # audio: section (+ loop crossfade tail), stereo 48 kHz, UI sounds on the tempo map
     derived = os.path.join(OUT_DIR, "click") if placeholder else os.path.join(ASSETS, "music", "derived")
     os.makedirs(derived, exist_ok=True)
     tmp = os.path.join(derived, f"_{name}_seg.wav")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{pick['start']:.6f}", "-t", f"{film_dur + 1.5:.6f}",
-                    "-i", path, "-ar", str(SR_OUT), "-ac", "2", tmp], check=True)
+                    "-i", path, "-af", f"atempo={1 / stretch_k:.8f}", "-ar", str(SR_OUT), "-ac", "2", tmp], check=True)
     seg = decode(tmp, SR_OUT, channels=2)
     os.remove(tmp)
     if len(seg) < int((film_dur + (0.25 if spec["loop"] else 0)) * SR_OUT):

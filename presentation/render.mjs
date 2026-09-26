@@ -193,7 +193,7 @@ async function verify() {
       const op = id => +getComputedStyle(document.getElementById(id)).opacity;
       return { fade: op("ofade"), mark: op("omark") }; }, t);
     const f = film.outro.final;
-    for (const [lab, t] of [["hit − 50 ms", f - 0.05], ["hit − 1 ms", f - 0.001], ["hit + 120 ms", f + 0.12], ["hit + 350 ms", f + 0.35], ["end", film.duration - 1 / 60]]) {
+    for (const [lab, t] of [["hit − 200 ms", f - 0.2], ["hit − 100 ms", f - 0.1], ["hit", f], ["hit + 50 ms", f + 0.05], ["end", film.duration - 1 / 60]]) {
       const p = await probe(t);
       console.log(`final hit ${lab.padEnd(12)} t=${t.toFixed(3)}  lockup ${p.mark.toFixed(3)}  canvas fade ${p.fade.toFixed(3)}`);
     }

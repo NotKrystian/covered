@@ -1,10 +1,10 @@
 {
  "name": "power",
  "title": "\"POWER\", Kanye West",
- "placeholder": true,
- "audio_source": "out/click/power-click.wav",
+ "placeholder": false,
+ "audio_source": "assets/music/power.mp3",
  "bpm": 77.0,
- "offset_s": 24.935,
+ "offset_s": 224.5933,
  "beats_per_bar": 4,
  "unit": 0.5,
  "stretch_bars": [
@@ -15,136 +15,148 @@
  ],
  "beat_times": [
   0.0,
-  0.7785,
-  1.5584,
-  2.3377,
-  3.1159,
-  3.8951,
-  4.6744,
-  5.4536,
-  6.2328,
-  7.0111,
-  7.7903,
-  8.5709,
-  9.3501,
-  10.1283,
-  10.9076,
-  11.6882,
-  12.4674,
-  13.2456,
-  14.0249,
-  14.8054,
-  15.5847,
-  16.3629,
-  17.1421,
-  17.9214,
-  18.7006,
-  19.4798,
-  20.2581,
-  21.0373,
-  21.8179,
-  22.5971,
-  23.3753,
-  24.1546,
-  24.9351,
-  25.7137,
-  26.4922
+  0.779145,
+  1.55829,
+  2.337534,
+  3.116679,
+  3.895824,
+  4.674969,
+  5.454214,
+  6.233358,
+  7.012503,
+  7.791648,
+  8.570893,
+  9.350037,
+  10.129182,
+  10.908327,
+  11.687472,
+  12.466717,
+  13.245861,
+  14.025006,
+  14.804151,
+  15.583396,
+  16.362541,
+  17.141685,
+  17.92083,
+  18.700075,
+  19.47922,
+  20.258365,
+  21.037509,
+  21.816654,
+  22.595899,
+  23.375044,
+  24.154189,
+  24.933333,
+  25.712578,
+  26.491723
  ],
  "loop": true,
  "punch": true,
  "outro": null,
  "section": {
-  "start_s": 24.935,
-  "end_s": 49.8702,
+  "start_s": 224.5933,
+  "end_s": 249.5285,
   "bars": 8
  },
  "candidates": [
   {
-   "bar": 7,
-   "start": 24.935,
-   "end": 49.87,
-   "score": 1.9,
-   "energy": 1.0,
-   "build": 1.0,
+   "bar": 72,
+   "start": 224.593,
+   "end": 249.528,
+   "score": 1.428,
+   "energy": 0.924,
+   "build": 0.389,
    "mid_phrase": false
   },
   {
-   "bar": 8,
-   "start": 28.052,
-   "end": 52.987,
-   "score": 1.75,
-   "energy": 1.0,
-   "build": 0.75,
+   "bar": 15,
+   "start": 46.912,
+   "end": 71.847,
+   "score": 1.329,
+   "energy": 0.963,
+   "build": 0.159,
    "mid_phrase": true
   },
   {
-   "bar": 9,
-   "start": 31.169,
-   "end": 56.104,
-   "score": 1.6,
-   "energy": 1.0,
-   "build": 0.5,
+   "bar": 14,
+   "start": 43.795,
+   "end": 68.73,
+   "score": 1.328,
+   "energy": 0.963,
+   "build": 0.157,
+   "mid_phrase": true
+  },
+  {
+   "bar": 13,
+   "start": 40.678,
+   "end": 65.613,
+   "score": 1.327,
+   "energy": 0.964,
+   "build": 0.155,
    "mid_phrase": true
   },
   {
    "bar": 31,
-   "start": 99.741,
-   "end": 124.676,
-   "score": 1.574,
-   "energy": 1.0,
-   "build": 0.458,
+   "start": 96.782,
+   "end": 121.717,
+   "score": 1.32,
+   "energy": 0.962,
+   "build": 0.128,
+   "mid_phrase": true
+  },
+  {
+   "bar": 12,
+   "start": 37.561,
+   "end": 62.496,
+   "score": 1.314,
+   "energy": 0.961,
+   "build": 0.14,
    "mid_phrase": false
   },
   {
-   "bar": 32,
-   "start": 102.857,
-   "end": 127.793,
-   "score": 1.506,
-   "energy": 1.0,
-   "build": 0.343,
+   "bar": 29,
+   "start": 90.548,
+   "end": 115.484,
+   "score": 1.308,
+   "energy": 0.958,
+   "build": 0.126,
    "mid_phrase": true
   },
   {
-   "bar": 10,
-   "start": 34.286,
-   "end": 59.221,
-   "score": 1.45,
-   "energy": 1.0,
-   "build": 0.25,
-   "mid_phrase": true
-  },
-  {
-   "bar": 33,
-   "start": 105.974,
-   "end": 130.91,
-   "score": 1.437,
-   "energy": 1.0,
-   "build": 0.229,
-   "mid_phrase": true
-  },
-  {
-   "bar": 34,
-   "start": 109.091,
-   "end": 134.026,
-   "score": 1.368,
-   "energy": 1.0,
-   "build": 0.114,
+   "bar": 30,
+   "start": 93.665,
+   "end": 118.6,
+   "score": 1.3,
+   "energy": 0.959,
+   "build": 0.111,
    "mid_phrase": true
   }
  ],
- "hits": {},
- "duration_s": 24.9351,
- "mix": "out/click/power-mix.wav",
+ "hits": {
+  "flip": {
+   "story_beat": 17.25,
+   "t": 8.695384,
+   "onset": 0.116
+  },
+  "sum": {
+   "story_beat": 41.0,
+   "t": 21.017011,
+   "onset": 0.087
+  }
+ },
+ "time_stretch": 0.99992915,
+ "duration_s": 24.9333,
+ "mix": "assets/music/derived/power-mix.wav",
  "sounds": [
   {
    "story_beat": 1.0,
    "sound": "tap",
-   "t": 0.3892
+   "t": 0.3896
   },
   {
    "story_beat": 16.0,
    "sound": "tap",
-   "t": 7.7903
+   "t": 7.7916
   },
   {
    "story_beat": 21.0,
@@ -154,92 +166,92 @@
   {
    "story_beat": 24.0,
    "sound": "side",
-   "t": 12.4674
+   "t": 12.4667
   },
   {
    "story_beat": 25.0,
    "sound": "side",
-   "t": 13.2456
+   "t": 13.2459
   },
   {
    "story_beat": 27.0,
    "sound": "check",
-   "t": 14.8054
+   "t": 14.8042
   },
   {
    "story_beat": 29.0,
    "sound": "tick",
-   "t": 15.9738
+   "t": 15.973
   },
   {
    "story_beat": 29.25,
    "sound": "tick",
-   "t": 16.0711
+   "t": 16.0704
   },
   {
    "story_beat": 29.5,
    "sound": "tick",
-   "t": 16.1684
+   "t": 16.1678
   },
   {
    "story_beat": 30.0,
    "sound": "tap",
-   "t": 16.3629
+   "t": 16.3625
   },
   {
    "story_beat": 37.0,
    "sound": "ping",
-   "t": 19.0902
+   "t": 19.0896
   },
   {
    "story_beat": 38.0,
    "sound": "tick",
-   "t": 19.4798
+   "t": 19.4792
   },
   {
    "story_beat": 38.25,
    "sound": "tick",
-   "t": 19.5771
+   "t": 19.5766
   },
   {
    "story_beat": 38.5,
    "sound": "tick",
-   "t": 19.6744
+   "t": 19.674
   },
   {
    "story_beat": 38.75,
    "sound": "tick",
-   "t": 19.7717
+   "t": 19.7714
   },
   {
    "story_beat": 41.0,
    "sound": "tick",
-   "t": 21.0373
+   "t": 21.017
   },
   {
    "story_beat": 43.0,
    "sound": "tick",
-   "t": 22.5971
+   "t": 22.5959
   },
   {
    "story_beat": 43.25,
    "sound": "tick",
-   "t": 22.7917
+   "t": 22.7907
   },
   {
    "story_beat": 45.0,
    "sound": "tick",
-   "t": 23.7649
+   "t": 23.7646
   },
   {
    "story_beat": 45.25,
    "sound": "tick",
-   "t": 23.8624
+   "t": 23.862
   },
   {
    "story_beat": 45.5,
    "sound": "tick",
-   "t": 23.9598
+   "t": 23.9594
   }
  ]
 }

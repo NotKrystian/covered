@@ -3,87 +3,87 @@ window.COVERED_CUTS = {
  "flames": {
   "name": "flames",
   "title": "\"Dancing in the Flames\", The Weeknd",
-  "placeholder": true,
-  "audio_source": "out/click/flames-click.wav",
-  "bpm": 120.001,
-  "offset_s": 16.0004,
+  "placeholder": false,
+  "audio_source": "assets/music/dancing-in-the-flames.mp3",
+  "bpm": 156.002,
+  "offset_s": 28.6973,
   "beats_per_bar": 4,
   "unit": 1.0,
   "stretch_bars": [],
   "beat_times": [
    0.0,
-   0.4996,
-   0.9992,
-   1.4992,
-   1.9984,
-   2.4977,
-   2.9969,
-   3.4969,
-   3.9969,
-   4.4989,
-   4.9989,
-   5.4989,
-   5.9981,
-   6.4973,
-   6.9973,
-   7.4973,
-   7.9993,
-   8.4993,
-   8.9993,
-   9.4985,
-   9.9977,
-   10.4977,
-   10.9977,
-   11.4997,
-   11.9997,
-   12.4997,
-   12.9989,
-   13.4981,
-   13.9974,
-   14.4974,
-   14.9973,
-   15.4993,
-   15.9993,
-   16.4993,
-   16.9985,
-   17.4978,
-   17.9978,
-   18.4978,
-   18.9997,
-   19.4997,
-   19.9997,
-   20.4989,
-   20.9982,
-   21.4974,
-   21.9974,
-   22.4974,
-   22.9994,
-   23.4994,
-   23.9994,
-   24.4986,
-   24.9978,
-   25.4978,
-   25.9978,
-   26.4998,
-   26.9998,
-   27.4998,
-   27.999,
-   28.4982,
-   28.9974,
-   29.4974,
-   29.9974,
-   30.4994,
-   30.9994,
-   31.4994,
-   31.9986,
-   32.4979,
-   32.9979,
-   33.4978,
-   33.9998,
-   34.4998,
-   34.9998,
-   35.4994,
-   35.999
+   0.3846,
+   0.7692,
+   1.1538,
+   1.5384,
+   1.9231,
+   2.3077,
+   2.6923,
+   3.0769,
+   3.4601,
+   3.8461,
+   4.2307,
+   4.6153,
+   4.9969,
+   5.3846,
+   5.7661,
+   6.1507,
+   6.5384,
+   6.923,
+   7.3076,
+   7.6922,
+   8.0768,
+   8.4614,
+   8.8461,
+   9.2307,
+   9.6153,
+   9.9999,
+   10.3845,
+   10.7691,
+   11.1537,
+   11.5383,
+   11.923,
+   12.3076,
+   12.6922,
+   13.0768,
+   13.4614,
+   13.846,
+   14.2306,
+   14.6152,
+   14.9998,
+   15.3845,
+   15.7691,
+   16.1537,
+   16.5383,
+   16.9229,
+   17.3075,
+   17.6921,
+   18.0767,
+   18.4613,
+   18.846,
+   19.2306,
+   19.6152,
+   19.9998,
+   20.3844,
+   20.769,
+   21.1536,
+   21.5382,
+   21.9228,
+   22.3075,
+   22.6921,
+   23.0767,
+   23.4613,
+   23.8459,
+   24.2305,
+   24.6151,
+   24.9997,
+   25.3843,
+   25.769,
+   26.1536,
+   26.5382,
+   26.9195,
+   27.3026,
+   27.6858
   ],
   "loop": false,
   "punch": false,
@@ -92,192 +92,213 @@ window.COVERED_CUTS = {
    "tail_s": 0.6
   },
   "section": {
-   "start_s": 16.0004,
-   "end_s": 48.0,
+   "start_s": 28.6973,
+   "end_s": 53.3125,
    "bars": 16
   },
   "candidates": [
    {
-    "bar": 8,
-    "start": 16.0,
-    "end": 48.0,
-    "score": 1.899,
-    "energy": 1.0,
-    "build": 0.999,
+    "bar": 18,
+    "start": 28.697,
+    "end": 53.312,
+    "score": 1.408,
+    "energy": 0.905,
+    "build": 0.437,
     "mid_phrase": false
    },
    {
-    "bar": 32,
-    "start": 64.0,
-    "end": 95.999,
-    "score": 1.574,
-    "energy": 1.0,
-    "build": 0.458,
-    "mid_phrase": false
-   },
-   {
-    "bar": 9,
-    "start": 18.0,
-    "end": 50.0,
-    "score": 1.528,
-    "energy": 0.971,
-    "build": 0.75,
-    "mid_phrase": true
-   },
-   {
-    "bar": 10,
-    "start": 20.0,
-    "end": 52.0,
-    "score": 1.329,
-    "energy": 0.943,
-    "build": 0.5,
-    "mid_phrase": true
-   },
-   {
-    "bar": 31,
-    "start": 62.0,
-    "end": 94.0,
-    "score": 1.216,
-    "energy": 0.971,
-    "build": 0.229,
-    "mid_phrase": true
-   },
-   {
-    "bar": 11,
-    "start": 22.0,
-    "end": 54.0,
-    "score": 1.137,
+    "bar": 93,
+    "start": 144.065,
+    "end": 168.68,
+    "score": 1.356,
     "energy": 0.914,
-    "build": 0.25,
+    "build": 0.337,
     "mid_phrase": true
    },
    {
-    "bar": 7,
-    "start": 14.0,
-    "end": 46.0,
-    "score": 1.118,
-    "energy": 0.938,
-    "build": 0.501,
+    "bar": 19,
+    "start": 30.22,
+    "end": 54.835,
+    "score": 1.354,
+    "energy": 0.904,
+    "build": 0.353,
     "mid_phrase": true
    },
    {
-    "bar": 30,
-    "start": 60.0,
-    "end": 92.0,
-    "score": 1.03,
-    "energy": 0.943,
-    "build": -0.0,
+    "bar": 94,
+    "start": 145.603,
+    "end": 170.218,
+    "score": 1.339,
+    "energy": 0.918,
+    "build": 0.3,
+    "mid_phrase": false
+   },
+   {
+    "bar": 95,
+    "start": 147.141,
+    "end": 171.757,
+    "score": 1.282,
+    "energy": 0.922,
+    "build": 0.201,
+    "mid_phrase": true
+   },
+   {
+    "bar": 20,
+    "start": 31.758,
+    "end": 56.373,
+    "score": 1.271,
+    "energy": 0.904,
+    "build": 0.214,
+    "mid_phrase": true
+   },
+   {
+    "bar": 58,
+    "start": 90.219,
+    "end": 114.834,
+    "score": 1.243,
+    "energy": 0.902,
+    "build": 0.166,
+    "mid_phrase": false
+   },
+   {
+    "bar": 57,
+    "start": 88.68,
+    "end": 113.296,
+    "score": 1.24,
+    "energy": 0.902,
+    "build": 0.161,
     "mid_phrase": true
    }
   ],
-  "hits": {},
-  "duration_s": 32.5986,
-  "mix": "out/click/flames-mix.wav",
+  "hits": {
+   "case": {
+    "story_beat": 8.0,
+    "t": 3.0665,
+    "onset": 0.13
+   },
+   "check": {
+    "story_beat": 27.0,
+    "t": 10.3692,
+    "onset": 0.184
+   },
+   "sum": {
+    "story_beat": 41.0,
+    "t": 15.7562,
+    "onset": 0.099
+   },
+   "mark": {
+    "story_beat": 56.0,
+    "t": 21.5264,
+    "onset": 0.074
+   }
+  },
+  "duration_s": 25.2151,
+  "mix": "assets/music/derived/flames-mix.wav",
   "sounds": [
    {
     "story_beat": 1.0,
     "sound": "tap",
-    "t": 0.4996
+    "t": 0.3846
    },
    {
     "story_beat": 16.0,
     "sound": "tap",
-    "t": 7.9993
+    "t": 6.1507
    },
    {
     "story_beat": 21.0,
     "sound": "tap",
-    "t": 10.4977
+    "t": 8.0768
    },
    {
     "story_beat": 24.0,
     "sound": "side",
-    "t": 11.9997
+    "t": 9.2307
    },
    {
     "story_beat": 25.0,
     "sound": "side",
-    "t": 12.4997
+    "t": 9.6153
    },
    {
     "story_beat": 27.0,
     "sound": "check",
-    "t": 13.4981
+    "t": 10.3692
    },
    {
     "story_beat": 29.0,
     "sound": "tick",
-    "t": 14.4974
+    "t": 11.1537
    },
    {
     "story_beat": 29.25,
     "sound": "tick",
-    "t": 14.6224
+    "t": 11.2499
    },
    {
     "story_beat": 29.5,
     "sound": "tick",
-    "t": 14.7474
+    "t": 11.346
    },
    {
     "story_beat": 30.0,
     "sound": "tap",
-    "t": 14.9973
+    "t": 11.5383
    },
    {
     "story_beat": 37.0,
     "sound": "ping",
-    "t": 18.4978
+    "t": 14.2306
    },
    {
     "story_beat": 38.0,
     "sound": "tick",
-    "t": 18.9997
+    "t": 14.6152
    },
    {
     "story_beat": 38.25,
     "sound": "tick",
-    "t": 19.1247
+    "t": 14.7113
    },
    {
     "story_beat": 38.5,
     "sound": "tick",
-    "t": 19.2497
+    "t": 14.8075
    },
    {
     "story_beat": 38.75,
     "sound": "tick",
-    "t": 19.3747
+    "t": 14.9037
    },
    {
     "story_beat": 41.0,
     "sound": "tick",
-    "t": 20.4989
+    "t": 15.7562
    },
    {
     "story_beat": 43.0,
     "sound": "tick",
-    "t": 21.4974
+    "t": 16.5383
    },
    {
     "story_beat": 43.25,
     "sound": "tick",
-    "t": 21.6224
+    "t": 16.6345
    },
    {
     "story_beat": 45.0,
     "sound": "tick",
-    "t": 22.4974
+    "t": 17.3075
    },
    {
     "story_beat": 45.25,
     "sound": "tick",
-    "t": 22.6229
+    "t": 17.4036
    },
    {
     "story_beat": 45.5,
     "sound": "tick",
-    "t": 22.7484
+    "t": 17.4998
    }
   ]
  },
@@ -309,10 +330,10 @@ window.COVERED_CUTS = {
  "power": {
   "name": "power",
   "title": "\"POWER\", Kanye West",
-  "placeholder": true,
-  "audio_source": "out/click/power-click.wav",
+  "placeholder": false,
+  "audio_source": "assets/music/power.mp3",
   "bpm": 77.0,
-  "offset_s": 24.935,
+  "offset_s": 224.5933,
   "beats_per_bar": 4,
   "unit": 0.5,
   "stretch_bars": [
@@ -323,136 +344,148 @@ window.COVERED_CUTS = {
   ],
   "beat_times": [
    0.0,
-   0.7785,
-   1.5584,
-   2.3377,
-   3.1159,
-   3.8951,
-   4.6744,
-   5.4536,
-   6.2328,
-   7.0111,
-   7.7903,
-   8.5709,
-   9.3501,
-   10.1283,
-   10.9076,
-   11.6882,
-   12.4674,
-   13.2456,
-   14.0249,
-   14.8054,
-   15.5847,
-   16.3629,
-   17.1421,
-   17.9214,
-   18.7006,
-   19.4798,
-   20.2581,
-   21.0373,
-   21.8179,
-   22.5971,
-   23.3753,
-   24.1546,
-   24.9351,
-   25.7137,
-   26.4922
+   0.779145,
+   1.55829,
+   2.337534,
+   3.116679,
+   3.895824,
+   4.674969,
+   5.454214,
+   6.233358,
+   7.012503,
+   7.791648,
+   8.570893,
+   9.350037,
+   10.129182,
+   10.908327,
+   11.687472,
+   12.466717,
+   13.245861,
+   14.025006,
+   14.804151,
+   15.583396,
+   16.362541,
+   17.141685,
+   17.92083,
+   18.700075,
+   19.47922,
+   20.258365,
+   21.037509,
+   21.816654,
+   22.595899,
+   23.375044,
+   24.154189,
+   24.933333,
+   25.712578,
+   26.491723
   ],
   "loop": true,
   "punch": true,
   "outro": null,
   "section": {
-   "start_s": 24.935,
-   "end_s": 49.8702,
+   "start_s": 224.5933,
+   "end_s": 249.5285,
    "bars": 8
   },
   "candidates": [
    {
-    "bar": 7,
-    "start": 24.935,
-    "end": 49.87,
-    "score": 1.9,
-    "energy": 1.0,
-    "build": 1.0,
+    "bar": 72,
+    "start": 224.593,
+    "end": 249.528,
+    "score": 1.428,
+    "energy": 0.924,
+    "build": 0.389,
     "mid_phrase": false
    },
    {
-    "bar": 8,
-    "start": 28.052,
-    "end": 52.987,
-    "score": 1.75,
-    "energy": 1.0,
-    "build": 0.75,
+    "bar": 15,
+    "start": 46.912,
+    "end": 71.847,
+    "score": 1.329,
+    "energy": 0.963,
+    "build": 0.159,
     "mid_phrase": true
    },
    {
-    "bar": 9,
-    "start": 31.169,
-    "end": 56.104,
-    "score": 1.6,
-    "energy": 1.0,
-    "build": 0.5,
+    "bar": 14,
+    "start": 43.795,
+    "end": 68.73,
+    "score": 1.328,
+    "energy": 0.963,
+    "build": 0.157,
+    "mid_phrase": true
+   },
+   {
+    "bar": 13,
+    "start": 40.678,
+    "end": 65.613,
+    "score": 1.327,
+    "energy": 0.964,
+    "build": 0.155,
     "mid_phrase": true
    },
    {
     "bar": 31,
-    "start": 99.741,
-    "end": 124.676,
-    "score": 1.574,
-    "energy": 1.0,
-    "build": 0.458,
+    "start": 96.782,
+    "end": 121.717,
+    "score": 1.32,
+    "energy": 0.962,
+    "build": 0.128,
+    "mid_phrase": true
+   },
+   {
+    "bar": 12,
+    "start": 37.561,
+    "end": 62.496,
+    "score": 1.314,
+    "energy": 0.961,
+    "build": 0.14,
     "mid_phrase": false
    },
    {
-    "bar": 32,
-    "start": 102.857,
-    "end": 127.793,
-    "score": 1.506,
-    "energy": 1.0,
-    "build": 0.343,
+    "bar": 29,
+    "start": 90.548,
+    "end": 115.484,
+    "score": 1.308,
+    "energy": 0.958,
+    "build": 0.126,
     "mid_phrase": true
    },
    {
-    "bar": 10,
-    "start": 34.286,
-    "end": 59.221,
-    "score": 1.45,
-    "energy": 1.0,
-    "build": 0.25,
-    "mid_phrase": true
-   },
-   {
-    "bar": 33,
-    "start": 105.974,
-    "end": 130.91,
-    "score": 1.437,
-    "energy": 1.0,
-    "build": 0.229,
-    "mid_phrase": true
-   },
-   {
-    "bar": 34,
-    "start": 109.091,
-    "end": 134.026,
-    "score": 1.368,
-    "energy": 1.0,
-    "build": 0.114,
+    "bar": 30,
+    "start": 93.665,
+    "end": 118.6,
+    "score": 1.3,
+    "energy": 0.959,
+    "build": 0.111,
     "mid_phrase": true
    }
   ],
-  "hits": {},
-  "duration_s": 24.9351,
-  "mix": "out/click/power-mix.wav",
+  "hits": {
+   "flip": {
+    "story_beat": 17.25,
+    "t": 8.695384,
+    "onset": 0.116
+   },
+   "sum": {
+    "story_beat": 41.0,
+    "t": 21.017011,
+    "onset": 0.087
+   }
+  },
+  "time_stretch": 0.99992915,
+  "duration_s": 24.9333,
+  "mix": "assets/music/derived/power-mix.wav",
   "sounds": [
    {
     "story_beat": 1.0,
     "sound": "tap",
-    "t": 0.3892
+    "t": 0.3896
    },
    {
     "story_beat": 16.0,
     "sound": "tap",
-    "t": 7.7903
+    "t": 7.7916
    },
    {
     "story_beat": 21.0,
@@ -462,92 +495,92 @@ window.COVERED_CUTS = {
    {
     "story_beat": 24.0,
     "sound": "side",
-    "t": 12.4674
+    "t": 12.4667
    },
    {
     "story_beat": 25.0,
     "sound": "side",
-    "t": 13.2456
+    "t": 13.2459
    },
    {
     "story_beat": 27.0,
     "sound": "check",
-    "t": 14.8054
+    "t": 14.8042
    },
    {
     "story_beat": 29.0,
     "sound": "tick",
-    "t": 15.9738
+    "t": 15.973
    },
    {
     "story_beat": 29.25,
     "sound": "tick",
-    "t": 16.0711
+    "t": 16.0704
    },
    {
     "story_beat": 29.5,
     "sound": "tick",
-    "t": 16.1684
+    "t": 16.1678
    },
    {
     "story_beat": 30.0,
     "sound": "tap",
-    "t": 16.3629
+    "t": 16.3625
    },
    {
     "story_beat": 37.0,
     "sound": "ping",
-    "t": 19.0902
+    "t": 19.0896
    },
    {
     "story_beat": 38.0,
     "sound": "tick",
-    "t": 19.4798
+    "t": 19.4792
    },
    {
     "story_beat": 38.25,
     "sound": "tick",
-    "t": 19.5771
+    "t": 19.5766
    },
    {
     "story_beat": 38.5,
     "sound": "tick",
-    "t": 19.6744
+    "t": 19.674
    },
    {
     "story_beat": 38.75,
     "sound": "tick",
-    "t": 19.7717
+    "t": 19.7714
    },
    {
     "story_beat": 41.0,
     "sound": "tick",
-    "t": 21.0373
+    "t": 21.017
    },
    {
     "story_beat": 43.0,
     "sound": "tick",
-    "t": 22.5971
+    "t": 22.5959
    },
    {
     "story_beat": 43.25,
     "sound": "tick",
-    "t": 22.7917
+    "t": 22.7907
    },
    {
     "story_beat": 45.0,
     "sound": "tick",
-    "t": 23.7649
+    "t": 23.7646
    },
    {
     "story_beat": 45.25,
     "sound": "tick",
-    "t": 23.8624
+    "t": 23.862
    },
    {
     "story_beat": 45.5,
     "sound": "tick",
-    "t": 23.9598
+    "t": 23.9594
    }
   ]
  }
