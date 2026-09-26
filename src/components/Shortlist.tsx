@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
+import { safeImageDataUrl, safeImageUrl } from "@/lib/photo-safety";
 
 /** Where the rows on screen came from. Shown as a badge so a saved grid is never passed off as live. */
 export type ShortlistSource = {
@@ -75,12 +77,21 @@ function rowState(item: ShortlistItem, decision: Decision | undefined, chosenId:
   return "neutral";
 }
 
+/** First photo that passes the safety checks: a raster data URL, a local fixture path, or plain https. */
 function listingPhoto(item: ShortlistItem): string | null {
-  return item.image_data_url || item.image_url || item.image_urls[0] || null;
+  for (const candidate of [item.image_data_url, item.image_url, item.image_urls[0]]) {
+    if (!candidate) continue;
+    if (candidate.startsWith("/") && !candidate.startsWith("//")) return candidate;
+    const safe = safeImageDataUrl(candidate) ?? safeImageUrl(candidate);
+    if (safe) return safe;
+  }
+  return null;
 }
 
 function Thumb({ item, dim }: { item: ShortlistItem; dim: boolean }) {
-  const src = listingPhoto(item);
+  const [failed, setFailed] = useState(false);
+  const photo = listingPhoto(item);
+  const src = failed ? null : photo;
   const local = src?.startsWith("/") ?? false;
   return (
     <div
@@ -91,7 +102,13 @@ function Thumb({ item, dim }: { item: ShortlistItem; dim: boolean }) {
       ) : src ? (
         // Live thumbs are data URLs or encrypted-tbn; next/image is not needed.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-[#1a1b20] text-[10px] uppercase tracking-wide text-muted">
           no photo

@@ -7,6 +7,7 @@
  * typed value back. Import from "@/lib/types".
  */
 import { z } from "zod";
+import { safeImageDataUrl, safeImageUrl } from "@/lib/photo-safety";
 
 /** Which list on the rendered Shopping grid an offer came from. Sponsored rows are ads. */
 export const OfferSectionSchema = z.enum(["sponsored", "browse"]);
@@ -65,10 +66,24 @@ export const OfferSchema = z.object({
   summary: z.string().nullable().optional(),
   /** Fixtures, or extra remote thumbs. */
   image_urls: z.array(z.string()).optional(),
-  /** Displayed card image src (encrypted-tbn or shop CDN). */
-  image_url: z.string().nullable().optional(),
-  /** One jpeg data URL per offer, captured in the reader when the canvas is clean. */
-  image_data_url: z.string().max(500_000).nullable().optional(),
+  /**
+   * Displayed card image src (encrypted-tbn or shop CDN). Vetted at parse time by
+   * `safeImageUrl`: anything but plain https becomes null, never an error.
+   */
+  image_url: z
+    .string()
+    .transform((value) => safeImageUrl(value))
+    .nullable()
+    .optional(),
+  /**
+   * One jpeg data URL per offer, captured in the reader when the canvas is clean.
+   * Vetted by `safeImageDataUrl`: anything but a bounded base64 raster becomes null.
+   */
+  image_data_url: z
+    .string()
+    .transform((value) => safeImageDataUrl(value))
+    .nullable()
+    .optional(),
 });
 export type Offer = z.infer<typeof OfferSchema>;
 

@@ -4,6 +4,7 @@
  */
 import type { Offer } from "@/lib/types";
 import { SHORTLIST_MAX } from "@/lib/decision";
+import { isGoogleImageUrl, sniffImageFormat } from "@/lib/photo-safety";
 
 export const OFFER_PHOTO_CAP = SHORTLIST_MAX;
 
@@ -23,35 +24,23 @@ export function capOfferPhotos(offers: Offer[], cap = OFFER_PHOTO_CAP): Offer[] 
   });
 }
 
-function mimeToDataPrefix(contentType: string | null): string | null {
-  const mime = (contentType ?? "image/jpeg").split(";")[0].trim().toLowerCase();
-  switch (mime) {
-    case "image/jpeg":
-    case "image/jpg":
-      return "data:image/jpeg;base64,";
-    case "image/png":
-      return "data:image/png;base64,";
-    case "image/webp":
-      return "data:image/webp;base64,";
-    case "image/gif":
-      return "data:image/gif;base64,";
-    default:
-      return "data:image/jpeg;base64,";
-  }
-}
-
+/**
+ * Server-side fetch, so it only ever touches Google's image CDNs over https, refuses
+ * redirects (no bouncing to an internal address), and labels the result by its magic
+ * bytes rather than the Content-Type, so a non-image never becomes a "jpeg".
+ */
 async function fetchAsDataUrl(url: string): Promise<string | null> {
-  if (!/^https?:\/\//i.test(url)) return null;
+  if (!isGoogleImageUrl(url)) return null;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { redirect: "follow", signal: ac.signal });
-    if (!res.ok) return null;
+    const res = await fetch(url, { redirect: "error", cache: "no-store", signal: ac.signal });
+    if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_BYTES) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length === 0 || buf.length > MAX_BYTES) return null;
-    const prefix = mimeToDataPrefix(res.headers.get("content-type"));
-    if (!prefix) return null;
-    return `${prefix}${buf.toString("base64")}`;
+    const format = sniffImageFormat(buf);
+    if (!format) return null;
+    return `data:image/${format};base64,${buf.toString("base64")}`;
   } catch {
     return null;
   } finally {
