@@ -14,7 +14,7 @@ export S3_BUCKET="${S3_BUCKET:-covered-hack-616532055961}"
 
 # Bedrock model the container calls. The Decision agent reports the real ID;
 # update this line and run deploy/aws/redeploy.sh — it re-reads this file.
-export BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-eu.anthropic.claude-sonnet-4-6}"
+export BEDROCK_MODEL_ID="${BEDROCK_MODEL_ID:-eu.anthropic.claude-haiku-4-5-20251001-v1:0}"
 
 # DynamoDB table used by src/lib/memory (created by the Judge+Memory agent, not here).
 export MEMORY_TABLE="${MEMORY_TABLE:-covered-memory}"
