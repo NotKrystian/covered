@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
+import { SortControl } from "@/components/SortControl";
+import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
 
 /** Where the rows on screen came from. Shown as a badge so a saved grid is never passed off as live. */
 export type ShortlistSource = {
@@ -39,6 +41,8 @@ type Props = {
   chosenId: string | null;
   loading: boolean;
   source: ShortlistSource | null;
+  /** Research brief brand, used when sorting by brand. */
+  briefBrand?: string;
 };
 
 function captured(iso: string): string {
@@ -110,9 +114,18 @@ function sellerLabel(d: Decision): string {
   return `${seller[d.seller_type]} · ${venue[d.venue_trust]}`;
 }
 
-export function Shortlist({ items, listings, decisions, chosenId, loading, source }: Props) {
+export function Shortlist({ items, listings, decisions, chosenId, loading, source, briefBrand = "" }: Props) {
   const all = listings && listings.length > 0 ? listings : items;
   const [tab, setTab] = useState<CentreTab>("shortlist");
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const sortedItems = useMemo(
+    () => sortListings(items, sort, decisions, briefBrand),
+    [items, sort, decisions, briefBrand],
+  );
+  const sortedAll = useMemo(
+    () => sortListings(all, sort, decisions, briefBrand),
+    [all, sort, decisions, briefBrand],
+  );
 
   useEffect(() => {
     setTab("shortlist");
@@ -126,7 +139,7 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
     );
   }
 
-  const rows = rowsForTab(tab, items, all);
+  const rows = rowsForTab(tab, sortedItems, sortedAll);
   const countLabel =
     tab === "all" ? `${all.length}` : source ? `${items.length} of ${source.offers}` : `${items.length}`;
 
@@ -152,6 +165,9 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
           </div>
           <span className="font-mono normal-case tracking-normal">{countLabel}</span>
           {source && <SourceBadge source={source} />}
+          <div className="ml-auto">
+            <SortControl value={sort} onChange={setSort} />
+          </div>
         </div>
         <div className="grid grid-cols-[5rem_minmax(0,1fr)_5.5rem_9rem_9rem_9rem_3.5rem] gap-3 px-5 py-2">
           <span>Photo</span>

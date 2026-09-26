@@ -165,6 +165,7 @@ export async function POST(request: Request) {
     trace,
     premium_paid_pence: premiumPaid(items, judged.decisions, verdict),
     learned,
+    brief_brand: researched.brief.brand,
   };
   return NextResponse.json(response);
 }

@@ -66,6 +66,8 @@ export type DecideResponse = {
   premium_paid_pence: number | null;
   /** True when preference memory was injected into the judge prompt. */
   learned: boolean;
+  /** Research brief brand, for client-side brand sort. Empty when unknown. */
+  brief_brand: string;
 };
 
 /** Judge batches this many listings per Bedrock call so the JSON does not truncate. */

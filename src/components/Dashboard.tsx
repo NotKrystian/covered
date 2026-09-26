@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Decision, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse, type ShortlistItem } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
 import {
   approveChosen,
   decide,
@@ -17,6 +18,7 @@ import {
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
 import { PaySheet } from "@/components/PaySheet";
 import { PoundField } from "@/components/PoundField";
+import { SortControl } from "@/components/SortControl";
 import { WalletStrip } from "@/components/WalletStrip";
 
 type Props = {
@@ -124,6 +126,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [balancePence, setBalancePence] = useState(memory.balance_pence);
   const [payOpen, setPayOpen] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
 
   const savePrefs = useCallback(async () => {
     const next = await patchMemory({ settings });
@@ -187,7 +190,10 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     }
   }, [result, query, settings]);
 
-  const rows = result?.listings ?? [];
+  const rows = useMemo(
+    () => sortListings(result?.listings ?? [], sort, result?.decisions ?? {}, result?.brief_brand ?? ""),
+    [result, sort],
+  );
   const chosenId = result?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
 
@@ -343,21 +349,26 @@ export function Dashboard({ memoryState, onMemory }: Props) {
               {rows.length === 0 ? (
                 <p className="text-sm text-muted">No listings came back for that search.</p>
               ) : (
-                <ul className="space-y-3">
-                  {rows.map((item) => (
-                    <OfferRow
-                      key={item.id}
-                      item={item}
-                      decision={result.decisions[item.id]}
-                      chosen={item.id === chosenId}
-                      approving={approving}
-                      onApprove={() => {
-                        setPayError(null);
-                        setPayOpen(true);
-                      }}
-                    />
-                  ))}
-                </ul>
+                <>
+                  <div className="flex justify-end">
+                    <SortControl value={sort} onChange={setSort} />
+                  </div>
+                  <ul className="space-y-3">
+                    {rows.map((item) => (
+                      <OfferRow
+                        key={item.id}
+                        item={item}
+                        decision={result.decisions[item.id]}
+                        chosen={item.id === chosenId}
+                        approving={approving}
+                        onApprove={() => {
+                          setPayError(null);
+                          setPayOpen(true);
+                        }}
+                      />
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
           )}

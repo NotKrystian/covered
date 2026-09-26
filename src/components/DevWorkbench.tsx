@@ -264,6 +264,7 @@ export function DevWorkbench() {
             chosenId={result?.verdict.chosen_id ?? null}
             loading={running}
             source={shortlistSource}
+            briefBrand={result?.brief_brand ?? ""}
           />
         </main>
         <TracePanel
