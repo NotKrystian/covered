@@ -32,7 +32,7 @@ function order(partial: Partial<OrderRecord> = {}): OrderRecord {
   };
 }
 
-function offer(title: string, pence: number, merchant: string): Offer {
+function offer(title: string, pence: number, merchant: string, delivery: string | null = null): Offer {
   return {
     section: "browse",
     title,
@@ -41,7 +41,7 @@ function offer(title: string, pence: number, merchant: string): Offer {
     compare_at: null,
     merchant,
     badge: null,
-    delivery: null,
+    delivery,
     rating: null,
     rating_count: null,
   };
@@ -127,6 +127,27 @@ test("return postage counts against the saving", () => {
   const result = evaluateSwitch(order({ returns: "Returns in 30 days" }), items, decisions, settings);
   assert.equal(result.ok, false);
   assert.match(result.note, /clear £6\.01 after £3\.99 return postage, under your £8\.00/);
+});
+
+test("the new listing's delivery counts against the saving and the ranking", () => {
+  // £36 − £26 − £4.99 delivery = £5.01, under the £8 minimum (free returns on the first order).
+  const charged = [offer("fleece", 2600, "Next", "£4.99 delivery")].map(offerToItem);
+  const under = evaluateSwitch(order(), charged, { [charged[0].id]: protectedDecision }, settings);
+  assert.equal(under.ok, false);
+  assert.match(under.note, /Next at £26\.00 \+ £4\.99 delivery: you would clear £5\.01/);
+
+  // £24 + £5 delivery loses to £27 with free delivery.
+  const items = [offer("fleece", 2400, "Argos", "£5.00 delivery"), offer("fleece", 2700, "Next", "Free delivery")].map(
+    offerToItem,
+  );
+  const decisions = Object.fromEntries(items.map((i) => [i.id, protectedDecision]));
+  const result = evaluateSwitch(order(), items, decisions, settings);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.item.merchant, "Next");
+    assert.equal(result.delivery_pence, 0);
+    assert.equal(result.clear_pence, 900);
+  }
 });
 
 test("never switches to a private seller, a mislisting, or a different item, however cheap", () => {

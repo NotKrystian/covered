@@ -129,6 +129,7 @@ export async function runSwitchCheck(
           merchant: verdict.item.merchant,
           price_pence: verdict.item.price_pence,
           postage_pence: verdict.postage_pence,
+          delivery_pence: verdict.delivery_pence,
           clear_pence: verdict.clear_pence,
         },
       };

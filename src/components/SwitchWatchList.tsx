@@ -150,7 +150,8 @@ export function SwitchWatchList({ watches, balancePence, onBalance, onRefresh, o
                       </span>
                     )}
                     <span className="block text-muted">
-                      {offer.merchant} at {formatPence(offer.price_pence)}: you clear{" "}
+                      {offer.merchant} at {formatPence(offer.price_pence)}
+                      {offer.delivery_pence > 0 ? ` + ${formatPence(offer.delivery_pence)} delivery` : ""}: you clear{" "}
                       <span className="tnum text-accent">{formatPence(offer.clear_pence)}</span>
                       {offer.postage_pence > 0 ? ` after ${formatPence(offer.postage_pence)} return postage` : " with free returns"}
                     </span>

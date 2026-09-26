@@ -103,7 +103,9 @@ export const SwitchOfferSchema = z.object({
   price_pence: z.number().int().nonnegative(),
   /** Estimated cost to send the first order back (0 when it had free returns). */
   postage_pence: z.number().int().nonnegative(),
-  /** Old price − new price − postage: what the buyer keeps by switching. */
+  /** Delivery charged on the new listing (0 when free or not stated). */
+  delivery_pence: z.number().int().nonnegative().default(0),
+  /** Old price − new price − new delivery − postage: what the buyer keeps by switching. */
   clear_pence: z.number().int(),
 });
 export type SwitchOffer = z.infer<typeof SwitchOfferSchema>;

@@ -16,6 +16,7 @@ import type { Decision, Offer, SellerType, UserSettings } from "@/lib/types";
 import { isProtected, type ShortlistItem } from "@/lib/decision";
 import type { OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
+import { shippingPence } from "@/lib/sort-listings";
 
 export const SWITCH_WINDOW_DAYS = 14;
 const HOUR_MS = 3_600_000;
@@ -101,12 +102,21 @@ export function returnPostagePence(order: Pick<OrderRecord, "returns">): number 
 }
 
 export type SwitchEvaluation =
-  | { ok: true; item: ShortlistItem; decision: Decision; postage_pence: number; clear_pence: number; note: string }
+  | {
+      ok: true;
+      item: ShortlistItem;
+      decision: Decision;
+      postage_pence: number;
+      delivery_pence: number;
+      clear_pence: number;
+      note: string;
+    }
   | { ok: false; note: string };
 
 /**
- * Pick the cheapest listing the judge rates as the same item from a UK business, and
- * switch only if old price − new price − return postage clears the buyer's minimum.
+ * Pick the listing the judge rates as the same item from a UK business with the lowest
+ * price plus delivery, and switch only if old price − new price − new delivery − return
+ * postage clears the buyer's minimum. Delivery the grid does not state counts as £0.
  */
 export function evaluateSwitch(
   order: OrderRecord,
@@ -115,32 +125,38 @@ export function evaluateSwitch(
   settings: Pick<UserSettings, "switch_minimum_pence">,
 ): SwitchEvaluation {
   const postage = returnPostagePence(order);
-  let best: ShortlistItem | null = null;
+  let best: { item: ShortlistItem; price: number; delivery: number } | null = null;
   for (const item of items) {
     const d = decisions[item.id];
     if (!d || !d.same_item || d.mislisting || !isProtected(d)) continue;
-    if (item.price_pence === null || item.price_pence >= order.price_pence) continue;
-    if (best === null || item.price_pence < (best.price_pence ?? Infinity)) best = item;
+    if (item.price_pence === null) continue;
+    const delivery = shippingPence(item.delivery) ?? 0;
+    if (item.price_pence + delivery >= order.price_pence) continue;
+    if (best === null || item.price_pence + delivery < best.price + best.delivery) {
+      best = { item, price: item.price_pence, delivery };
+    }
   }
-  if (!best || best.price_pence === null) {
+  if (!best) {
     return { ok: false, note: "no cheaper listing from a UK business" };
   }
-  const clear = order.price_pence - best.price_pence - postage;
+  const clear = order.price_pence - best.price - best.delivery - postage;
+  const priceText = `${best.item.merchant} at ${formatPence(best.price)}${best.delivery > 0 ? ` + ${formatPence(best.delivery)} delivery` : ""}`;
   const postageText = postage > 0 ? `after ${formatPence(postage)} return postage` : "with free returns";
   if (clear < settings.switch_minimum_pence) {
     return {
       ok: false,
-      note: `best is ${best.merchant} at ${formatPence(best.price_pence)}: you would clear ${formatPence(clear)} ${postageText}, under your ${formatPence(settings.switch_minimum_pence)}`,
+      note: `best is ${priceText}: you would clear ${formatPence(clear)} ${postageText}, under your ${formatPence(settings.switch_minimum_pence)}`,
     };
   }
-  const decision = decisions[best.id] as Decision;
+  const decision = decisions[best.item.id] as Decision;
   return {
     ok: true,
-    item: best,
+    item: best.item,
     decision,
     postage_pence: postage,
+    delivery_pence: best.delivery,
     clear_pence: clear,
-    note: `${best.merchant} at ${formatPence(best.price_pence)}: you clear ${formatPence(clear)} ${postageText}`,
+    note: `${priceText}: you clear ${formatPence(clear)} ${postageText}`,
   };
 }
 
