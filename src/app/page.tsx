@@ -360,6 +360,7 @@ export default function Home() {
         <main className="min-h-0 min-w-0 overflow-x-auto">
           <Shortlist
             items={result?.shortlist ?? []}
+            listings={result?.listings ?? []}
             decisions={result?.decisions ?? {}}
             chosenId={result?.verdict.chosen_id ?? null}
             loading={running}

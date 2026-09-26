@@ -2,21 +2,23 @@
  * POST /api/decide — owned by Judge+Memory.
  *
  * Body: `{ query, settings?, display_name?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
- * Builds the shortlist, loads this buyer's memory (read-only), asks the Bedrock judge
- * (or the mock), applies the pound rule in code, and returns `DecideResponse` with a
- * visible trace. Decide never writes memory. Only approve/override events are purchases.
+ * Researches the product, builds the shortlist (top 12 by brief, all listings kept),
+ * loads this buyer's memory (read-only), asks the Bedrock judge (or the mock),
+ * applies the pound rule in code, and returns `DecideResponse` with a visible trace.
+ * Decide never writes memory. Only approve/override events are purchases.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OfferSchema, ReaderErrorSchema, SearchSourceSchema, UserSettingsSchema } from "@/lib/types";
 import { FIXTURE_LISTINGS, isFixtureQuery } from "@/lib/fixtures";
-import { judge } from "@/lib/judge";
+import { judge, researchProduct, researchTraceDetail } from "@/lib/judge";
 import {
   applyPremium,
   buildShortlistFromOffers,
   listingToItem,
   premiumPaid,
   type DecideResponse,
+  type ShortlistItem,
   type TraceEvent,
 } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
@@ -29,10 +31,10 @@ import {
   memoryStore,
   publicMemory,
 } from "@/lib/memory";
-import { capOfferPhotos } from "@/lib/reader/photos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const BodySchema = z.object({
   query: z.string().min(1),
@@ -82,8 +84,12 @@ export async function POST(request: Request) {
     trace.push({ t: new Date().toISOString(), tool, detail });
   };
 
+  const researched = await researchProduct(body.query);
+  log("research", researchTraceDetail(researched.brief, researched.source));
+
   const useFixtures = body.source === "fixture" || !body.offers;
-  let items;
+  let items: ShortlistItem[];
+  let listings: ShortlistItem[];
   if (useFixtures) {
     if (!isFixtureQuery(body.query)) {
       return NextResponse.json(
@@ -92,16 +98,19 @@ export async function POST(request: Request) {
       );
     }
     items = FIXTURE_LISTINGS.map(listingToItem);
+    listings = items;
     log("read_fixtures", `${items.length} listings for "${body.query}"`);
   } else {
-    const offers = capOfferPhotos(body.offers ?? []);
-    const built = buildShortlistFromOffers(offers);
+    const offers = body.offers ?? [];
+    const built = buildShortlistFromOffers(offers, researched.brief);
     items = built.items;
+    const judgedIds = new Set(items.map((i) => i.id));
+    listings = built.all.map((item) => (judgedIds.has(item.id) ? item : { ...item, image_data_url: null }));
     const sponsored = items.filter((i) => i.section === "sponsored").length;
     const withPhotos = items.filter((i) => Boolean(i.image_data_url) || i.image_urls.length > 0).length;
     log(
       "read_grid",
-      `${gridLabel(body.grid)}: ${offers.length} offers → ${items.length} shortlisted (${built.deduped} duplicates dropped, ${sponsored} ads marked, ${withPhotos} with photos)`,
+      `${gridLabel(body.grid)}: ${offers.length} offers → ${listings.length} listings, ${items.length} sent to the judge (${built.deduped} duplicates dropped, ${sponsored} ads marked, ${withPhotos} with photos)`,
     );
   }
 
@@ -123,7 +132,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const judged = await judge(body.query, settings, items, { memory: memoryBlock });
+  const judged = await judge(body.query, settings, items, {
+    memory: memoryBlock,
+    brief: researched.brief,
+  });
   for (const note of judged.notes) log("judge", note);
   const values = Object.values(judged.decisions);
   const mislistings = values.filter((d) => d.mislisting).length;
@@ -145,6 +157,7 @@ export async function POST(request: Request) {
     verdict,
     decisions: judged.decisions,
     shortlist: items,
+    listings,
     mode: judged.mode,
     model: judged.model,
     trace,

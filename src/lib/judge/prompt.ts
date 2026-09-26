@@ -6,6 +6,7 @@ import type { ContentBlock, ImageFormat } from "@aws-sdk/client-bedrock-runtime"
 import type { UserSettings } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import type { ProductBrief } from "./research";
 
 export const SYSTEM_PROMPT = `You are the judge inside Covered, a UK shopping bot. You look at a shortlist of listings for one request and return JSON only.
 
@@ -21,7 +22,9 @@ RIGHTS CARD (UK):
 - Marketplace with a written money-back / buyer-protection policy (e.g. eBay Money Back Guarantee): that is venue policy, not statute. Say which one you are relying on as extra.
 - Sponsored rows are ads. A "Sale" badge, a struck-through price, or the top slot is never a reason to buy.
 
-MISLISTING: photos are the check, titles are the bait. If a photo was actually attached and it shows a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without an attached photo you cannot call a mislisting: mislisting=false, photo_reason=null, and judge identity from the text only. If the title clearly describes a different product from the request (wrong garment, wrong gender/fit when the request names one, an accessory, a bundle of something else), same_item=false. A different brand or a missing colour word is not a mismatch on its own.
+PRODUCT: a "Product we are buying" block may be present. That is the researched identity of the request — use it, do not treat the query as an unknown string. A listing is the same item if it is that product, even when the title uses a marketing name or a longer model code (UE85N990F, "85 inch Neo QLED") instead of the exact string the user typed. Do not reject a television because the title does not contain the raw query. Reject only when category, size, or model family actually conflicts. Size must match (85 vs 75 is not the same). A case, cover, soundbar, stand or mount is not the product unless the request is for that accessory.
+
+MISLISTING: photos are the check, titles are the bait. If a photo was actually attached and it shows a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without an attached photo you cannot call a mislisting: mislisting=false, photo_reason=null, and judge identity from the text only. If the title clearly describes a different product from the request (wrong garment, wrong size class, a different model family, an accessory, a bundle of something else), same_item=false. A marketing name for the same product is not a mismatch.
 
 VENUE TRUST values: shop_checkout (a retailer's own checkout), marketplace_protected (written buyer protection), marketplace_unprotected, stranger (private sale, cash on collection), unclear.
 SELLER TYPE values: uk_business, private, overseas_business, unclear.
@@ -78,18 +81,36 @@ export type ImageLoader = (url: string) => Promise<{ format: ImageFormat; bytes:
  * Build the user turn: query, settings, one text block per item, then that item's
  * photos as image blocks. `loadImage` turns a stored URL into bytes the API accepts.
  */
+function describeBrief(brief: ProductBrief): string {
+  return [
+    "Product we are buying:",
+    `  what: ${brief.what_it_is}`,
+    `  brand: ${brief.brand || "unknown"}`,
+    `  model codes: ${brief.model_codes.join(", ") || "none"}`,
+    `  category: ${brief.category}`,
+    `  key specs: ${brief.key_specs.join(", ") || "none"}`,
+    `  must match: ${brief.must_match.join(", ") || "none"}`,
+    `  must not be: ${brief.must_not_be.join(", ") || "none"}`,
+    `  notes: ${brief.notes || "none"}`,
+    `  confidence: ${brief.confidence}`,
+    "A listing is the same item if it is this product, even when the title uses a marketing name instead of the exact model code the user typed. Do not reject a TV because the title says UE85N990F or \"85 inch Neo QLED\" rather than the raw query string. Reject only when category, size, or model family actually conflicts. Size must match (85 vs 75 is not the same). A case, soundbar, or stand is not the TV.",
+  ].join("\n");
+}
+
 export async function buildUserContent(
   query: string,
   settings: UserSettings,
   items: ShortlistItem[],
   loadImage: ImageLoader,
   memory: string | null = null,
+  brief: ProductBrief | null = null,
 ): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = [
     {
       text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatPence(settings.protection_premium_pence)}, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.`,
     },
   ];
+  if (brief) blocks.push({ text: describeBrief(brief) });
   if (memory) blocks.push({ text: memory });
 
   const loadedById = new Map<string, Awaited<ReturnType<ImageLoader>>[]>();

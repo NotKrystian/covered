@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
@@ -17,8 +17,25 @@ export type ShortlistSource = {
   offers: number;
 };
 
+type CentreTab = "shortlist" | "all";
+
+function rowsForTab(tab: CentreTab, items: ShortlistItem[], all: ShortlistItem[]): ShortlistItem[] {
+  switch (tab) {
+    case "shortlist":
+      return items;
+    case "all":
+      return all;
+    default: {
+      const never: never = tab;
+      return never;
+    }
+  }
+}
+
 type Props = {
   items: ShortlistItem[];
+  /** Every distinct offer from the search. Defaults to `items` when omitted. */
+  listings?: ShortlistItem[];
   decisions: Record<string, Decision>;
   chosenId: string | null;
   loading: boolean;
@@ -135,8 +152,16 @@ function sellerLabel(d: Decision): string {
   return `${seller[d.seller_type]} · ${venue[d.venue_trust]}`;
 }
 
-export function Shortlist({ items, decisions, chosenId, loading, source }: Props) {
-  if (items.length === 0) {
+export function Shortlist({ items, listings, decisions, chosenId, loading, source }: Props) {
+  const all = listings && listings.length > 0 ? listings : items;
+  const judgedIds = new Set(items.map((i) => i.id));
+  const [tab, setTab] = useState<CentreTab>("shortlist");
+
+  useEffect(() => {
+    setTab("shortlist");
+  }, [source?.fetched_at, items.length, all.length]);
+
+  if (items.length === 0 && all.length === 0) {
     return (
       <section className="flex h-full items-center justify-center text-sm text-muted">
         {loading ? "Reading the shelf…" : "No shortlist yet. Send a query or load the fixtures."}
@@ -144,16 +169,31 @@ export function Shortlist({ items, decisions, chosenId, loading, source }: Props
     );
   }
 
+  const rows = rowsForTab(tab, items, all);
+  const countLabel =
+    tab === "all" ? `${all.length}` : source ? `${items.length} of ${source.offers}` : `${items.length}`;
+
   return (
     <section className="h-full overflow-y-auto">
       <div className="sticky top-0 z-10 border-b border-line bg-background/95 text-[11px] uppercase tracking-wide text-muted backdrop-blur">
-        <div className="flex items-center gap-2 px-5 pt-2">
-          <span>Shortlist</span>
-          {source && (
-            <span className="font-mono normal-case tracking-normal">
-              {items.length} of {source.offers}
-            </span>
-          )}
+        <div className="flex items-center gap-3 px-5 pt-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setTab("shortlist")}
+              className={`uppercase tracking-wide ${tab === "shortlist" ? "text-foreground" : "text-muted hover:text-foreground"}`}
+            >
+              Shortlist
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("all")}
+              className={`uppercase tracking-wide ${tab === "all" ? "text-foreground" : "text-muted hover:text-foreground"}`}
+            >
+              All listings · {all.length}
+            </button>
+          </div>
+          <span className="font-mono normal-case tracking-normal">{countLabel}</span>
           {source && <SourceBadge source={source} />}
         </div>
         <div className="grid grid-cols-[5rem_minmax(0,1fr)_5.5rem_9rem_9rem_9rem_3.5rem] gap-3 px-5 py-2">
@@ -167,8 +207,9 @@ export function Shortlist({ items, decisions, chosenId, loading, source }: Props
         </div>
       </div>
       <ul className="divide-y divide-line">
-        {items.map((item) => {
+        {rows.map((item) => {
           const d = decisions[item.id];
+          const sent = judgedIds.has(item.id);
           const state = rowState(item, d, chosenId);
           const rowClass =
             state === "chosen"
@@ -192,6 +233,11 @@ export function Shortlist({ items, decisions, chosenId, loading, source }: Props
                     )}
                     {item.badge && (
                       <span className="rounded border border-line px-1 text-[10px] text-muted">{item.badge}</span>
+                    )}
+                    {tab === "all" && !sent && (
+                      <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
+                        not sent to the judge
+                      </span>
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted">

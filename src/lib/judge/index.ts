@@ -20,6 +20,9 @@ import { safeImageDataUrl, sniffImageFormat } from "@/lib/photo-safety";
 import { buildUserContent, SYSTEM_PROMPT } from "./prompt";
 import { mockDecision, mockJudge } from "./mock";
 import { BEDROCK_MODEL_ID, converse, errorLabel, isAccessError, judgeMode, shortModelName } from "./bedrock";
+import type { ProductBrief } from "./research";
+export { researchProduct, researchTraceDetail } from "./research";
+export type { ProductBrief, ResearchResult } from "./research";
 
 export type { Decision, Verdict, Listing, Offer } from "@/lib/types";
 export { BEDROCK_MODEL_ID, BEDROCK_REGION, judgeMode, shortModelName } from "./bedrock";
@@ -44,6 +47,8 @@ export type JudgeResult = {
 export type JudgeContext = {
   /** "What we know about this buyer" block, or null when memory is empty. */
   memory: string | null;
+  /** Researched identity of the query. Same_item is judged against this, not the raw string. */
+  brief?: ProductBrief | null;
 };
 
 const FORMAT_BY_EXT: Record<string, ImageFormat> = {
@@ -102,8 +107,13 @@ function parseResponse(text: string): JudgeResponse {
 /** Output budget: ~12 decisions × ~120 tokens plus a summary, with headroom so the JSON never truncates. */
 const JUDGE_MAX_TOKENS = 4000;
 
-function mockResult(items: ShortlistItem[], settings: UserSettings, notes: string[]): JudgeResult {
-  const { decisions, summary } = mockJudge(items, settings);
+function mockResult(
+  items: ShortlistItem[],
+  settings: UserSettings,
+  notes: string[],
+  brief: ProductBrief | null,
+): JudgeResult {
+  const { decisions, summary } = mockJudge(items, settings, brief);
   return { decisions, summary, mode: "mock", model: "mock", notes };
 }
 
@@ -117,12 +127,12 @@ export async function judge(
   const { mode, why } = await judgeMode();
   if (mode === "mock") {
     console.log(`[covered/judge] mode=mock (${why}) items=${items.length}`);
-    return mockResult(items, settings, [`mock: ${why}`]);
+    return mockResult(items, settings, [`mock: ${why}`], context.brief ?? null);
   }
 
   console.log(`[covered/judge] mode=bedrock (${why}) items=${items.length}`);
   const notes: string[] = [`bedrock: ${why}`];
-  const content = await buildUserContent(query, settings, items, loadImage, context.memory);
+  const content = await buildUserContent(query, settings, items, loadImage, context.memory, context.brief ?? null);
   const images = content.filter((b) => "image" in b).length;
   notes.push(`sent ${items.length} items, ${images} photos${context.memory ? ", buyer memory" : ""}`);
 
@@ -146,7 +156,7 @@ export async function judge(
       if (isAccessError(err)) {
         console.warn("[covered/judge] credentials/access error, falling back to mock");
         notes.push("mock: Bedrock credentials or model access missing");
-        return mockResult(items, settings, notes);
+        return mockResult(items, settings, notes, context.brief ?? null);
       }
       // With a bad body, retry with the error appended. Without one (network, empty), retry as-is.
       if (attempt === 1 && raw) {
@@ -173,14 +183,14 @@ export async function judge(
     }
     summary = parsed.summary;
   } else {
-    summary = mockJudge(items, settings).summary;
+    summary = mockJudge(items, settings, context.brief ?? null).summary;
     notes.push("bedrock unusable; mock for every item");
   }
 
   let filled = 0;
   for (const item of items) {
     if (!decisions[item.id]) {
-      decisions[item.id] = mockDecision(item, items, settings);
+      decisions[item.id] = mockDecision(item, items, settings, context.brief ?? null);
       filled += 1;
     }
   }

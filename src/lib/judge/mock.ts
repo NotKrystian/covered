@@ -8,6 +8,7 @@ import type { Decision, UserSettings } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
 import { isProtected } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import { identityFromBrief, type ProductBrief } from "./research";
 
 const UK_RETAILERS = [
   "argos", "currys", "john lewis", "jd sports", "next", "marks", "m&s", "asos",
@@ -137,16 +138,33 @@ function heuristicDecision(item: ShortlistItem): Decision {
   };
 }
 
-export function mockDecision(item: ShortlistItem, items: ShortlistItem[], settings: UserSettings): Decision {
-  return fixtureDecision(item, items, settings) ?? heuristicDecision(item);
+export function mockDecision(
+  item: ShortlistItem,
+  items: ShortlistItem[],
+  settings: UserSettings,
+  brief: ProductBrief | null = null,
+): Decision {
+  const fixture = fixtureDecision(item, items, settings);
+  if (fixture) return fixture;
+  const base = heuristicDecision(item);
+  if (!brief) return base;
+  const identity = identityFromBrief(item.title, brief);
+  if (identity.same_item) return base;
+  return {
+    ...base,
+    same_item: false,
+    recommendation: "skip",
+    reason: identity.why,
+  };
 }
 
 export function mockJudge(
   items: ShortlistItem[],
   settings: UserSettings,
+  brief: ProductBrief | null = null,
 ): { decisions: Record<string, Decision>; summary: string } {
   const decisions: Record<string, Decision> = {};
-  for (const item of items) decisions[item.id] = mockDecision(item, items, settings);
+  for (const item of items) decisions[item.id] = mockDecision(item, items, settings, brief);
   const values = Object.values(decisions);
   const mislistings = values.filter((d) => d.mislisting).length;
   const protectedCount = values.filter((d) => isProtected(d)).length;

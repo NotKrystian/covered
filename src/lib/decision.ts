@@ -13,6 +13,7 @@ import type {
   Verdict,
 } from "@/lib/types";
 import { formatPence, parsePricePence } from "@/lib/money";
+import { scoreAgainstBrief, type ProductBrief } from "@/lib/judge/research";
 
 /** One row of the shortlist the judge sees and the UI renders. Wraps an `Offer` or a `Listing`. */
 export type ShortlistItem = {
@@ -53,6 +54,8 @@ export type DecideResponse = {
   verdict: Verdict;
   decisions: Record<string, Decision>;
   shortlist: ShortlistItem[];
+  /** Every distinct offer from the search, including rows not sent to the judge. */
+  listings: ShortlistItem[];
   mode: JudgeMode;
   /** Bedrock model id when `mode === "bedrock"`, e.g. "eu.anthropic.claude-haiku-4-5-20251001-v1:0"; "mock" otherwise. */
   model: string;
@@ -122,18 +125,7 @@ function byPrice(a: ShortlistItem, b: ShortlistItem): number {
   return a.price_pence - b.price_pence;
 }
 
-/**
- * Build the shortlist the judge sees from a grid read.
- *
- * Dedupe on `offer_id` (sponsored) or title + merchant, then pick a mix rather than
- * the 12 cheapest rows: the cheapest sponsored rows up to `SHORTLIST_SPONSORED_MAX`,
- * and browse rows with a returns line before browse rows without one. The result is
- * sorted by price (unparsed prices last) and capped at `SHORTLIST_MAX`.
- */
-export function buildShortlistFromOffers(offers: Offer[]): {
-  items: ShortlistItem[];
-  deduped: number;
-} {
+function uniqueOffers(offers: Offer[]): Offer[] {
   const seen = new Set<string>();
   const unique: Offer[] = [];
   for (const offer of offers) {
@@ -145,12 +137,13 @@ export function buildShortlistFromOffers(offers: Offer[]): {
     seen.add(key);
     unique.push(offer);
   }
-  const all = unique.map(offerToItem).sort(byPrice);
+  return unique;
+}
 
+function pickByPriceAndReturns(all: ShortlistItem[]): ShortlistItem[] {
   const sponsored = all.filter((i) => i.section === "sponsored").slice(0, SHORTLIST_SPONSORED_MAX);
   const browseWithReturns = all.filter((i) => i.section === "browse" && i.returns !== null);
   const browseNoReturns = all.filter((i) => i.section === "browse" && i.returns === null);
-
   const picked: ShortlistItem[] = [...sponsored];
   for (const pool of [browseWithReturns, browseNoReturns]) {
     for (const item of pool) {
@@ -158,8 +151,51 @@ export function buildShortlistFromOffers(offers: Offer[]): {
       picked.push(item);
     }
   }
+  return picked.slice(0, SHORTLIST_MAX);
+}
+
+/** Rank listings so the real product (model code, brand, size) makes the judge's 12. */
+function pickByBrief(all: ShortlistItem[], brief: ProductBrief): ShortlistItem[] {
+  const ranked = all
+    .map((item) => ({ item, score: scoreAgainstBrief(item.title, brief) }))
+    .sort((a, b) => b.score - a.score || byPrice(a.item, b.item));
+  if (!ranked.some((row) => row.score > 0)) return pickByPriceAndReturns(all);
+
+  const picked: ShortlistItem[] = [];
+  let sponsored = 0;
+  for (const { item } of ranked) {
+    if (picked.length >= SHORTLIST_MAX) break;
+    if (item.section === "sponsored") {
+      if (sponsored >= SHORTLIST_SPONSORED_MAX) continue;
+      sponsored += 1;
+    }
+    picked.push(item);
+  }
+  return picked;
+}
+
+/**
+ * Build the shortlist the judge sees from a grid read.
+ *
+ * Dedupe on `offer_id` (sponsored) or title + merchant. Nothing is dropped for
+ * "not the query" — every distinct offer is returned in `all`. The judge still
+ * sees at most `SHORTLIST_MAX` rows (at most `SHORTLIST_SPONSORED_MAX` ads).
+ * When a product brief is present, those 12 are the best lexical matches
+ * (model code, brand, size), not the 12 cheapest random rows.
+ */
+export function buildShortlistFromOffers(
+  offers: Offer[],
+  brief: ProductBrief | null = null,
+): {
+  items: ShortlistItem[];
+  all: ShortlistItem[];
+  deduped: number;
+} {
+  const unique = uniqueOffers(offers);
+  const all = unique.map(offerToItem);
+  const picked = brief ? pickByBrief(all, brief) : pickByPriceAndReturns([...all].sort(byPrice));
   picked.sort(byPrice);
-  return { items: picked.slice(0, SHORTLIST_MAX), deduped: offers.length - unique.length };
+  return { items: picked, all, deduped: offers.length - unique.length };
 }
 
 /** A seller you can enforce against at a venue that honours it. A business badge alone is not this. */

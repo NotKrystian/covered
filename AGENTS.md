@@ -20,7 +20,7 @@ Source of truth for the next Cursor agent or **alan-d-smith**. Do not invent pro
 
 - **Live host:** https://covered.kawuc.uk (proxied A → EC2 `i-0be6351eb53244b66`, public IP `3.8.77.227`, `eu-west-2`). HTTP `:80` is the Next container. HTTPS is nginx `:443` with Let's Encrypt. Security group: 443 only from Cloudflare. Redeploy with `deploy/aws/redeploy.sh`. **Do not start a second App Runner** — that path was retired.
 - **AWS:** account `616532055961`, region `eu-west-2`, profile `default`. Bucket `covered-hack-616532055961` (`receipts/`, `searches/`). DynamoDB `covered-memory`. Do not write other Kawuc buckets or DNS records except `covered.kawuc.uk`.
-- **Judge:** Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` via `BEDROCK_MODEL_ID`. Mock if `COVERED_MOCK=1`. The pound rule stays in code (`applyPremium`). Mislistings never reach the price comparison. No xAI / Grok.
+- **Judge:** Research the product first (`src/lib/judge/research.ts`, DuckDuckGo HTML / Wikipedia + one Bedrock JSON brief), then judge the shortlist. Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` via `BEDROCK_MODEL_ID`. Mock if `COVERED_MOCK=1`. The pound rule stays in code (`applyPremium`). Mislistings never reach the price comparison. No xAI / Grok. The centre panel default is the judged shortlist (≤12); **All listings** shows every offer.
 - **Catalog:** Live grid prefers the user's Brave via the MV3 extension in `extension/` (background tab, their Google session). Installer page `/ext`. Do **not** CDP-attach or launch the user's Brave/Chrome. Server Playwright gets Google's `/sorry/` from the datacenter; exact-slug snapshots in `public/snapshots/` are fallback only. Fixtures are only the black-fleece demo; never answer a different query with those four listings.
 - **Cloudflare:** token lives in `~/.config/covered/cloudflare.env` (mode 600). Never commit it. Never print it. DNS:Edit on zone `kawuc.uk`. Zone SSL stays **Full (strict)**.
 - **Git:** commit only your own paths with explicit `git add <path>`; never `git add -A` or `git add .`; never sweep another agent's staged or unstaged files. Run `pnpm build && npx tsc --noEmit` before every push. Rebase only on a clean tree. No secrets in the repo. No force-push.
@@ -35,7 +35,8 @@ flowchart LR
  P -->|POST /api/search| R[Reader<br/>Brave MV3 extension<br/>or snapshot / fixtures]
  R -->|Offer[] with photos| P
  P -->|POST /api/decide| D[decide route]
- D --> S[Shortlist<br/>dedupe, sort, cap 12]
+ D --> Q[Research<br/>DDG/wiki + Bedrock brief]
+ Q --> S[Shortlist<br/>score vs brief, cap 12]
  D -->|getMemory read only| M[(DynamoDB<br/>covered-memory)]
  S --> J[Judge<br/>Bedrock Converse + photos<br/>JSON validated with zod]
  M -->|approve events only| J
@@ -57,11 +58,11 @@ Commit only your own paths. If you need a change elsewhere, ask the owner in the
 | `src/lib/reader/`, `src/app/api/search/`, `public/snapshots/` | Reader | Ingest of client offers from the extension; server Playwright (datacenter `/sorry/`); exact-slug snapshot fallback; typed challenge error. |
 | `extension/` | Extension | MV3 Brave/Chrome reader: background tab on the user's Google session. Does not CDP-attach or launch a browser. |
 | `src/app/ext/` | Extension | Installer page at `/ext`. Another agent may be adding this — leave their files alone. |
-| `src/lib/judge/` | Judge | Bedrock client + per-process mode probe (`bedrock.ts`), prompt with the rights card, JSON parse/retry, mock. |
+| `src/lib/judge/` | Judge | Bedrock client + per-process mode probe (`bedrock.ts`), product research (`research.ts`), prompt with the rights card, JSON parse/retry, mock. |
 | `src/lib/memory/` | Memory | DynamoDB memory (`index.ts`), `covered_uid` cookie (`identity.ts`), summary rewrite (`summary.ts`), `create-table.sh`. |
 | `src/lib/fixtures/`, `public/fixtures/` | Fixtures | Four seeded listings with photos for the black-fleece demo only, incl. the wrong-jacket mislisting. |
 | `src/lib/decision.ts` | Decision | Shortlist shape, pound rule (`applyPremium`), `DecideResponse`. |
-| `src/app/page.tsx`, `src/components/`, `src/app/globals.css` | UI | Three-panel UI: chat, shortlist, trace + Memory card. Keep the layout and colours. |
+| `src/app/page.tsx`, `src/components/`, `src/app/globals.css` | UI | Three-panel UI: chat, shortlist / All listings, trace + Memory card. Keep the layout and colours. |
 | `src/app/api/decide/`, `src/app/api/memory/` | API (Judge+Memory) | Shortlist → verdict (memory-aware, read-only). GET/POST/DELETE memory. POST is approve/override only. |
 | `src/app/api/approve/` | API (Infra) | Wallet check, receipt, order, approve event. 402 if the wallet is short. |
 | `src/app/api/orders/`, `src/app/api/wallet/` | API (Memory) | Approved orders list. Demo wallet deposit. |
@@ -133,7 +134,7 @@ Anything else in this account (other Kawuc buckets, other DNS records, other EC2
 - Model output is JSON only, validated with zod (`DecisionSchema`, `MemorySchema`). Retry once with the parse error appended, then fall back to the mock for that item. Never trust unparsed text.
 - Mock mode must always work: `COVERED_MOCK=1` and any Bedrock/DynamoDB failure degrade to the deterministic judge, template summary, and an in-process memory Map, with the reason in the trace.
 - The pound rule stays in code (`applyPremium`). The model never sees the premium as something to apply, and a mislisting never reaches the price comparison.
-- Every trace line is real: `read_fixtures` / `read_grid`, `learned` (memory was injected), `judge` (mode + model id), `apply_premium`, `memory`.
+- Every trace line is real: `research`, `read_fixtures` / `read_grid`, `learned` (memory was injected), `judge` (mode + model id), `apply_premium`, `memory`.
 - Commit only your own paths with explicit `git add <path>`; never `git add -A` or `git add .`; never sweep another agent's staged files. Run `pnpm build && npx tsc --noEmit` before every push. Rebase only on a clean tree; never `git stash --include-untracked` while others have uncommitted work. No force-push.
 - Imports at the top of the file. Exhaustive `switch` with a `never` default over unions. Keep the three-panel layout and colours; do not redesign.
 
@@ -143,7 +144,7 @@ The exact 3-minute run — start commands, warm-up curls, the four clicks, what 
 
 The beats, for reference:
 
-0. **The real shelf.** Hit Live grid. Prefers the user's Brave via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads carry an `Ad` chip; browse rows show their returns line. Twelve rows (at most 4 ads) go to the judge. Card photos are captured when the reader can; without an attached photo the judge cannot call a mislisting.
+0. **The real shelf.** Hit Live grid. Prefers the user's Brave via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads carry an `Ad` chip; browse rows show their returns line. Twelve rows (at most 4 ads) go to the judge; **All listings** on the centre panel shows every offer. Card photos are captured when the reader can; without an attached photo the judge cannot call a mislisting.
 1. **The photo beat.** Type the fleece, hit Fixtures. The £22 "Nike Tech Fleece" has the right title and a photo of a nylon bomber. The judge drops it from the picture before any price rule runs; the row is struck through with the photo reason.
 2. **The rights beat, £10.** Private seller £28 vs JD Sports £36. Gap £8 is inside the £10 premium, so it buys the shop and says exactly what the £8 buys: 14-day cancellation and a 30-day fault refund. The overseas "shop" at £34 gets no premium: a business badge is not protection.
 3. **The flip, £10 → £5.** Change "Pay up to" to 5 and Re-run. Same judgements, but now the £8 gap beats the premium: it buys the private listing and warns that a break is your problem. Same model output, different pound rule, deterministic.
