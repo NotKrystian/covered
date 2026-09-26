@@ -2,3 +2,5 @@
 assets/source/
 assets/*.wav
 __pycache__/
+# user-supplied commercial tracks and anything derived from them: never commit
+assets/music/

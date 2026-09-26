@@ -5,6 +5,11 @@
   python3 analyze_beats.py build SONG.mp3         trim a 12-bar loop starting on a
                                                   downbeat, synthesize UI sounds,
                                                   mix them onto measured beat peaks
+  python3 analyze_beats.py cut power|flames [F]   measure tempo + downbeats + energy,
+                                                  suggest a 20-32 s section, write
+                                                  cuts/<cut>.json and the mixed audio
+  python3 analyze_beats.py click power|flames     same, on a placeholder click track
+  python3 analyze_beats.py bundle                 rebuild cuts/cuts.js from cuts/*.json
 
 Song: "House Vibes" by Alejandro Magaña (A. M.), Mixkit #129,
 https://assets.mixkit.co/music/129/129.mp3 (listed at mixkit.co/free-stock-music/tag/house/),
@@ -362,10 +367,322 @@ def build(song):
     print(f"wrote song-loop.wav, mix.wav, beats.json ({len(placed)} UI sounds)")
 
 
+# ---------------------------------------------------------------- tempo-mapped cuts
+#
+#   python3 analyze_beats.py cut power assets/music/power.mp3
+#   python3 analyze_beats.py click power           (placeholder click track, no song)
+#
+# The film is written in story beats (12 bars of 4). A cut maps story beats to song
+# beats (`unit` song beats per story beat, doubled inside `stretch_bars`) and song
+# beats to seconds (measured `beat_times`). This mirrors tOf() in covered-film.html.
+
+CUTS_DIR = os.path.join(HERE, "cuts")
+OUT_DIR = os.path.join(HERE, "out")
+DENSE_BARS = [3, 5, 7, 11]  # case drop, the drag flip, the double-click check, the £195 sum
+CUT_SPECS = {
+    # placeholder tempos are only used until the user's file is in assets/music/
+    "power": dict(title='"POWER", Kanye West', loop=True, punch=True, story_beats=48, outro=None,
+                  placeholder_bpm=77.0, bpm_range=(60, 100)),
+    "flames": dict(title='"Dancing in the Flames", The Weeknd', loop=False, punch=False, story_beats=64,
+                   outro=dict(end_bar=17, tail_s=0.6), placeholder_bpm=120.0, bpm_range=(90, 180)),
+}
+MUSIC_EXTS = (".mp3", ".m4a", ".wav", ".aac")
+# story beat of each big hit, and how long after that beat the visible hit lands
+HIT_STORY = {"case": (8.0, 0.0), "flip": (17.25, 0.045), "check": (27.0, 0.0), "sum": (41.0, 0.0)}
+OUTRO_HITS = {"mark": (56.0, 0.0), "final": (64.0, 0.0)}
+
+
+def rate_at(cut, k):
+    return cut["unit"] * (2 if (k // 4 + 1) in cut["stretch_bars"] else 1)
+
+
+def song_beat(cut, s):
+    if s < 0:
+        return s * rate_at(cut, 0)
+    k = int(np.floor(s))
+    return sum(rate_at(cut, i) for i in range(k)) + (s - k) * rate_at(cut, k)
+
+
+def beat_sec(cut, x):
+    bt = cut.get("beat_times")
+    if not bt:
+        return x * 60.0 / (cut.get("grid_bpm") or cut["bpm"])
+    n = len(bt) - 1
+    i = max(0, min(n - 1, int(np.floor(x))))
+    return bt[i] + (x - i) * (bt[i + 1] - bt[i])
+
+
+def t_of(cut, s):
+    base = beat_sec(cut, song_beat(cut, s))
+    for h in cut.get("hits", {}).values():
+        d = h["t"] - beat_sec(cut, song_beat(cut, h["story_beat"]))
+        base += d * max(0.0, 1 - abs(s - h["story_beat"]))
+    return base
+
+
+def choose_layout(spec, spb):
+    """One event per beat or per half-beat (optionally doubling the dense bars) so the
+    story lands in 20-32 s in whole bars; nearest to 26 s wins, per-beat on ties."""
+    options = []
+    for unit in (1.0, 0.5):
+        for stretch in ([], DENSE_BARS):
+            cut = dict(unit=unit, stretch_bars=stretch)
+            beats = song_beat(cut, spec["story_beats"])
+            dur = beats * spb
+            if abs(beats / 4 - round(beats / 4)) < 1e-9 and 20 <= dur <= 32.05:
+                options.append((abs(dur - 26) + (0 if unit == 1 else 0.01) + 0.005 * len(stretch), unit, stretch, beats, dur))
+    if not options:
+        sys.exit(f"no layout fits 20-32 s at {60 / spb:.1f} BPM")
+    _, unit, stretch, beats, dur = min(options)
+    return unit, stretch, int(round(beats)), dur
+
+
+def bar_energy(a, downbeats, period):
+    """Per-bar loudness (dB RMS, normalised 0..1) and bar-to-bar novelty."""
+    y, sr = a["y"], SR_AN
+    e = []
+    for d in downbeats:
+        seg = y[int(d * sr):int((d + 4 * period) * sr)]
+        e.append(20 * np.log10(np.sqrt(np.mean(seg ** 2)) + 1e-9) if len(seg) else -90)
+    e = np.array(e)
+    lo, hi = np.percentile(e, 5), e.max()
+    en = np.clip((e - lo) / (hi - lo + 1e-9), 0, 1)
+    nov = np.r_[0, np.abs(np.diff(en))]
+    return en, nov
+
+
+def suggest_sections(a, bars, period, r):
+    """Score every downbeat as a section start: loud inside, a jump in from the bars
+    before (a chorus or a drop), no dips, and on a 4-bar phrase boundary."""
+    beats = a["phase"] + period * np.arange(int((a["dur"] - a["phase"]) / period))
+    downbeats = beats[r::4]
+    en, nov = bar_energy(a, downbeats, period)
+    anchor = int(np.argmax(nov))  # the biggest section change defines the phrase grid
+    cands = []
+    for s in range(0, len(downbeats) - bars - 1):
+        inside = en[s:s + bars]
+        before = en[max(0, s - 4):s].mean() if s > 0 else 0.0
+        build = en[s:s + 2].mean() - before
+        score = inside.mean() + 0.6 * max(0.0, build) + 0.3 * inside.min() - 0.5 * inside.std()
+        cands.append(dict(bar=s, start=float(downbeats[s]), end=float(downbeats[s] + bars * 4 * period),
+                          score=float(score), energy=float(inside.mean()), build=float(build),
+                          mid_phrase=bool((s - anchor) % 4 != 0)))
+    cands.sort(key=lambda c: -c["score"])
+    return cands, downbeats
+
+
+def attack_bias(a, period, n=32):
+    """Spectral flux on a 93 ms window peaks before a decaying hit's attack. Measure that
+    bias against the sample-accurate attack (steepest rise of the low-band envelope)."""
+    y, sr = a["y"], SR_AN
+    spec = np.fft.rfft(y)
+    spec[np.fft.rfftfreq(len(y), 1 / sr) > 1500] = 0
+    low = np.abs(np.fft.irfft(spec, len(y)))
+    w = int(0.003 * sr)
+    envt = np.convolve(low, np.ones(w) / w, mode="same")
+    slope = np.diff(envt)
+    beats = a["phase"] + period * np.arange(int((a["dur"] - a["phase"]) / period))
+    mid = beats[len(beats) // 4: len(beats) // 4 + n]
+    devs = []
+    for g in mid:
+        lo, hi = int((g - 0.08) * sr), int((g + 0.08) * sr)
+        if lo > 0 and hi < len(slope):
+            devs.append((lo + int(np.argmax(slope[lo:hi]))) / sr - g)
+    return float(np.median(devs)) if devs else 0.0
+
+
+def measured_beats(a, start, n, period):
+    """Beat times from the start downbeat, each nudged to its onset peak (±40 ms) when
+    the onset is clear, deviations smoothed so tempo drift is followed but jitter is not."""
+    env, fps = a["env"], a["fps"]
+    grid = start + period * np.arange(n + 1)
+    dev = np.zeros(n + 1)
+    for i, g in enumerate(grid):
+        lo, hi = max(0, int((g - 0.04) * fps)), int((g + 0.04) * fps) + 1
+        seg = env[lo:hi]
+        if len(seg) and seg.max() > 0.15:
+            dev[i] = (lo + int(np.argmax(seg))) / fps - g
+    sm = np.array([np.median(dev[max(0, i - 2):i + 3]) for i in range(n + 1)])
+    t = grid + sm
+    return (t - t[0]).tolist()
+
+
+def pin_hits(a, cut, start, names):
+    """Move each big hit onto the strongest onset within ±0.3 beat of where the grid puts it."""
+    env, fps = a["env"], a["fps"]
+    spb = 60.0 / cut["bpm"]
+    hits = {}
+    for name, (sb, lead) in names.items():
+        tg = t_of(dict(cut, hits={}), sb) + lead
+        lo, hi = max(0, int((start + tg - 0.3 * spb) * fps)), int((start + tg + 0.3 * spb) * fps) + 1
+        seg = env[lo:hi]
+        if not len(seg):
+            continue
+        k = lo + int(np.argmax(seg))
+        at_grid = env[min(len(env) - 1, int((start + tg) * fps))]
+        if seg.max() > 1.3 * max(at_grid, 0.05):
+            hits[name] = dict(story_beat=sb, t=round(k / fps - start - lead, 4), onset=round(float(seg.max()), 3))
+    return hits
+
+
+def write_bundle():
+    cuts = {}
+    for f in sorted(os.listdir(CUTS_DIR)):
+        if f.endswith(".json"):
+            with open(os.path.join(CUTS_DIR, f)) as fh:
+                cuts[f[:-5]] = json.load(fh)
+    with open(os.path.join(CUTS_DIR, "cuts.js"), "w") as fh:
+        fh.write("// generated by analyze_beats.py from cuts/*.json; loaded by covered-film.html\n")
+        fh.write("window.COVERED_CUTS = " + json.dumps(cuts, indent=1) + ";\n")
+
+
+def mix_cut(cut, song_seg, dur, loop, xf=0.25):
+    """UI sounds on the cut's tempo map, each on its local beat peak, mixed into the song."""
+    n = int(round(dur * SR_OUT))
+    out = song_seg[:n].copy()
+    if loop:
+        nx = int(xf * SR_OUT)
+        fade = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, nx))[:, None]
+        out[:nx] = out[:nx] * fade + song_seg[n:n + nx] * (1 - fade)
+    else:
+        nf = int(min(0.6, dur / 4) * SR_OUT)
+        out[-nf:] *= np.linspace(1, 0, nf)[:, None]
+    out *= 0.84 / (np.abs(out).max() + 1e-9)
+    rng = np.random.default_rng(4821)
+    ui = np.zeros(n)
+    placed = []
+    for sb, sub, name, gain in EVENTS:
+        t = t_of(cut, sb + sub)
+        s = SOUNDS[name](rng)
+        s = s / (np.abs(s).max() + 1e-9) * 10 ** ((LEVEL_DB[name] + gain) / 20)
+        i0 = int(round(t * SR_OUT))
+        m = min(len(s), n - i0)
+        if m > 0:
+            ui[i0:i0 + m] += s[:m]
+            placed.append(dict(story_beat=sb + sub, sound=name, t=round(t, 4)))
+    mix = out + ui[:, None]
+    mix *= 0.9 / max(0.9, np.abs(mix).max())
+    return mix, placed
+
+
+def find_song(name):
+    folder = os.path.join(ASSETS, "music")
+    stems = {"power": ("power",), "flames": ("dancing-in-the-flames", "flames")}[name]
+    for stem in stems:
+        for ext in MUSIC_EXTS:
+            p = os.path.join(folder, stem + ext)
+            if os.path.exists(p):
+                return p
+    return None
+
+
+def cut_cmd(name, path=None, placeholder=False):
+    spec = CUT_SPECS[name]
+    path = path or find_song(name)
+    if not path:
+        sys.exit(f"no song for {name}: put it in assets/music/ (see CUT_SPECS) or run `click {name}`")
+    a = analyse(path)
+    # beat phase from the low band (kick, bass, snare body): hi-hats on the offbeats
+    # otherwise pull the grid half a beat early
+    a["env"], _, _ = onset_envelope(a["y"], SR_AN, fmax=1500)
+    lo, hi = spec["bpm_range"]
+    bpm = a["bpm"]
+    while bpm < lo:
+        bpm *= 2
+    while bpm > hi:
+        bpm /= 2
+    a["bpm"], a["phase"] = fine_tempo(a["env"], a["fps"], bpm)
+    period = 60.0 / a["bpm"]
+    bias = attack_bias(a, period)
+    a["phase"] = (a["phase"] + bias) % period
+    print(f"onset-to-attack bias {bias * 1000:+.1f} ms (grid moved onto the attacks)")
+    st = pick_start(a, 8)
+    r = st["downbeat_phase"]
+    unit, stretch, song_beats, dur = choose_layout(spec, period)
+    bars = song_beats // 4
+    cands, _ = suggest_sections(a, bars, period, r)
+    print(f"{spec['title']}: {a['bpm']:.3f} BPM (coarse {a['bpm0']:.2f}), downbeat phase {r}")
+    print(f"layout: {'one event per beat' if unit == 1 else 'one event per half-beat'}"
+          f"{', dense bars ' + str(stretch) + ' at double length' if stretch else ''}: "
+          f"{song_beats} song beats = {bars} bars = {dur:.2f} s")
+    print(" rank  start_s  end_s    bar  score  energy  build  phrase")
+    for i, c in enumerate(cands[:8]):
+        print(f" {i + 1:>4}  {c['start']:7.2f}  {c['end']:7.2f}  {c['bar']:>4}  {c['score']:.3f}  {c['energy']:.3f}"
+              f"  {c['build']:+.3f}  {'MID-PHRASE' if c['mid_phrase'] else 'ok'}")
+    pick = next((c for c in cands if not c["mid_phrase"]), cands[0])
+    print(f"chosen: bar {pick['bar']}  {pick['start']:.3f}-{pick['end']:.3f} s")
+    extra = 8 if spec["outro"] else 2
+    bt = measured_beats(a, pick["start"], song_beats + extra, period)
+    cut = dict(name=name, title=spec["title"], placeholder=placeholder, audio_source=os.path.relpath(path, HERE),
+               bpm=round(a["bpm"], 3), offset_s=round(pick["start"], 4), beats_per_bar=4, unit=unit,
+               stretch_bars=stretch, beat_times=[round(x, 4) for x in bt], loop=spec["loop"], punch=spec["punch"],
+               outro=spec["outro"], section=dict(start_s=round(pick["start"], 4), end_s=round(pick["end"], 4), bars=bars),
+               candidates=[{k: (round(v, 3) if isinstance(v, float) else v) for k, v in c.items()} for c in cands[:8]], hits={})
+    if not placeholder:
+        cut["hits"] = pin_hits(a, cut, pick["start"], {**HIT_STORY, **(OUTRO_HITS if spec["outro"] else {})})
+        print("hits pinned to onsets:", {k: v["t"] for k, v in cut["hits"].items()})
+    film_dur = t_of(cut, 48) if spec["loop"] else t_of(cut, (spec["outro"]["end_bar"] - 1) * 4) + spec["outro"]["tail_s"]
+    # audio: section (+ loop crossfade tail), stereo 48 kHz, UI sounds on the tempo map
+    derived = os.path.join(OUT_DIR, "click") if placeholder else os.path.join(ASSETS, "music", "derived")
+    os.makedirs(derived, exist_ok=True)
+    tmp = os.path.join(derived, f"_{name}_seg.wav")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{pick['start']:.6f}", "-t", f"{film_dur + 1.5:.6f}",
+                    "-i", path, "-ar", str(SR_OUT), "-ac", "2", tmp], check=True)
+    seg = decode(tmp, SR_OUT, channels=2)
+    os.remove(tmp)
+    if len(seg) < int((film_dur + (0.25 if spec["loop"] else 0)) * SR_OUT):
+        sys.exit("section runs past the end of the song")
+    mix, placed = mix_cut(cut, seg, film_dur, spec["loop"])
+    mix_path = os.path.join(derived, f"{name}-mix.wav")
+    write_wav(mix_path, mix)
+    cut.update(duration_s=round(film_dur, 4), mix=os.path.relpath(mix_path, HERE), sounds=placed)
+    os.makedirs(CUTS_DIR, exist_ok=True)
+    with open(os.path.join(CUTS_DIR, f"{name}.json"), "w") as fh:
+        json.dump(cut, fh, indent=1)
+    write_bundle()
+    print(f"wrote cuts/{name}.json (film {film_dur:.2f} s), {os.path.relpath(mix_path, HERE)}")
+
+
+def click_cmd(name):
+    """Placeholder: a synthetic click track at the placeholder tempo, with a soft intro,
+    a loud chorus, a quieter verse and a second chorus, so the section picker has work to do."""
+    spec = CUT_SPECS[name]
+    bpm = spec["placeholder_bpm"]
+    period = 60.0 / bpm
+    plan = [0.22] * 8 + [1.0] * 16 + [0.5] * 8 + [1.0] * 16 + [0.22] * 8
+    n = int((len(plan) * 4 + 2) * period * SR_OUT)
+    y = np.zeros(n)
+    rng = np.random.default_rng(77)
+    kick = lambda: (np.sin(2 * np.pi * 55 * np.arange(int(0.18 * SR_OUT)) / SR_OUT * (1 + 2 * env_exp(int(0.18 * SR_OUT), 0.02)))
+                    * env_exp(int(0.18 * SR_OUT), 0.06))
+    for bar, g in enumerate(plan):
+        for k in range(4):
+            t = (bar * 4 + k) * period
+            i = int(t * SR_OUT)
+            kk = kick() * g * (1.0 if k == 0 else 0.7)
+            y[i:i + len(kk)] += kk[: max(0, min(len(kk), n - i))]
+            h = bandnoise(int(0.03 * SR_OUT), 6000, 14000, rng) * env_exp(int(0.03 * SR_OUT), 0.008) * 0.25 * g
+            j = int((t + period / 2) * SR_OUT)
+            y[j:j + len(h)] += h[: max(0, min(len(h), n - j))]
+    y = np.stack([y, y], 1) * 0.8 / (np.abs(y).max() + 1e-9)
+    os.makedirs(os.path.join(OUT_DIR, "click"), exist_ok=True)
+    path = os.path.join(OUT_DIR, "click", f"{name}-click.wav")
+    write_wav(path, y)
+    print(f"placeholder click track {bpm:g} BPM: {os.path.relpath(path, HERE)}")
+    cut_cmd(name, path, placeholder=True)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3 or sys.argv[1] not in ("scan", "build"):
+    cmds = ("scan", "build", "cut", "click", "bundle")
+    if len(sys.argv) < 2 or sys.argv[1] not in cmds or (sys.argv[1] != "bundle" and len(sys.argv) < 3):
         sys.exit(__doc__)
     if sys.argv[1] == "scan":
         scan(sys.argv[2:])
-    else:
+    elif sys.argv[1] == "build":
         build(sys.argv[2])
+    elif sys.argv[1] == "cut":
+        cut_cmd(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
+    elif sys.argv[1] == "click":
+        click_cmd(sys.argv[2])
+    else:
+        write_bundle()

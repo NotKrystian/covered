@@ -102,6 +102,14 @@ body { font-family: Geist, sans-serif; color: #111; -webkit-font-smoothing: anti
 #lh0, #lh1, #lh2 { z-index: 8; }
 #gapline, #meterhdr, #track, #marker, #handle, .verdict, #summary, #rowchip { z-index: 9; }
 .card { z-index: 10; }
+#outro { position: absolute; inset: 0; pointer-events: none; }
+#tagline { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: flex; align-items: center; justify-content: center;
+  font-size: 124px; font-weight: 640; letter-spacing: -0.045em; color: #121212; white-space: pre; }
+#tagline span { display: inline-block; }
+#tg2 { margin-left: 0.26em; }
+#omark { position: absolute; left: 0; top: 0; overflow: visible; }
+#oword { position: absolute; left: 0; top: 0; font-size: 155px; font-weight: 650; letter-spacing: -0.03em; color: #0b0b0b; line-height: 1; white-space: nowrap; }
+#ofade { position: absolute; inset: 0; background: #ebe8e2; }
 #debug { position: absolute; right: 16px; bottom: 12px; font: 600 18px Geist; color: #8a877f; }
 </style>
 </head>
@@ -292,12 +300,57 @@ body { font-family: Geist, sans-serif; color: #111; -webkit-font-smoothing: anti
     <div class="ripple" id="hold"></div>
     <div id="finger"></div>
   </div>
+  <div id="outro">
+    <div id="tagline"><span id="tg1">Shopping.</span> <span id="tg2">Made simple.</span></div>
+    <div id="oword">Covered</div>
+    <svg id="omark" viewBox="0 0 120 120"><g id="markA" fill="none" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round">
+      <path stroke="#0b0b0b" d="M72 17 H42 A25 25 0 0 0 17 42 V78 A25 25 0 0 0 42 103 H78 A25 25 0 0 0 103 78 V60"/>
+      <path stroke="#5fd38a" d="M40 59 L57 76 L101 30"/></g>
+      <g id="markB"><path fill="#0b0b0b" d="M60 8 C74 8 88 11 99 16 C103 18 105 21 105 26 V58 C105 83 87 101 63 111 C61 112 59 112 57 111 C33 101 15 83 15 58 V26 C15 21 17 18 21 16 C32 11 46 8 60 8 Z"/>
+      <path fill="none" stroke="#5fd38a" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round" d="M39 58 L54 73 L82 43"/></g></svg>
+    <div id="ofade"></div>
+  </div>
   <div id="debug"></div>
 </div>
 
+<script src="cuts/cuts.js"></script>
 <script>
 "use strict";
-const T = 24, BEAT = 0.5;
+// ---------------------------------------------------------------- cut + tempo map
+// Every cue is written in story beats: b(bar, beat, ms) is bar.beat of the 12-bar
+// story (beat may be fractional), plus an offset in milliseconds for things that are
+// physical rather than musical (a finger press lead, a blur swap, a caption lead).
+// The cut's tempo map turns story beats into seconds; springs stay in seconds.
+const CUT_NAME = new URLSearchParams(location.search).get("cut") || "mixkit";
+const CUT = Object.assign({
+  bpm: 120, grid_bpm: null, beats_per_bar: 4, unit: 1, stretch_bars: [], beat_times: null,
+  hits: {}, punch: false, loop: true, outro: null, placeholder: false,
+}, (window.COVERED_CUTS || {})[CUT_NAME] || {});
+const STORY_BEATS = 48;
+// song beats per story beat: `unit` (1 or 0.5), doubled inside stretched story bars
+const rateAt = k => CUT.unit * (CUT.stretch_bars.includes(Math.floor(k / 4) + 1) ? 2 : 1);
+const CUM = [0];
+for (let k = 0; k < 128; k++) CUM.push(CUM[k] + rateAt(k));
+function songBeat(s) {
+  if (s < 0) return s * rateAt(0);
+  const k = Math.floor(s);
+  return CUM[k] + (s - k) * rateAt(k);
+}
+const SPB = 60 / (CUT.grid_bpm || CUT.bpm);
+function beatSec(x) {
+  const bt = CUT.beat_times;
+  if (!bt) return x * SPB;
+  const n = bt.length - 1, i = Math.max(0, Math.min(n - 1, Math.floor(x)));
+  return bt[i] + (x - i) * (bt[i + 1] - bt[i]);
+}
+const baseT = s => beatSec(songBeat(s));
+// hits: a story beat pinned to a measured onset; the warp fades out over ±1 story beat
+const HITS = Object.values(CUT.hits || {}).map(h => [h.story_beat, h.t - baseT(h.story_beat)]);
+const tOf = s => baseT(s) + HITS.reduce((a, [sh, d]) => a + d * Math.max(0, 1 - Math.abs(s - sh)), 0);
+const b = (bar, beat = 1, ms = 0) => tOf((bar - 1) * 4 + (beat - 1)) + ms / 1000;
+const T = tOf(STORY_BEATS);
+const OUTRO = CUT.outro;
+const DURATION = OUTRO ? b(OUTRO.end_bar, 1) + OUTRO.tail_s : T;
 const AX = 1275, AY = 540;
 
 // ---------------------------------------------------------------- springs
@@ -328,6 +381,12 @@ function tr(v0, evs, def = "ui", name = "") {
   for (const [te, tg, s] of es) { if (tg !== prev) ds.push([te, tg - prev, SP[s][0], SP[s][1]]); prev = tg; }
   if (Math.abs(prev - v0) > 1e-9) BAD.push(name || JSON.stringify(evs));
   return t => { let v = v0; for (const [te, d, w, z] of ds) v += d * (stepS(t - te, w, z) + stepS(t + T - te, w, z)); return v; };
+}
+// non-periodic: for the outro, which plays once after the story
+function once(v0, evs) {
+  const ds = []; let prev = v0;
+  for (const [te, tg, s] of [...evs].sort((x, y) => x[0] - y[0])) { ds.push([te, tg - prev, SP[s][0], SP[s][1]]); prev = tg; }
+  return t => ds.reduce((v, [te, d, w, z]) => v + d * stepS(t - te, w, z), v0);
 }
 // presence 0..1 over windows [[on, off, sOn?, sOff?], ...]
 function win(ws, sOn = "enter", sOff = "exit", name = "") {
@@ -381,11 +440,11 @@ function box(el, x, y, w, h, r) {
 
 // ---------------------------------------------------------------- captions
 const CAPS = [
-  [0.0, "Text what you want."], [2.0, "Four listings found."], [4.0, "Just a case. Dropped."],
-  [5.5, "Rights abroad: weak."], [6.0, "£49 buys your rights."], [8.0, "Pay less for rights?"],
-  [10.0, "Approve once."], [12.0, "Double-click to pay."], [14.0, "Bought. Rights kept."],
-  [16.0, "Tracked to your door."], [18.0, "Watching your return window."], [20.0, "Worth £195. Switching."],
-  [22.0, "Money kept: £195."],
+  [b(1, 1), "Text what you want."], [b(2, 1), "Four listings found."], [b(3, 1), "Just a case. Dropped."],
+  [b(3, 4), "Rights abroad: weak."], [b(4, 1), "£49 buys your rights."], [b(5, 1), "Pay less for rights?"],
+  [b(6, 1), "Approve once."], [b(7, 1), "Double-click to pay."], [b(8, 1), "Bought. Rights kept."],
+  [b(9, 1), "Tracked to your door."], [b(10, 1), "Watching your return window."], [b(11, 1), "Worth £195. Switching."],
+  [b(12, 1), "Money kept: £195."],
 ];
 const capEls = [];
 CAPS.forEach(([c, text], i) => {
@@ -394,7 +453,7 @@ CAPS.forEach(([c, text], i) => {
   const inner = document.createElement("div"); blk.appendChild(inner);
   const words = text.split(" ").map((w, j) => {
     const s = document.createElement("span"); s.className = "w"; s.textContent = w; inner.appendChild(s);
-    // caption swaps lead the beat so they never cross over on the same subframe as phone text
+    // captions lead their beat by 80 ms so they never cross over on the same subframe as phone text
     const on = c - 0.08 + 0.035 * j, off = next - 0.22 + 0.02 * j;
     return { el: s,
       enter: win([[on, next + 0.35, "enter", "reset"]]),
@@ -419,92 +478,96 @@ const SF = {
   S7: [12, 124, 406, 100, 24, ...C.panel, 0],
 };
 const SURF_EVS = [
-  [0.47, SF.S1, "soft"], [1.5, SF.S2, "soft"], [10.0, SF.Sb, "soft"], [11.0, SF.S3, "ui"],
-  [12.55, SF.S4, "soft"], [13.5, SF.S4g, "ui"], [14.0, SF.S5, "soft"], [15.5, SF.S6, "soft"],
-  [18.5, SF.S7, "soft"], [23.5, SF.S0, "soft"],
+  [b(1, 2, -30), SF.S1, "soft"], [b(1, 4), SF.S2, "soft"], [b(6, 1), SF.Sb, "soft"], [b(6, 3), SF.S3, "ui"],
+  [b(7, 2, 50), SF.S4, "soft"], [b(7, 4), SF.S4g, "ui"], [b(8, 1), SF.S5, "soft"], [b(8, 4), SF.S6, "soft"],
+  [b(10, 2), SF.S7, "soft"], [b(12, 4), SF.S0, "soft"],
 ];
 // geometry on the event's spring; colour on a quicker one so a morph never sits mid-grey
 const surf = [
   ...trv(SF.S0.slice(0, 5), SURF_EVS.map(([t, s, k]) => [t, s.slice(0, 5), k]), "soft", "surfg"),
   ...trv(SF.S0.slice(5), SURF_EVS.map(([t, s]) => [t, s.slice(5), "snap"]), "snap", "surfc"),
 ];
-const surfBorder = win([[14.0, 15.5, "ui", "ui"]]);
+const surfBorder = win([[b(8, 1), b(8, 4), "ui", "ui"]]);
 const P = {
-  msg: win([[23.62, 1.5]]), btn: win([[10.1, 11.0]]), sheet: win([[11.12, 12.55]]), ring: win([[12.62, 14.0]]),
-  row: win([[14.1, 15.5]]), detail: win([[15.6, 18.5]]), compact: win([[18.6, 23.5]]),
-  stA: win([[18.6, 22.0]]), stB: win([[22.06, 23.5]]),
+  msg: win([[b(12, 4, 120), b(1, 4)]]), btn: win([[b(6, 1, 100), b(6, 3)]]), sheet: win([[b(6, 3, 120), b(7, 2, 50)]]),
+  ring: win([[b(7, 2, 120), b(8, 1)]]), row: win([[b(8, 1, 100), b(8, 4)]]), detail: win([[b(8, 4, 100), b(10, 2)]]),
+  compact: win([[b(10, 2, 100), b(12, 4)]]), stA: win([[b(10, 2, 100), b(12, 1)]]), stB: win([[b(12, 1, 60), b(12, 4)]]),
 };
-const ringProg = tr(0, [[12.6, 1, "ring"], [14.4, 0, "reset"]]);
-const checkProg = tr(0, [[13.5, 1, "ring"], [14.4, 0, "reset"]]);
-const ringFade = tr(1, [[13.5, 0, "ui"], [14.4, 1, "reset"]]);
+const ringProg = tr(0, [[b(7, 2, 100), 1, "ring"], [b(8, 2, -100), 0, "reset"]]);
+const checkProg = tr(0, [[b(7, 4), 1, "ring"], [b(8, 2, -100), 0, "reset"]]);
+const ringFade = tr(1, [[b(7, 4), 0, "ui"], [b(8, 2, -100), 1, "reset"]]);
 
 // ---------------------------------------------------------------- chat
-const pField = win([[23.55, 1.6]]);
-const pDots = win([[1.0, 1.55]]);
-const pressSend = tr(0, [[0.44, 1, "press"], [0.56, 0, "unpress"]]);
+const pField = win([[b(12, 4, 50), b(1, 4, 100)]]);
+const pDots = win([[b(1, 3), b(1, 4, 50)]]);
+const pressSend = tr(0, [[b(1, 2, -60), 1, "press"], [b(1, 2, 60), 0, "unpress"]]);
 
 // ---------------------------------------------------------------- listing cards
 const SLOT = i => 178 + 180 * i;
-const land = i => win([[2.0 + 0.045 * i, [5.0, 10.0, 6.0, 10.9][i], "land", ["soft", "exit", "soft", "reset"][i]]]);
+const land = i => win([[b(2, 1, 45 * i), [b(3, 3), b(6, 1), b(4, 1), b(6, 3, -100)][i], "land", ["soft", "exit", "soft", "reset"][i]]]);
 const cards = [0, 1, 2, 3].map(i => ({ el: $("card" + i), pres: land(i) }));
+const RESET = b(1, 3); // layout resets while the cards are hidden
 cards[0].y = tr(SLOT(0), []); cards[0].x = tr(24, []); cards[0].w = tr(382, []);
-cards[0].h = tr(170, [[5.0, 0, "soft"], [1.0, 170, "reset"]]);
+cards[0].h = tr(170, [[b(3, 3), 0, "soft"], [RESET, 170, "reset"]]);
 // side-by-side reflow: widths and x settle first, heights and y follow, so the
 // shop card slides into its column before it rises past the private card
-cards[1].y = tr(SLOT(1), [[5.0, SLOT(0), "soft"], [6.0, 172, "ui"], [1.0, SLOT(1), "reset"]]);
+cards[1].y = tr(SLOT(1), [[b(3, 3), SLOT(0), "soft"], [b(4, 1), 172, "ui"], [RESET, SLOT(1), "reset"]]);
 cards[1].x = tr(24, []);
-cards[1].w = tr(382, [[6.0, 185, "snap"], [1.0, 382, "reset"]]);
-cards[1].h = tr(170, [[6.0, 380, "ui"], [1.0, 170, "reset"]]);
-cards[2].y = tr(SLOT(2), [[5.0, SLOT(1), "soft"], [1.0, SLOT(2), "reset"]]);
+cards[1].w = tr(382, [[b(4, 1), 185, "snap"], [RESET, 382, "reset"]]);
+cards[1].h = tr(170, [[b(4, 1), 380, "ui"], [RESET, 170, "reset"]]);
+cards[2].y = tr(SLOT(2), [[b(3, 3), SLOT(1), "soft"], [RESET, SLOT(2), "reset"]]);
 cards[2].x = tr(24, []); cards[2].w = tr(382, []);
-cards[2].h = tr(170, [[6.0, 0, "ui"], [1.0, 170, "reset"]]);
-cards[3].y = tr(SLOT(3), [[5.0, SLOT(2), "soft"], [6.06, 172, "ui"], [1.0, SLOT(3), "reset"]]);
-cards[3].x = tr(24, [[6.0, 221, "snap"], [1.0, 24, "reset"]]);
-cards[3].w = tr(382, [[6.0, 185, "snap"], [1.0, 382, "reset"]]);
-cards[3].h = tr(170, [[6.06, 380, "ui"], [1.0, 170, "reset"]]);
-const layoutM = tr(0, [[6.0, 1, "ui"], [1.0, 0, "reset"]]);
-const pLT = win([[2.0, 6.0]]), pCT = win([[6.08, 10.0]]);
-const photoRes = [0, 1, 2, 3].map(i => win([[2.5 + 0.03 * i, 1.0, "soft", "reset"]]));
-const grey = [tr(0, [[4.5, 1, "ui"], [1.0, 0, "reset"]]), tr(0, []), tr(0, [[5.5, 1, "ui"], [1.0, 0, "reset"]]), tr(0, [])];
-const strike0 = tr(0, [[4.52, 1, "soft"], [1.0, 0, "reset"]]);
-const chipP = [win([[4.58, 5.0]]), win([[7.0, 10.0]]), win([[5.56, 6.0]]), win([[6.5, 10.0]])];
-const scanP = win([[2.98, 3.95]]);
-const scanY = tr(-34, [[3.0, 8, "soft"], [3.5, 150, "soft"], [1.0, -34, "reset"]]);
-const merge = tr(0, [[10.0, 1, "merge"], [1.0, 0, "reset"]]);
-const lbRect = trv([38, 192, 142, 142, 16], [[4.0, [24, 150, 382, 382, 26], "soft"], [4.5, [38, 192, 142, 142, 16], "ui"]], "soft", "lb");
-const lbChip = win([[4.1, 4.47]]);
-const lbVeil = win([[4.0, 4.5]], "ui", "ui");
-const lh = [win([[2.05, 5.0]]), win([[5.06, 6.0]]), win([[6.06, 10.0]])];
+cards[2].h = tr(170, [[b(4, 1), 0, "ui"], [RESET, 170, "reset"]]);
+cards[3].y = tr(SLOT(3), [[b(3, 3), SLOT(2), "soft"], [b(4, 1, 60), 172, "ui"], [RESET, SLOT(3), "reset"]]);
+cards[3].x = tr(24, [[b(4, 1), 221, "snap"], [RESET, 24, "reset"]]);
+cards[3].w = tr(382, [[b(4, 1), 185, "snap"], [RESET, 382, "reset"]]);
+cards[3].h = tr(170, [[b(4, 1, 60), 380, "ui"], [RESET, 170, "reset"]]);
+const layoutM = tr(0, [[b(4, 1), 1, "ui"], [RESET, 0, "reset"]]);
+const pLT = win([[b(2, 1), b(4, 1)]]), pCT = win([[b(4, 1, 80), b(6, 1)]]);
+const photoRes = [0, 1, 2, 3].map(i => win([[b(2, 2, 30 * i), RESET, "soft", "reset"]]));
+const grey = [tr(0, [[b(3, 2), 1, "ui"], [RESET, 0, "reset"]]), tr(0, []), tr(0, [[b(3, 4), 1, "ui"], [RESET, 0, "reset"]]), tr(0, [])];
+const strike0 = tr(0, [[b(3, 2, 20), 1, "soft"], [RESET, 0, "reset"]]);
+const chipP = [win([[b(3, 2, 80), b(3, 3)]]), win([[b(4, 3), b(6, 1)]]), win([[b(3, 4, 60), b(4, 1)]]), win([[b(4, 2), b(6, 1)]])];
+const scanP = win([[b(2, 3, -20), b(3, 1, -50)]]);
+const scanY = tr(-34, [[b(2, 3), 8, "soft"], [b(2, 4), 150, "soft"], [RESET, -34, "reset"]]);
+const merge = tr(0, [[b(6, 1), 1, "merge"], [RESET, 0, "reset"]]);
+const lbRect = trv([38, 192, 142, 142, 16], [[b(3, 1), [24, 150, 382, 382, 26], "soft"], [b(3, 2), [38, 192, 142, 142, 16], "ui"]], "soft", "lb");
+const lbChip = win([[b(3, 1, 100), b(3, 2, -30)]]);
+const lbVeil = win([[b(3, 1), b(3, 2)]], "ui", "ui");
+const LB_ON = [b(3, 1, -20), b(3, 3, -100)];
+const lh = [win([[b(2, 1, 50), b(3, 3)]]), win([[b(3, 3, 60), b(4, 1)]]), win([[b(4, 1, 60), b(6, 1)]])];
 
 // ---------------------------------------------------------------- premium meter + drag
 const X0 = 36, PXL = 358 / 80, px = v => X0 + v * PXL;
 const HANDLE_Y = 686;
-const pGap = win([[6.12, 10.0]]), pMeter = win([[7.3, 10.0]]), pHandle = win([[7.56, 10.0]]), pVerdict = win([[7.72, 10.0]]);
-const fill = tr(0, [[7.5, 49, "money"], [1.0, 0, "reset"]]);
+const pGap = win([[b(4, 1, 120), b(6, 1)]]), pMeter = win([[b(4, 3.5, 50), b(6, 1)]]);
+const pHandle = win([[b(4, 4, 60), b(6, 1)]]), pVerdict = win([[b(4, 4.5, -30), b(6, 1)]]);
+const fill = tr(0, [[b(4, 4), 49, "money"], [RESET, 0, "reset"]]);
 
 // finger: position, opacity, press. The drag moves are critically damped so the
 // premium never dips past £49 before the second move.
 const REST = [396, 1012];
-const fX = tr(REST[0], [
-  [0.72, REST[0], "move"], [7.52, px(60), "move"], [8.06, px(49), "drag"], [8.64, px(40), "drag"],
-  [9.62, 300, "move"], [9.92, 215, "move"], [10.78, 470, "move"], [12.75, 520, "move"],
-  [14.5, 290, "move"], [15.25, REST[0], "move"], [23.58, 386, "move"],
-], "move", "fx");
-const fY = tr(820, [
-  [0.72, REST[1], "move"], [7.52, HANDLE_Y, "move"], [9.62, 640, "move"], [9.92, 742, "move"],
-  [10.78, 281, "move"], [12.75, 330, "move"], [14.5, 895, "move"], [15.25, REST[1], "move"], [23.58, 820, "move"],
-], "move", "fy");
-const fOp = win([[23.5, 0.85], [7.45, 13.0], [14.45, 15.4]], "ui", "ui");
-const pressTimes = [0.47, 7.98, 10.47, 11.97, 12.47, 14.97];
+const F_MOVES = [
+  [b(1, 2.5, -30), REST], [b(4, 4, 20), [px(60), HANDLE_Y]], [b(5, 1, 60), [px(49), HANDLE_Y], "drag"],
+  [b(5, 2.25, 15), [px(40), HANDLE_Y], "drag"], [b(5, 4, 120), [300, 640]], [b(6, 1, -80), [215, 742]],
+  [b(6, 2.5, 30), [470, 281]], [b(7, 2.5), [520, 330]], [b(8, 2), [290, 895]], [b(8, 3.5), REST], [b(12, 4, 80), [386, 820]],
+];
+const fX = tr(REST[0], F_MOVES.map(m => [m[0], m[1][0], m[2] || "move"]), "move", "fx");
+const fY = tr(820, F_MOVES.filter(m => !m[2]).map(m => [m[0], m[1][1], "move"]), "move", "fy");
+const fOp = win([[b(12, 4), b(1, 2.5, 100)], [b(4, 4, -50), b(7, 3)], [b(8, 2, -50), b(8, 4, -100)]], "ui", "ui");
+// taps: finger down 60 ms before the beat, up 60 ms after; contact lands on the beat
+const TAPS = { send: b(1, 2), approve: b(6, 2), side1: b(7, 1), side2: b(7, 2), tab: b(8, 3) };
+const HOLD_ON = b(5, 1, -20), RELEASE = b(5, 4), [RW, RZ] = [14, 0.9];
+const tap = t => [[t - 0.06, 1, "press"], [t + 0.06, 0, "unpress"]];
+const pressTimes = [TAPS.send - 0.03, HOLD_ON, TAPS.approve - 0.03, TAPS.side1 - 0.03, TAPS.side2 - 0.03, TAPS.tab - 0.03];
 const fPress = tr(0, [
-  [0.44, 1, "press"], [0.56, 0, "unpress"], [7.95, 1, "press"], [9.5, 0, "unpress"], [10.44, 1, "press"], [10.56, 0, "unpress"],
-  [11.94, 1, "press"], [12.06, 0, "unpress"], [12.44, 1, "press"], [12.56, 0, "unpress"], [14.94, 1, "press"], [15.06, 0, "unpress"],
+  ...tap(TAPS.send), [HOLD_ON - 0.03, 1, "press"], [RELEASE, 0, "unpress"], ...tap(TAPS.approve),
+  ...tap(TAPS.side1), ...tap(TAPS.side2), ...tap(TAPS.tab),
 ], "press", "fpress");
-const pressApprove = tr(0, [[10.44, 1, "press"], [10.56, 0, "unpress"]]);
-const pressSide = tr(0, [[11.94, 1, "press"], [12.06, 0, "unpress"], [12.44, 1, "press"], [12.56, 0, "unpress"]]);
-const pressTab = tr(0, [[14.94, 1, "press"], [15.06, 0, "unpress"]]);
+const pressApprove = tr(0, tap(TAPS.approve));
+const pressSide = tr(0, [...tap(TAPS.side1), ...tap(TAPS.side2)]);
+const pressTab = tr(0, tap(TAPS.tab));
 
-const HOLD_ON = 7.98, RELEASE = 9.5, [RW, RZ] = [14, 0.9];
 function premiumRaw(t) {
   if (t >= HOLD_ON && t < RELEASE) return clamp((fX(t) - X0) / PXL, 0, 80);
   if (t >= RELEASE) {
@@ -520,59 +583,80 @@ const premQ = t => Math.round(premiumRaw(t)); // the slider steps in whole pound
 const shopWins = t => GAP <= premQ(t);        // the real rule: protected wins when gap ≤ premium
 // winner track built from the rule's flips (sampled once from constants, not from frames)
 const flips = [];
-for (let t = 7.9, prev = shopWins(7.9); t < 11; t += 1 / 960) { const s = shopWins(t); if (s !== prev) { flips.push([t, s ? 0 : 1, "snap"]); prev = s; } }
+for (let t = HOLD_ON - 0.08, prev = shopWins(t), end = b(6, 3); t < end; t += 1 / 960) { const s = shopWins(t); if (s !== prev) { flips.push([t, s ? 0 : 1, "snap"]); prev = s; } }
 const privW = tr(0, flips, "snap", "winner");
 
 // ---------------------------------------------------------------- approve, sheet, pay
-const pSummary = win([[10.08, 11.0]]);
-const pOverlay = win([[11.0, 14.0, "ui", "ui"]]);
-const pHint = win([[11.45, 12.58]]);
-const hintPulse = tr(0, [[11.5, 1, "snap"], [11.64, 0, "ui"], [11.97, 0.7, "snap"], [12.1, 0, "ui"], [12.47, 0.7, "snap"], [12.6, 0, "ui"]]);
+const pSummary = win([[b(6, 1, 80), b(6, 3)]]);
+const pOverlay = win([[b(6, 3), b(8, 1), "ui", "ui"]]);
+const pHint = win([[b(6, 4, -50), b(7, 2, 80)]]);
+const hintPulse = tr(0, [[b(6, 4), 1, "snap"], [b(6, 4, 140), 0, "ui"], [TAPS.side1 - 0.03, 0.7, "snap"], [TAPS.side1 + 0.1, 0, "ui"],
+  [TAPS.side2 - 0.03, 0.7, "snap"], [TAPS.side2 + 0.1, 0, "ui"]]);
+const Z_SHEET = [b(6, 3, -100), b(8, 1, 600)];
+const MERGE_ON = [b(6, 1), b(6, 2.5, 30)];
+const SIDE_HOLD = [b(6, 4), b(7, 2.5, 50)];
 
 // ---------------------------------------------------------------- orders
-const pWallet = win([[14.02, 23.5]]);
-const walletV = moneyTr([[14.5, 901], [21.5, 2], [1.0, 2000]]);
-const pRowChip = win([[14.25, 15.5]]);
-const tabL = tr(86, [[14.97, 234, "trail"], [23.5, 86, "lead"]]);
-const tabR = tr(194, [[14.97, 348, "lead"], [23.5, 194, "trail"]]);
+const pWallet = win([[b(8, 1, 20), b(12, 4)]]);
+const walletV = moneyTr([[b(8, 2), 901], [b(11, 4), 2], [RESET, 2000]]);
+const pRowChip = win([[b(8, 1.5), b(8, 4)]]);
+const tabL = tr(86, [[TAPS.tab - 0.03, 234, "trail"], [b(12, 4), 86, "lead"]]);
+const tabR = tr(194, [[TAPS.tab - 0.03, 348, "lead"], [b(12, 4), 194, "trail"]]);
 const NODES = [44, 203, 362];
-const trkP = win([[16.0, 18.5]]);
-const trkL = tr(44, [[16.5, 203, "trail"], [17.0, 362, "trail"], [19.0, 44, "reset"]]);
-const trkR = tr(44, [[16.5, 203, "lead"], [17.0, 362, "lead"], [19.0, 44, "reset"]]);
-const pRing = win([[17.45, 22.0]]);
-const ringDraw = tr(0, [[17.5, 1, "ring"], [22.4, 0, "reset"]]);
-const days = tr(14, [[18.0, 8, "money"], [22.4, 14, "reset"]]);
-const ringGeo = trv([215, 574, 64, 12], [[18.5, [372, 174, 22, 5], "soft"], [22.4, [215, 574, 64, 12], "reset"]], "soft", "rg");
-const pRrBig = win([[17.5, 18.5]]);
+const trkP = win([[b(9, 1), b(10, 2)]]);
+const trkL = tr(44, [[b(9, 2), 203, "trail"], [b(9, 3), 362, "trail"], [b(10, 3), 44, "reset"]]);
+const trkR = tr(44, [[b(9, 2), 203, "lead"], [b(9, 3), 362, "lead"], [b(10, 3), 44, "reset"]]);
+const pRing = win([[b(9, 4, -50), b(12, 1)]]);
+const ringDraw = tr(0, [[b(9, 4), 1, "ring"], [b(12, 2, -100), 0, "reset"]]);
+const days = tr(14, [[b(10, 1), 8, "money"], [b(12, 2, -100), 14, "reset"]]);
+const ringGeo = trv([215, 574, 64, 12], [[b(10, 2), [372, 174, 22, 5], "soft"], [b(12, 2, -100), [215, 574, 64, 12], "reset"]], "soft", "rg");
+const pRrBig = win([[b(9, 4), b(10, 2)]]);
 
 // ---------------------------------------------------------------- switch
-const pAlert = win([[18.5, 23.5]], "land", "exit");
+const pAlert = win([[b(10, 2), b(12, 4)]], "land", "exit");
 const alRect = [
-  ...trv([12, 236, 406, 196, 26], [[21.5, [12, 236, 406, 100, 24], "ui"], [1.0, [12, 236, 406, 196, 26], "reset"]], "ui", "al"),
-  ...trv(C.ink, [[21.5, C.panel, "snap"], [1.0, C.ink, "reset"]], "snap", "alc"),
+  ...trv([12, 236, 406, 196, 26], [[b(11, 4), [12, 236, 406, 100, 24], "ui"], [RESET, [12, 236, 406, 196, 26], "reset"]], "ui", "al"),
+  ...trv(C.ink, [[b(11, 4), C.panel, "snap"], [RESET, C.ink, "reset"]], "snap", "alc"),
 ];
-const pAlA = win([[18.5, 21.5]]), pAlB = win([[21.6, 23.5]]);
-const pChips = [0, 1, 2, 3].map(i => win([[19.0 + 0.125 * i, 21.5]], "snap"));
-const pSum = win([[19.46, 23.5]], "land", "exit");
-const sumRect = trv([12, 446, 406, 284, 26], [[21.5, [12, 348, 406, 284, 26], "ui"], [22.5, [12, 348, 406, 236, 28], "soft"], [1.0, [12, 446, 406, 284, 26], "reset"]], "soft", "sum");
-const pSmA = win([[19.46, 22.5]]), pSmB = win([[22.58, 23.5]]);
-const pSr = [win([[19.5, 22.5]]), win([[19.56, 22.5]]), win([[20.0, 22.5]]), win([[20.5, 22.5]]), win([[20.52, 22.5]]), win([[21.0, 22.5]], "snap")];
-const keptV = moneyTr([[22.6, 195], [1.0, 0]]);
-const pMem = win([[23.0, 23.5]], "land");
+const pAlA = win([[b(10, 2), b(11, 4)]]), pAlB = win([[b(11, 4, 100), b(12, 4)]]);
+const pChips = [0, 1, 2, 3].map(i => win([[b(10, 3 + 0.25 * i), b(11, 4)]], "snap"));
+const pSum = win([[b(10, 4, -40), b(12, 4)]], "land", "exit");
+const sumRect = trv([12, 446, 406, 284, 26], [[b(11, 4), [12, 348, 406, 284, 26], "ui"], [b(12, 2), [12, 348, 406, 236, 28], "soft"], [RESET, [12, 446, 406, 284, 26], "reset"]], "soft", "sum");
+const pSmA = win([[b(10, 4, -40), b(12, 2)]]), pSmB = win([[b(12, 2, 80), b(12, 4)]]);
+const pSr = [win([[b(10, 4), b(12, 2)]]), win([[b(10, 4, 60), b(12, 2)]]), win([[b(11, 1), b(12, 2)]]), win([[b(11, 2), b(12, 2)]]), win([[b(11, 2, 20), b(12, 2)]]), win([[b(11, 3), b(12, 2)]], "snap")];
+const keptV = moneyTr([[b(12, 2, 100), 195], [RESET, 0]]);
+const pMem = win([[b(12, 3), b(12, 4)]], "land");
+const KEEP_CARD3_HIDDEN = [MERGE_ON[1], b(12, 3)];
 
 // ---------------------------------------------------------------- camera
 // [cx, cy, s]: phone-screen point that sits at (AX, AY), and zoom
 const CAM0 = [215, 735, 1.55];
 const cam = trv(CAM0, [
-  [0.52, [215, 520, 1.05]], [0.8, [215, 232, 1.6]], [1.5, [215, 470, 1.02]], [1.95, [215, 520, 1.18]],
-  [2.9, [215, 272, 1.75]], [3.95, [215, 341, 1.92]], [4.45, [215, 272, 1.75]], [4.95, [215, 470, 1.3]],
-  [5.45, [215, 440, 1.62]], [5.95, [215, 470, 1.08]], [6.15, [215, 372, 1.55]], [7.35, [215, 560, 1.5]],
-  [8.0, [215, 590, 1.45]], [9.95, [215, 480, 1.05]], [10.2, [215, 610, 1.6]], [10.95, [215, 470, 1.0]],
-  [11.45, [292, 330, 1.45]], [12.55, [215, 450, 1.05]], [12.75, [215, 450, 1.85]], [13.95, [215, 470, 1.05]],
-  [14.15, [215, 170, 1.7]], [14.8, [215, 520, 1.08]], [15.45, [215, 470, 1.04]], [15.9, [215, 300, 1.6]],
-  [17.4, [215, 566, 1.6]], [18.45, [215, 450, 1.05]], [18.7, [215, 290, 1.6]], [19.45, [215, 590, 1.6]],
-  [21.4, [215, 380, 1.25]], [22.45, [215, 470, 1.7]], [23.45, [215, 470, 1.02]], [23.85, CAM0],
+  [b(1, 2, 20), [215, 520, 1.05]], [b(1, 2.5, 50), [215, 232, 1.6]], [b(1, 4), [215, 470, 1.02]], [b(2, 1, -50), [215, 520, 1.18]],
+  [b(2, 3, -100), [215, 272, 1.75]], [b(3, 1, -50), [215, 341, 1.92]], [b(3, 2, -50), [215, 272, 1.75]], [b(3, 3, -50), [215, 470, 1.3]],
+  [b(3, 4, -50), [215, 440, 1.62]], [b(4, 1, -50), [215, 470, 1.08]], [b(4, 1, 150), [215, 372, 1.55]], [b(4, 3.5, 100), [215, 560, 1.5]],
+  [b(5, 1), [215, 590, 1.45]], [b(6, 1, -50), [215, 480, 1.05]], [b(6, 1, 200), [215, 610, 1.6]], [b(6, 3, -50), [215, 470, 1.0]],
+  [b(6, 4, -50), [292, 330, 1.45]], [b(7, 2, 50), [215, 450, 1.05]], [b(7, 2.5), [215, 450, 1.85]], [b(8, 1, -50), [215, 470, 1.05]],
+  [b(8, 1, 150), [215, 170, 1.7]], [b(8, 2.5, 50), [215, 520, 1.08]], [b(8, 4, -50), [215, 470, 1.04]], [b(9, 1, -100), [215, 300, 1.6]],
+  [b(9, 4, -100), [215, 566, 1.6]], [b(10, 2, -50), [215, 450, 1.05]], [b(10, 2.5, -50), [215, 290, 1.6]], [b(10, 4, -50), [215, 590, 1.6]],
+  [b(11, 4, -100), [215, 380, 1.25]], [b(12, 2, -50), [215, 470, 1.7]], [b(12, 4, -50), [215, 470, 1.02]], [b(12, 4.5, 100), CAM0],
 ], "cam", "cam");
+// hard hits (cuts with `punch`): a quick push-in on top of the camera, on the measured onset
+const HIT_BEATS = { case: b(3, 1), flip: b(5, 2.25, 45), check: b(7, 4), sum: b(11, 2) };
+const punch = CUT.punch
+  ? tr(0, Object.values(HIT_BEATS).flatMap(t => [[t - 0.03, 1, "snap"], [t + 0.12, 0, "soft"]]), "snap", "punch")
+  : () => 0;
+
+// ---------------------------------------------------------------- outro (cuts with an outro only)
+// the phone recedes, the tagline lands one word group per beat, then the mark, then the lockup
+const OT = OUTRO ? {
+  recede: once(0, [[b(12, 4), 1, "soft"]]),
+  tag1: once(0, [[b(13, 1, -80), 1, "enter"], [b(14, 4, -80), 0, "exit"]]),
+  tag2: once(0, [[b(13, 2, -80), 1, "enter"], [b(14, 4, -40), 0, "exit"]]),
+  mark: once(0, [[b(15, 1, -150), 1, "land"]]),
+  lock: once(0, [[b(15, 2, -120), 1, "soft"]]),
+  fade: once(0, [[b(OUTRO.end_bar, 1), 1, "exit"]]),
+} : null;
 
 if (BAD.length) console.error("non-periodic tracks:", BAD);
 
@@ -592,7 +676,7 @@ const DEBUG = new URLSearchParams(location.search).has("debug");
 function seek(t) {
   // captions
   for (const words of capEls) for (const w of words) {
-    const e = w.enter(t), x = w.exit(t), q = clamp(e) * (1 - clamp(x));
+    const e = w.enter(t), x = w.exit(t), q = clamp(e) * (1 - clamp(x)) * (OT ? 1 - clamp(OT.recede(t) * 1.6) : 1);
     if (q < 0.003) { w.el.style.visibility = "hidden"; w.el.style.opacity = "0"; w.el.style.filter = "none"; w.el.style.transform = "none"; continue; }
     w.el.style.visibility = "visible";
     w.el.style.opacity = q.toFixed(4);
@@ -602,8 +686,17 @@ function seek(t) {
   }
 
   // camera (no will-change anywhere: the camera scales text)
-  const [cx, cy, cs] = at(cam, t);
-  E.cam.style.transform = `translate(${(AX - cx * cs).toFixed(3)}px,${(AY - cy * cs).toFixed(3)}px) scale(${cs.toFixed(5)})`;
+  const [cx, cy, cs0] = at(cam, t);
+  const cs = CUT.punch ? cs0 * (1 + 0.07 * punch(t)) : cs0;
+  if (OT) {
+    // outro: the whole phone recedes about the frame centre and fades
+    const r = clamp(OT.recede(t)), k = 1 - 0.24 * r;
+    E.cam.style.transform = `translate(${(AX + (AX - cx * cs - AX) * k).toFixed(3)}px,${(AY + (AY - cy * cs - AY) * k).toFixed(3)}px) scale(${(cs * k).toFixed(5)})`;
+    E.cam.style.opacity = (1 - r).toFixed(4);
+    E.cam.style.visibility = r > 0.997 ? "hidden" : "visible";
+  } else {
+    E.cam.style.transform = `translate(${(AX - cx * cs).toFixed(3)}px,${(AY - cy * cs).toFixed(3)}px) scale(${cs.toFixed(5)})`;
+  }
 
   // surface
   const [sx, sy, sw, sh, sr, R, G, B, dark] = at(surf, t);
@@ -611,10 +704,10 @@ function seek(t) {
   E.surface.style.background = rgb([R, G, B]);
   const bd = clamp(surfBorder(t));
   E.surface.style.boxShadow = bd > 0.003 ? `inset 0 0 0 1.5px rgba(214,211,204,${bd.toFixed(3)})` : "none";
-  E.surface.style.zIndex = t >= 10.9 && t < 14.6 ? 40 : 5;
+  E.surface.style.zIndex = t >= Z_SHEET[0] && t < Z_SHEET[1] ? 40 : 5;
   // the panel dissolves while the shop card flies into the button; the surface takes
   // over under the card once both have the same rect, colour and label
-  E.surface.style.opacity = t >= 10.0 && t < 10.78 ? clamp(1 - stepS(t - 10.0, 30, 0.95)).toFixed(4) : "1";
+  E.surface.style.opacity = t >= MERGE_ON[0] && t < MERGE_ON[1] ? clamp(1 - stepS(t - MERGE_ON[0], 30, 0.95)).toFixed(4) : "1";
   E.surface.style.transform = `scale(${1 - 0.035 * pressApprove(t)})`;
   const ink = lerp(17, 255, clamp(dark));
   E.c_msg.style.color = rgb([ink, ink, ink]);
@@ -649,7 +742,7 @@ function seek(t) {
   show(E.send, pField(t), { blur: 0, scale: 1 - 0.08 * pressSend(t) });
   if (show(E.dots, pDots(t), { sc: 0.3, dy: 10 })) {
     [...E.dots.children].forEach((d, i) => {
-      const ph = (t - 1.0) * 2 * Math.PI * 2.4 - i * 0.9;
+      const ph = (t - b(1, 3)) * 2 * Math.PI * 2.4 - i * 0.9;
       d.style.transform = `translateY(${(-4 * Math.max(0, Math.sin(ph))).toFixed(2)}px)`;
       d.style.opacity = (0.45 + 0.55 * Math.max(0, Math.sin(ph))).toFixed(3);
     });
@@ -663,7 +756,7 @@ function seek(t) {
   const pw = privW(t), gate = pVerdict(t);
   cards.forEach((c, i) => {
     let p = c.pres(t);
-    if (i === 3 && t >= 10.78 && t < 23) p = 0; // merged into the surface: identical rect, colour and label
+    if (i === 3 && t >= KEEP_CARD3_HIDDEN[0] && t < KEEP_CARD3_HIDDEN[1]) p = 0; // merged into the surface: identical rect, colour and label
     if (!show(c.el, p, { dy: 60, sc: 0.04, blur: 6, scale: i === 3 ? 1 - 0.035 * pressApprove(t) : 1 })) return;
     let x = c.x(t), y = c.y(t), w = c.w(t), h = c.h(t), r = 22;
     let bg = C.white;
@@ -704,7 +797,7 @@ function seek(t) {
   } else show(E.scanband, 0);
   // lightbox: the mislisted photo, zoomed
   show(E.lbveil, lbVeil(t), { blur: 0 });
-  if (t >= 3.98 && t < 4.9) {
+  if (t >= LB_ON[0] && t < LB_ON[1]) {
     const [lx, ly, lw, lhh, lr] = at(lbRect, t);
     show(E.lightbox, 1, { blur: 0 }); box(E.lightbox, lx, ly, lw, lhh, lr);
     E.lightbox.style.zIndex = 20;
@@ -785,8 +878,8 @@ function seek(t) {
   }
 
   // finger
-  const fo = clamp(fOp(t)), fp = clamp(fPress(t));
-  const fx = fX(t) - (t > 11.5 && t < 12.8 ? 5 * fp : 0), fy = fY(t);
+  const fo = clamp(fOp(t)) * (OT ? 1 - clamp(OT.recede(t) * 2) : 1), fp = clamp(fPress(t));
+  const fx = fX(t) - (t > SIDE_HOLD[0] && t < SIDE_HOLD[1] ? 5 * fp : 0), fy = fY(t);
   E.finger.style.opacity = (fo * (1 + 0.25 * fp)).toFixed(4);
   E.finger.style.visibility = fo > 0.003 ? "visible" : "hidden";
   E.finger.style.transform = `translate(${fx.toFixed(2)}px,${fy.toFixed(2)}px) scale(${(1 - 0.14 * fp).toFixed(4)})`;
@@ -800,8 +893,53 @@ function seek(t) {
     box(E.rip, fx - rr, fy - rr, 2 * rr, 2 * rr); E.rip.style.opacity = ro.toFixed(4); E.rip.style.visibility = "visible";
   } else E.rip.style.visibility = "hidden";
 
-  if (DEBUG) { const b = Math.floor(((t % T) + 1e-6) / BEAT); E.debug.textContent = `${Math.floor(b / 4) + 1}.${b % 4 + 1}  t=${t.toFixed(3)}`; }
+  if (OT) seekOutro(t);
+  if (DEBUG) {
+    let k = 0; while (k + 1 < FILM.beats.length && FILM.beats[k + 1] <= t + 1e-6) k++;
+    E.debug.textContent = `${Math.floor(k / 4) + 1}.${k % 4 + 1}  t=${t.toFixed(3)}  ${CUT_NAME}`;
+  }
 }
+// ---------------------------------------------------------------- outro
+const MARK_OPT = new URLSearchParams(location.search).get("mark") === "b" ? "B" : "A";
+const LK = 1.8;                          // lockup scale: 120-unit mark box -> 216 px
+const LOCK_W = 478 * LK;                 // lockup width from make_logo.py (mark + gap + wordmark)
+function seekOutro(t) {
+  const el = $("outro");
+  const [g1, g2] = [OT.tag1(t), OT.tag2(t)];
+  const tagWord = (s, p) => show(s, p, { dy: 50, blur: 12 });
+  tagWord($("tg1"), g1); tagWord($("tg2"), g2);
+  // the mark lands centred, then slides left while the wordmark wipes out from behind it
+  const m = OT.mark(t), L = clamp(OT.lock(t)), Lr = OT.lock(t);
+  // alone, the mark sits 35 % larger; it settles to lockup size as it slides
+  const lockPx = 120 * LK, markPx = lockPx * lerp(1.35, 1, Lr);
+  const lockX = 960 - LOCK_W / 2, mx = lerp(960 - markPx / 2, lockX, Lr), my = 540 - markPx / 2;
+  const om = $("omark");
+  box(om, mx, my, markPx, markPx);
+  show(om, m, { sc: 0.45, blur: 10 });
+  const ow = $("oword");
+  ow.style.left = (mx + 128 * LK) + "px"; ow.style.top = (540 - 155 * 0.52) + "px";
+  if (L > 0.003) {
+    ow.style.visibility = "visible"; ow.style.opacity = "1";
+    ow.style.clipPath = `inset(-20% ${((1 - L) * 100).toFixed(2)}% -20% 0)`;
+    ow.style.transform = `translateX(${(-40 * (1 - Lr)).toFixed(2)}px)`;
+  } else { ow.style.visibility = "hidden"; ow.style.opacity = "0"; }
+  const f = clamp(OT.fade(t));
+  $("ofade").style.opacity = f.toFixed(4);
+  $("ofade").style.visibility = f > 0.003 ? "visible" : "hidden";
+}
+$("outro").style.display = OT ? "block" : "none";
+$("markA").style.display = MARK_OPT === "A" ? "" : "none";
+$("markB").style.display = MARK_OPT === "B" ? "" : "none";
+
+// what the renderer needs: duration, loop, and the time of every story beat
+const FILM = {
+  cut: CUT_NAME, loop: !OUTRO && CUT.loop !== false, period: T, duration: DURATION, placeholder: !!CUT.placeholder,
+  bpm: CUT.grid_bpm || CUT.bpm, unit: CUT.unit, stretch_bars: CUT.stretch_bars,
+  beats: Array.from({ length: OUTRO ? (OUTRO.end_bar - 1) * 4 : STORY_BEATS }, (_, k) => tOf(k)),
+  hits: HIT_BEATS, outro: OUTRO ? { tagline: b(13, 3), mark: b(15, 1, 250), lockup: b(15, 4), final: b(OUTRO.end_bar, 1) } : null,
+};
+window.FILM = FILM;
+window.tOfStory = tOf;
 window.seek = seek;
 for (const img of document.images) img.decoding = "sync";
 window.filmReady = Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode().catch(() => {}))]).then(() => { seek(0); return BAD; });

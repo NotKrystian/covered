@@ -1,0 +1,21 @@
+{
+ "name": "mixkit",
+ "title": "\"House Vibes\", Alejandro Magaña (A. M.), Mixkit #129",
+ "placeholder": false,
+ "audio_source": "assets/source/mixkit-house-vibes-129.mp3",
+ "bpm": 119.998,
+ "grid_bpm": 120,
+ "note": "measured 119.998 BPM; analyze_beats.py build time-stretches the loop by 120/119.998 so 48 beats are exactly 24.000 s",
+ "offset_s": 16.0842,
+ "beats_per_bar": 4,
+ "unit": 1,
+ "stretch_bars": [],
+ "beat_times": null,
+ "loop": true,
+ "punch": false,
+ "outro": null,
+ "section": { "start_s": 16.0842, "end_s": 40.0846, "bars": 12 },
+ "hits": {},
+ "duration_s": 24.0,
+ "mix": "assets/mix.wav"
+}

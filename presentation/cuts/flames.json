@@ -1,0 +1,281 @@
+{
+ "name": "flames",
+ "title": "\"Dancing in the Flames\", The Weeknd",
+ "placeholder": true,
+ "audio_source": "out/click/flames-click.wav",
+ "bpm": 120.001,
+ "offset_s": 16.0004,
+ "beats_per_bar": 4,
+ "unit": 1.0,
+ "stretch_bars": [],
+ "beat_times": [
+  0.0,
+  0.4996,
+  0.9992,
+  1.4992,
+  1.9984,
+  2.4977,
+  2.9969,
+  3.4969,
+  3.9969,
+  4.4989,
+  4.9989,
+  5.4989,
+  5.9981,
+  6.4973,
+  6.9973,
+  7.4973,
+  7.9993,
+  8.4993,
+  8.9993,
+  9.4985,
+  9.9977,
+  10.4977,
+  10.9977,
+  11.4997,
+  11.9997,
+  12.4997,
+  12.9989,
+  13.4981,
+  13.9974,
+  14.4974,
+  14.9973,
+  15.4993,
+  15.9993,
+  16.4993,
+  16.9985,
+  17.4978,
+  17.9978,
+  18.4978,
+  18.9997,
+  19.4997,
+  19.9997,
+  20.4989,
+  20.9982,
+  21.4974,
+  21.9974,
+  22.4974,
+  22.9994,
+  23.4994,
+  23.9994,
+  24.4986,
+  24.9978,
+  25.4978,
+  25.9978,
+  26.4998,
+  26.9998,
+  27.4998,
+  27.999,
+  28.4982,
+  28.9974,
+  29.4974,
+  29.9974,
+  30.4994,
+  30.9994,
+  31.4994,
+  31.9986,
+  32.4979,
+  32.9979,
+  33.4978,
+  33.9998,
+  34.4998,
+  34.9998,
+  35.4994,
+  35.999
+ ],
+ "loop": false,
+ "punch": false,
+ "outro": {
+  "end_bar": 17,
+  "tail_s": 0.6
+ },
+ "section": {
+  "start_s": 16.0004,
+  "end_s": 48.0,
+  "bars": 16
+ },
+ "candidates": [
+  {
+   "bar": 8,
+   "start": 16.0,
+   "end": 48.0,
+   "score": 1.899,
+   "energy": 1.0,
+   "build": 0.999,
+   "mid_phrase": false
+  },
+  {
+   "bar": 32,
+   "start": 64.0,
+   "end": 95.999,
+   "score": 1.574,
+   "energy": 1.0,
+   "build": 0.458,
+   "mid_phrase": false
+  },
+  {
+   "bar": 9,
+   "start": 18.0,
+   "end": 50.0,
+   "score": 1.528,
+   "energy": 0.971,
+   "build": 0.75,
+   "mid_phrase": true
+  },
+  {
+   "bar": 10,
+   "start": 20.0,
+   "end": 52.0,
+   "score": 1.329,
+   "energy": 0.943,
+   "build": 0.5,
+   "mid_phrase": true
+  },
+  {
+   "bar": 31,
+   "start": 62.0,
+   "end": 94.0,
+   "score": 1.216,
+   "energy": 0.971,
+   "build": 0.229,
+   "mid_phrase": true
+  },
+  {
+   "bar": 11,
+   "start": 22.0,
+   "end": 54.0,
+   "score": 1.137,
+   "energy": 0.914,
+   "build": 0.25,
+   "mid_phrase": true
+  },
+  {
+   "bar": 7,
+   "start": 14.0,
+   "end": 46.0,
+   "score": 1.118,
+   "energy": 0.938,
+   "build": 0.501,
+   "mid_phrase": true
+  },
+  {
+   "bar": 30,
+   "start": 60.0,
+   "end": 92.0,
+   "score": 1.03,
+   "energy": 0.943,
+   "build": -0.0,
+   "mid_phrase": true
+  }
+ ],
+ "hits": {},
+ "duration_s": 32.5986,
+ "mix": "out/click/flames-mix.wav",
+ "sounds": [
+  {
+   "story_beat": 1.0,
+   "sound": "tap",
+   "t": 0.4996
+  },
+  {
+   "story_beat": 16.0,
+   "sound": "tap",
+   "t": 7.9993
+  },
+  {
+   "story_beat": 21.0,
+   "sound": "tap",
+   "t": 10.4977
+  },
+  {
+   "story_beat": 24.0,
+   "sound": "side",
+   "t": 11.9997
+  },
+  {
+   "story_beat": 25.0,
+   "sound": "side",
+   "t": 12.4997
+  },
+  {
+   "story_beat": 27.0,
+   "sound": "check",
+   "t": 13.4981
+  },
+  {
+   "story_beat": 29.0,
+   "sound": "tick",
+   "t": 14.4974
+  },
+  {
+   "story_beat": 29.25,
+   "sound": "tick",
+   "t": 14.6224
+  },
+  {
+   "story_beat": 29.5,
+   "sound": "tick",
+   "t": 14.7474
+  },
+  {
+   "story_beat": 30.0,
+   "sound": "tap",
+   "t": 14.9973
+  },
+  {
+   "story_beat": 37.0,
+   "sound": "ping",
+   "t": 18.4978
+  },
+  {
+   "story_beat": 38.0,
+   "sound": "tick",
+   "t": 18.9997
+  },
+  {
+   "story_beat": 38.25,
+   "sound": "tick",
+   "t": 19.1247
+  },
+  {
+   "story_beat": 38.5,
+   "sound": "tick",
+   "t": 19.2497
+  },
+  {
+   "story_beat": 38.75,
+   "sound": "tick",
+   "t": 19.3747
+  },
+  {
+   "story_beat": 41.0,
+   "sound": "tick",
+   "t": 20.4989
+  },
+  {
+   "story_beat": 43.0,
+   "sound": "tick",
+   "t": 21.4974
+  },
+  {
+   "story_beat": 43.25,
+   "sound": "tick",
+   "t": 21.6224
+  },
+  {
+   "story_beat": 45.0,
+   "sound": "tick",
+   "t": 22.4974
+  },
+  {
+   "story_beat": 45.25,
+   "sound": "tick",
+   "t": 22.6229
+  },
+  {
+   "story_beat": 45.5,
+   "sound": "tick",
+   "t": 22.7484
+  }
+ ]
+}
