@@ -9,7 +9,7 @@
  *   3. link the two orders. If step 2 fails, step 1 is rolled back.
  */
 import { OfferSchema, type Offer } from "@/lib/types";
-import { buildShortlistFromOffers } from "@/lib/decision";
+import { buildShortlistFromOffers, listingToItem, offerToItem } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
 import { judge, researchProduct } from "@/lib/judge";
 import { hydrateOfferPhotos } from "@/lib/reader/photos";
@@ -159,7 +159,12 @@ export async function acceptSwitch(userId: string, orderId: string): Promise<Swi
   const offer = order.switch_check?.offer;
   if (!offer) return { ok: false, status: 409, error: "No switch on offer for this order" };
 
-  const refund = Math.max(0, order.price_pence - offer.postage_pence);
+  // The stored offer may predate a settings change: run the rule again before any money moves.
+  const item = "returns_text" in offer.chosen ? listingToItem(offer.chosen) : offerToItem(offer.chosen, 0);
+  const recheck = evaluateSwitch(order, [item], { [item.id]: offer.decision }, current.settings);
+  if (!recheck.ok) return { ok: false, status: 409, error: `Switch no longer clears: ${recheck.note}` };
+
+  const refund = Math.max(0, order.price_pence - recheck.postage_pence);
   if (current.balance_pence + refund < offer.price_pence) {
     return {
       ok: false,
@@ -170,7 +175,7 @@ export async function acceptSwitch(userId: string, orderId: string): Promise<Swi
 
   // 1. Cancel under the 14-day right and refund to the demo wallet.
   const cancelledAt = new Date().toISOString();
-  const postageText = offer.postage_pence > 0 ? ` after ${formatPence(offer.postage_pence)} return postage` : "";
+  const postageText = recheck.postage_pence > 0 ? ` after ${formatPence(recheck.postage_pence)} return postage` : "";
   await saveMemory(userId, {
     ...patchOrder(current, orderId, (o) => ({
       ...o,
@@ -233,7 +238,7 @@ export async function acceptSwitch(userId: string, orderId: string): Promise<Swi
     ok: true,
     new_order_id: paid.id,
     refund_pence: refund,
-    clear_pence: offer.clear_pence,
+    clear_pence: recheck.clear_pence,
     balance_pence: linked.balance_pence,
   };
 }
