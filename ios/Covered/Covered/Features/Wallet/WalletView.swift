@@ -14,8 +14,6 @@ struct WalletView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    FilmHeader(showWallet: true, balancePence: state.wallet?.balancePence ?? 0)
-                        .padding(.horizontal, -Theme.inset)
                     balanceBlock
                     depositBlock
                     historyBlock
@@ -24,8 +22,16 @@ struct WalletView: View {
                 .padding(.horizontal, Theme.inset)
                 .padding(.bottom, 24)
             }
-            .background(Color.screen.ignoresSafeArea())
-            .navigationBarHidden(true)
+            .background(Color.screen)
+            .navigationTitle("Wallet")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color.screen, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    WalletChip(pence: state.wallet?.balancePence ?? 0)
+                }
+            }
             .refreshable { await state.refresh() }
             .task { await state.refresh() }
             .navigationDestination(isPresented: $showNewLimit) {

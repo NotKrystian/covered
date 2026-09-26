@@ -18,9 +18,6 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    FilmHeader()
-                        .padding(.horizontal, -Theme.inset)
-
                     field("Name") {
                         TextField("Name", text: $displayName)
                             .font(.system(size: 14.5))
@@ -114,8 +111,11 @@ struct SettingsView: View {
                 .padding(.horizontal, Theme.inset)
                 .padding(.bottom, 24)
             }
-            .background(Color.screen.ignoresSafeArea())
-            .navigationBarHidden(true)
+            .background(Color.screen)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color.screen, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .confirmationDialog(
                 "Reset memory?",
                 isPresented: $confirmReset,

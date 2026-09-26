@@ -11,11 +11,11 @@ struct ShopView: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        ZStack {
-            Color.screen.ignoresSafeArea()
-            VStack(spacing: 0) {
-                FilmHeader()
-                ScrollView {
+        NavigationStack {
+            ZStack {
+                Color.screen
+                VStack(spacing: 0) {
+                    ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         ComposerBar(
                             text: $shop.query,
@@ -88,19 +88,24 @@ struct ShopView: View {
                     errorText: shop.errorText
                 )
             }
-        }
-        .animation(Motion.merge, value: confirming)
-        .animation(Motion.ui, value: shop.phase)
-        .sheet(item: $limitItem) { item in
-            limitSheet(item)
-        }
-        .task {
-            shop.localPremiumBps = AppState.shared.settings.protectionPremiumBps
-            if AppState.shared.wallet == nil {
-                await AppState.shared.refresh()
             }
-            if let seeded = LaunchFlags.seededSearchQuery, shop.query.isEmpty {
-                shop.query = seeded
+            .navigationTitle("Shop")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color.screen, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .animation(Motion.merge, value: confirming)
+            .animation(Motion.ui, value: shop.phase)
+            .sheet(item: $limitItem) { item in
+                limitSheet(item)
+            }
+            .task {
+                shop.localPremiumBps = AppState.shared.settings.protectionPremiumBps
+                if AppState.shared.wallet == nil {
+                    await AppState.shared.refresh()
+                }
+                if let seeded = LaunchFlags.seededSearchQuery, shop.query.isEmpty {
+                    shop.query = seeded
+                }
             }
         }
     }

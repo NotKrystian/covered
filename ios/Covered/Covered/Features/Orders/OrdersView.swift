@@ -8,38 +8,39 @@ struct OrdersView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.screen.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    FilmHeader(
-                        showWallet: true,
-                        balancePence: AppState.shared.wallet?.balancePence ?? 0
-                    )
-                    content
-                        .coveredSwap()
+            content
+                .coveredSwap()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.screen)
+                .navigationTitle("Orders")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbarBackground(Color.screen, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        WalletChip(pence: state.wallet?.balancePence ?? 0)
+                    }
                 }
-            }
-            .navigationBarHidden(true)
-            .refreshable { await store.refresh() }
-            .navigationDestination(for: Order.self) { order in
-                OrderDetailView(order: order, store: store)
-            }
-            .task { await store.refresh() }
-            .onChange(of: tabs.selection) { _, next in
-                if next == .orders {
-                    Task { await store.refresh() }
+                .refreshable { await store.refresh() }
+                .navigationDestination(for: Order.self) { order in
+                    OrderDetailView(order: order, store: store)
                 }
-            }
-            .onChange(of: state.orders) { _, next in
-                if !next.isEmpty {
-                    store.orders = next
-                    store.count = next.count
-                    store.totalPence = next.reduce(0) { $0 + $1.pricePence }
+                .task { await store.refresh() }
+                .onChange(of: tabs.selection) { _, next in
+                    if next == .orders {
+                        Task { await store.refresh() }
+                    }
                 }
-            }
-            .onChange(of: store.totalPence) { _, next in
-                withAnimation(Motion.money) { shownTotal = Double(next) }
-            }
+                .onChange(of: state.orders) { _, next in
+                    if !next.isEmpty {
+                        store.orders = next
+                        store.count = next.count
+                        store.totalPence = next.reduce(0) { $0 + $1.pricePence }
+                    }
+                }
+                .onChange(of: store.totalPence) { _, next in
+                    withAnimation(Motion.money) { shownTotal = Double(next) }
+                }
         }
     }
 
