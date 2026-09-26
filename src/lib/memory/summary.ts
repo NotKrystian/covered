@@ -9,7 +9,7 @@ import type { Message } from "@aws-sdk/client-bedrock-runtime";
 import { z } from "zod";
 import type { JudgeMode } from "@/lib/decision";
 import { formatBps, formatPence } from "@/lib/money";
-import { converseText, errorLabel, judgeMode } from "@/lib/judge/bedrock";
+import { converseText, errorLabel, judgeMode, withThrottleBackoff } from "@/lib/judge/bedrock";
 import { SUMMARY_MAX, type Memory, type MemoryEvent } from "./index";
 
 const SUMMARY_SYSTEM = `You write a buyer profile for Covered, a UK shopping bot that buys the cheapest listing that is actually the item and still has the buyer's rights.
@@ -75,7 +75,10 @@ export async function rewriteSummary(memory: Memory): Promise<SummaryResult> {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let raw = "";
     try {
-      raw = await converseText(messages, { system: SUMMARY_SYSTEM, maxTokens: 300, temperature: 0.3 });
+      raw = await withThrottleBackoff(
+        () => converseText(messages, { system: SUMMARY_SYSTEM, maxTokens: 300, temperature: 0.3 }),
+        { onThrottle: (retry, waitMs) => notes.push(`attempt ${attempt}: throttled, backoff ${retry} for ${waitMs} ms`) },
+      );
       const cleaned = raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
       const parsed = SummaryResponseSchema.parse(JSON.parse(cleaned));
       notes.push(`bedrock rewrote summary (attempt ${attempt})`);

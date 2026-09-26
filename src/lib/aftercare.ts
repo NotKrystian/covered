@@ -7,7 +7,7 @@
 import type { Message } from "@aws-sdk/client-bedrock-runtime";
 import type { UserSettings } from "@/lib/types";
 import { formatPence } from "@/lib/money";
-import { converseText, errorLabel, judgeMode } from "@/lib/judge/bedrock";
+import { converseText, errorLabel, judgeMode, withThrottleBackoff } from "@/lib/judge/bedrock";
 import type { OrderRecord } from "@/lib/memory";
 import {
   AftercareAssistSchema,
@@ -65,6 +65,8 @@ function extractJson(text: string): string {
 export type AftercareRun = {
   result: AftercareAssist;
   mode: "bedrock" | "mock";
+  /** The probe line for bedrock; for mock, why it fell back. */
+  why: string;
 };
 
 export async function runAftercareAssist(input: {
@@ -76,7 +78,7 @@ export async function runAftercareAssist(input: {
 }): Promise<AftercareRun> {
   const { mode, why } = await judgeMode();
   if (mode === "mock") {
-    return { result: mockAftercareAssist(input.order, input.message), mode: "mock" };
+    return { result: mockAftercareAssist(input.order, input.message), mode: "mock", why };
   }
 
   const list =
@@ -104,14 +106,22 @@ export async function runAftercareAssist(input: {
     },
   ];
 
+  let lastError = "no attempt";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let raw = "";
     try {
-      raw = await converseText(messages, { system: AFTERCARE_SYSTEM, maxTokens: 900, temperature: 0.2 });
+      raw = await withThrottleBackoff(
+        () => converseText(messages, { system: AFTERCARE_SYSTEM, maxTokens: 900, temperature: 0.2 }),
+        {
+          onThrottle: (retry, waitMs) =>
+            console.warn(`[covered/aftercare] attempt ${attempt} throttled, backoff ${retry} for ${waitMs} ms`),
+        },
+      );
       const parsed = AftercareAssistSchema.parse(JSON.parse(extractJson(raw)));
-      return { result: parsed, mode: "bedrock" };
+      return { result: parsed, mode: "bedrock", why };
     } catch (err) {
       const label = errorLabel(err);
+      lastError = label.slice(0, 160);
       console.warn(`[covered/aftercare] attempt ${attempt} failed: ${label}`);
       if (attempt === 1 && raw) {
         messages.push({ role: "assistant", content: [{ text: raw }] });
@@ -126,6 +136,7 @@ export async function runAftercareAssist(input: {
       }
     }
   }
-  console.warn(`[covered/aftercare] bedrock unusable (${why}); mock`);
-  return { result: mockAftercareAssist(input.order, input.message), mode: "mock" };
+  const fallback = `bedrock answer unusable after 2 attempts (${lastError})`;
+  console.warn(`[covered/aftercare] ${fallback}; mock`);
+  return { result: mockAftercareAssist(input.order, input.message), mode: "mock", why: fallback };
 }

@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   };
 
   const researched = await researchProduct(body.query);
-  log("research", researchTraceDetail(researched.brief, researched.source));
+  log("research", researchTraceDetail(researched.brief, researched.source, researched.fallback));
 
   const useFixtures = body.source === "fixture" || !body.offers;
   let items: ShortlistItem[];

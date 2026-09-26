@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type AssistOk = AftercareAssist & { mode: "bedrock" | "mock"; order_id: string | null };
+type AssistOk = AftercareAssist & { mode: "bedrock" | "mock"; why: string; order_id: string | null };
 type AssistErr = { error: string };
 
 export async function POST(request: Request): Promise<NextResponse<AssistOk | AssistErr>> {
@@ -32,7 +32,7 @@ export async function POST(request: Request): Promise<NextResponse<AssistOk | As
   const { userId } = await getUserId();
   const memory = await getMemory(userId);
   if (memory.orders.length === 0) {
-    return NextResponse.json({ ...emptyOrdersAssist(), mode: "mock", order_id: null });
+    return NextResponse.json({ ...emptyOrdersAssist(), mode: "mock", why: "no approved orders to help with", order_id: null });
   }
 
   const selected =
@@ -42,7 +42,7 @@ export async function POST(request: Request): Promise<NextResponse<AssistOk | As
     return NextResponse.json({ error: "order not found" }, { status: 404 });
   }
 
-  const { result, mode } = await runAftercareAssist({
+  const { result, mode, why } = await runAftercareAssist({
     order: selected,
     settings: memory.settings,
     message: body.message,
@@ -51,5 +51,5 @@ export async function POST(request: Request): Promise<NextResponse<AssistOk | As
   });
 
   await recordAftercare(userId, selected.id, toAftercareEntry(result));
-  return NextResponse.json({ ...result, mode, order_id: selected.id });
+  return NextResponse.json({ ...result, mode, why, order_id: selected.id });
 }

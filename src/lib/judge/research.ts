@@ -8,7 +8,7 @@
  */
 import type { Message } from "@aws-sdk/client-bedrock-runtime";
 import { z } from "zod";
-import { converse, errorLabel, isAccessError, judgeMode } from "./bedrock";
+import { converse, errorLabel, isAccessError, judgeMode, withThrottleBackoff } from "./bedrock";
 
 export const ProductBriefSchema = z.object({
   query: z.string(),
@@ -29,6 +29,8 @@ export type ResearchSource = "duckduckgo" | "wikipedia" | "bedrock" | "tokens";
 export type ResearchResult = {
   brief: ProductBrief;
   source: ResearchSource;
+  /** Why the brief came from query tokens instead of Bedrock; null when Bedrock wrote it. */
+  fallback: string | null;
 };
 
 export type Snippet = { title: string; text: string };
@@ -303,10 +305,10 @@ export function scoreAgainstBrief(title: string, brief: ProductBrief): number {
   return score;
 }
 
-export function researchTraceDetail(brief: ProductBrief, source: ResearchSource): string {
+export function researchTraceDetail(brief: ProductBrief, source: ResearchSource, fallback: string | null = null): string {
   const codes = brief.model_codes.filter(Boolean).slice(0, 2).join(", ");
   const label = brief.what_it_is.trim() || brief.category || brief.query;
-  return `${label}${codes ? ` (${codes})` : ""} · ${source}`;
+  return `${label}${codes ? ` (${codes})` : ""} · ${source}${fallback ? ` · no Bedrock brief: ${fallback}` : ""}`;
 }
 
 async function fetchText(url: string): Promise<string | null> {
@@ -437,7 +439,7 @@ function parseBrief(text: string, query: string): ProductBrief {
   return { ...parsed, query: parsed.query || query };
 }
 
-async function briefFromBedrock(query: string, snippets: Snippet[]): Promise<ProductBrief | null> {
+async function briefFromBedrock(query: string, snippets: Snippet[]): Promise<{ brief: ProductBrief } | { error: string }> {
   const snippetBlock =
     snippets.length === 0
       ? "No web snippets were retrieved. Infer from the query only and set confidence to \"low\"."
@@ -449,19 +451,23 @@ async function briefFromBedrock(query: string, snippets: Snippet[]): Promise<Pro
     },
   ];
 
+  let lastError = "no attempt";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     let raw = "";
     try {
-      const out = await converse(messages, {
-        system: RESEARCH_SYSTEM,
-        maxTokens: RESEARCH_MAX_TOKENS,
-        temperature: 0.1,
-      });
+      const out = await withThrottleBackoff(
+        () => converse(messages, { system: RESEARCH_SYSTEM, maxTokens: RESEARCH_MAX_TOKENS, temperature: 0.1 }),
+        {
+          onThrottle: (retry, waitMs) =>
+            console.warn(`[covered/research] attempt ${attempt} throttled, backoff ${retry} for ${waitMs} ms`),
+        },
+      );
       raw = out.text;
-      return parseBrief(raw, query);
+      return { brief: parseBrief(raw, query) };
     } catch (err) {
       console.warn(`[covered/research] attempt ${attempt} failed: ${errorLabel(err)}`);
-      if (isAccessError(err)) return null;
+      lastError = errorLabel(err).slice(0, 120);
+      if (isAccessError(err)) return { error: lastError };
       if (attempt === 1 && raw) {
         messages.push({ role: "assistant", content: [{ text: raw }] });
         messages.push({
@@ -475,7 +481,7 @@ async function briefFromBedrock(query: string, snippets: Snippet[]): Promise<Pro
       }
     }
   }
-  return null;
+  return { error: lastError };
 }
 
 /** Never throws. Always returns a ProductBrief the shortlist and judge can use. */
@@ -491,13 +497,15 @@ export async function researchProduct(query: string): Promise<ResearchResult> {
     console.warn(`[covered/research] fetch failed: ${errorLabel(err)}`);
   }
 
-  const { mode } = await judgeMode();
+  const { mode, why } = await judgeMode();
+  let fallback = `mock: ${why}`;
   if (mode === "bedrock") {
     const fromModel = await briefFromBedrock(trimmed, snippets);
-    if (fromModel) {
-      return { brief: fromModel, source: snippets.length > 0 ? source : "bedrock" };
+    if ("brief" in fromModel) {
+      return { brief: fromModel.brief, source: snippets.length > 0 ? source : "bedrock", fallback: null };
     }
+    fallback = fromModel.error;
   }
 
-  return { brief: fallbackProductBrief(trimmed, snippets), source };
+  return { brief: fallbackProductBrief(trimmed, snippets), source, fallback };
 }

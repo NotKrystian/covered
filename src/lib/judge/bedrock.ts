@@ -6,8 +6,9 @@
  * EU cross-region inference profile: vision-capable, $1.00 in / $5.00 out per 1M tokens).
  * Region: `BEDROCK_REGION ?? AWS_REGION ?? "eu-west-2"`. Default credential chain.
  *
- * Mode: `mock` when `COVERED_MOCK=1` or when the probe `ConverseCommand` fails with a
- * credentials / access error. The probe runs once per process and is cached.
+ * Mode: `mock` when `COVERED_MOCK=1` or when the probe `ConverseCommand` fails. A good
+ * probe is cached for the process; a failed one only for `PROBE_RETRY_MS` (throttle,
+ * timeout, 5xx) or `PROBE_LASTING_RETRY_MS` (access, model id, credentials).
  */
 import {
   BedrockRuntimeClient,
@@ -119,34 +120,102 @@ export async function converseText(messages: Message[], options: ConverseOptions
 
 export type ModeProbe = { mode: JudgeMode; why: string };
 
-let probe: Promise<ModeProbe> | null = null;
+/** A throttled, timed-out or 5xx probe: mock only this long, then probe again. */
+export const PROBE_RETRY_MS = 60_000;
+/** Access denied, bad model id, no credentials: mock this long, then probe again (access can be granted without a restart). */
+export const PROBE_LASTING_RETRY_MS = 5 * 60_000;
+export const PROBE_TIMEOUT_MS = 10_000;
+
+/** Why a probe failed: `lasting` needs someone to fix access; `transient` clears on its own. */
+export type ProbeFailure = "lasting" | "transient";
+
+export function probeFailureKind(err: unknown): ProbeFailure {
+  if (isThrottleError(err)) return "transient";
+  return isAccessError(err) ? "lasting" : "transient";
+}
+
+type ProbeState =
+  | { kind: "pending"; result: Promise<ModeProbe> }
+  | { kind: "settled"; mode: JudgeMode; reason: string; retryAt: number };
+
+let probeState: ProbeState | null = null;
+
+function settledProbe(state: Extract<ProbeState, { kind: "settled" }>, now: number): ModeProbe {
+  if (state.mode === "bedrock") return { mode: "bedrock", why: state.reason };
+  return { mode: "mock", why: `${state.reason}; probing again in ${Math.max(1, Math.ceil((state.retryAt - now) / 1000))} s` };
+}
+
+async function probeWithTimeout(): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(Object.assign(new Error(`no answer in ${PROBE_TIMEOUT_MS} ms`), { name: "TimeoutError" })),
+      PROBE_TIMEOUT_MS,
+    );
+  });
+  try {
+    await Promise.race([
+      converseText([{ role: "user", content: [{ text: "Reply with the single word OK." }] }], { maxTokens: 5, temperature: 0 }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runProbe(): Promise<Extract<ProbeState, { kind: "settled" }>> {
+  const started = Date.now();
+  try {
+    await probeWithTimeout();
+    const reason = `${BEDROCK_MODEL_ID} in ${BEDROCK_REGION} (probe ${Date.now() - started} ms)`;
+    console.log(`[covered/bedrock] probe ok: ${reason}`);
+    return { kind: "settled", mode: "bedrock", reason, retryAt: Number.POSITIVE_INFINITY };
+  } catch (err) {
+    const label = errorLabel(err).slice(0, 160);
+    const failure = probeFailureKind(err);
+    let reason: string;
+    let waitMs: number;
+    switch (failure) {
+      case "lasting":
+        reason = `Bedrock access missing (${label})`;
+        waitMs = PROBE_LASTING_RETRY_MS;
+        break;
+      case "transient":
+        reason = isThrottleError(err) ? `Bedrock throttled the probe (${label})` : `Bedrock probe failed (${label})`;
+        waitMs = PROBE_RETRY_MS;
+        break;
+      default: {
+        const unhandled: never = failure;
+        throw new Error(`unhandled probe failure ${String(unhandled)}`);
+      }
+    }
+    console.warn(`[covered/bedrock] probe failed (${failure}), mock for ${waitMs / 1000} s: ${reason}`);
+    return { kind: "settled", mode: "mock", reason, retryAt: Date.now() + waitMs };
+  }
+}
 
 /**
- * Decide the judge mode once per process. `COVERED_MOCK=1` short-circuits; otherwise a
- * tiny Converse call must succeed. A failure is cached too, so a denied model does not
- * cost a round trip on every request (restart the server after enabling access).
+ * The judge mode, shared by every Bedrock caller. `COVERED_MOCK=1` short-circuits;
+ * otherwise a tiny Converse call must succeed. Concurrent callers share one probe.
+ * Success is kept for the process; a mock result expires and the next call probes again.
  */
 export function judgeMode(): Promise<ModeProbe> {
   if (process.env.COVERED_MOCK === "1") {
     return Promise.resolve({ mode: "mock", why: "COVERED_MOCK=1" });
   }
-  if (probe === null) {
-    probe = (async (): Promise<ModeProbe> => {
-      const started = Date.now();
-      try {
-        await converseText([{ role: "user", content: [{ text: "Reply with the single word OK." }] }], {
-          maxTokens: 5,
-          temperature: 0,
-        });
-        const why = `${BEDROCK_MODEL_ID} in ${BEDROCK_REGION} (probe ${Date.now() - started} ms)`;
-        console.log(`[covered/bedrock] probe ok: ${why}`);
-        return { mode: "bedrock", why };
-      } catch (err) {
-        const why = `Bedrock unreachable: ${errorLabel(err).slice(0, 160)}`;
-        console.warn(`[covered/bedrock] probe failed, mock mode: ${why}`);
-        return { mode: "mock", why };
-      }
-    })();
-  }
-  return probe;
+  if (probeState?.kind === "pending") return probeState.result;
+  const now = Date.now();
+  if (probeState?.kind === "settled" && now < probeState.retryAt) return Promise.resolve(settledProbe(probeState, now));
+
+  const result = runProbe().then((settled) => {
+    probeState = settled;
+    return settledProbe(settled, Date.now());
+  });
+  probeState = { kind: "pending", result };
+  return result;
+}
+
+/** Forget the cached probe so the next `judgeMode()` probes again. For tests. */
+export function resetJudgeMode(): void {
+  probeState = null;
 }
