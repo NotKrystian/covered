@@ -1,0 +1,208 @@
+/**
+ * Shared types for Covered.
+ *
+ * Every boundary in the app (reader -> app, app -> Grok, app -> S3) speaks
+ * these shapes. Each type has a zod schema (`XSchema`) and an inferred TS
+ * type (`X`) so callers can validate untrusted JSON at the edge and get a
+ * typed value back. Import from "@/lib/types".
+ */
+import { z } from "zod";
+
+/** Which list on the rendered Shopping grid an offer came from. Sponsored rows are ads. */
+export const OfferSectionSchema = z.enum(["sponsored", "browse"]);
+export type OfferSection = z.infer<typeof OfferSectionSchema>;
+
+/**
+ * One offer read from the Google Shopping grid (`udm=28`) first paint.
+ * Mirrors the Record in the plan. `price` is the string as shown ("£249.00");
+ * `price_pence` is the parsed integer when the string parsed cleanly.
+ * Browse records omit `offer_id`, `merchant_domain`, `specs`, `product_url`.
+ * `image_urls` is only populated for fixtures; grid thumbnails are not trusted photos.
+ */
+export const OfferSchema = z.object({
+  section: OfferSectionSchema,
+  /** Sponsored slot position from `data-pla-slot-pos`. */
+  position: z.number().int().optional(),
+  title: z.string(),
+  /** Price as displayed, e.g. "£249.00". */
+  price: z.string(),
+  /** Parsed pence, or null if the displayed price did not parse. */
+  price_pence: z.number().int().nullable().optional(),
+  /** Struck-through / "was" price. Often has no "£". */
+  compare_at: z.string().nullable(),
+  merchant: z.string(),
+  /** Sponsored only: `data-dtld`, e.g. "argos.co.uk". */
+  merchant_domain: z.string().optional(),
+  /** Sponsored only: `data-merchant-id`. */
+  merchant_id: z.string().optional(),
+  /** Sponsored only: `data-offer-id`. Dedupe key for sponsored units. */
+  offer_id: z.string().optional(),
+  /** Sponsored only: `data-offer-docid`. */
+  offer_docid: z.string().optional(),
+  /** Sponsored only: store location text, e.g. "London". */
+  location: z.string().nullable().optional(),
+  /** "Sale", "£50 off", "Price drop", or null. Never a reason to buy. */
+  badge: z.string().nullable(),
+  /** Delivery / collect text as shown. */
+  delivery: z.string().nullable(),
+  /** Browse only: returns text. Feeds the rights decision. */
+  returns: z.string().nullable().optional(),
+  /** Sponsored only: energy label aria text. */
+  energy: z.string().nullable().optional(),
+  /** Rating as shown, e.g. "4.7". */
+  rating: z.string().nullable(),
+  /** Rating count as shown, e.g. "1k+". */
+  rating_count: z.string().nullable(),
+  /** Sponsored only: spec chips with the "·" separators dropped. */
+  specs: z.array(z.string()).optional(),
+  /** Sponsored only: shop URL from the clickable card. Never the /aclk tracker. */
+  product_url: z.string().optional(),
+  /** Browse only: "& more" text meaning this price is one of several. */
+  more_merchants: z.string().nullable().optional(),
+  /** Browse only: aria-label summary repeating title, badge, price, merchant, delivery, rating. */
+  summary: z.string().nullable().optional(),
+  /** Fixtures only. Real product photos Grok can judge. */
+  image_urls: z.array(z.string()).optional(),
+});
+export type Offer = z.infer<typeof OfferSchema>;
+
+/** Where a SearchResult came from: the live grid or local fixtures. */
+export const SearchSourceSchema = z.enum(["live", "fixture"]);
+export type SearchSource = z.infer<typeof SearchSourceSchema>;
+
+/** A deduped read of one query's first paint (or its fixture stand-in). */
+export const SearchResultSchema = z.object({
+  query: z.string(),
+  /** ISO 8601 timestamp of the read. */
+  fetched_at: z.string(),
+  source: SearchSourceSchema,
+  offers: z.array(OfferSchema),
+});
+export type SearchResult = z.infer<typeof SearchResultSchema>;
+
+/** Typed failure from the browser reader. `challenge` means switch to fixtures; do not bypass. */
+export const ReaderErrorSchema = z.object({
+  kind: z.enum(["challenge", "timeout", "no_offers", "unknown"]),
+  message: z.string(),
+});
+export type ReaderError = z.infer<typeof ReaderErrorSchema>;
+
+/** Discriminated result of a reader call. */
+export const ReaderResponseSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), result: SearchResultSchema }),
+  z.object({ ok: z.literal(false), error: ReaderErrorSchema }),
+]);
+export type ReaderResponse = z.infer<typeof ReaderResponseSchema>;
+
+/**
+ * A seeded fixture listing with real photos. Used when the grid is a
+ * challenge page, and for the wrong-jacket mislisting beat.
+ */
+export const ListingSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  price_pence: z.number().int(),
+  merchant: z.string(),
+  /** Hint for the demo only; Grok still decides `seller_type`. */
+  seller_type_hint: z.string().optional(),
+  /** Where it is sold, e.g. "Facebook Marketplace", "eBay", "Shop". */
+  venue: z.string(),
+  /** Real product photos. The mislisting check reads these. */
+  image_urls: z.array(z.string()),
+  returns_text: z.string(),
+  delivery_text: z.string(),
+  rating: z.string().optional(),
+  url: z.string().optional(),
+});
+export type Listing = z.infer<typeof ListingSchema>;
+
+/** Who is selling, as judged by Grok. */
+export const SellerTypeSchema = z.enum([
+  "uk_business",
+  "private",
+  "overseas_business",
+  "unclear",
+]);
+export type SellerType = z.infer<typeof SellerTypeSchema>;
+
+/** How enforceable the venue is. A business badge is not protection. */
+export const VenueTrustSchema = z.enum([
+  "shop_checkout",
+  "marketplace_protected",
+  "marketplace_unprotected",
+  "stranger",
+  "unclear",
+]);
+export type VenueTrust = z.infer<typeof VenueTrustSchema>;
+
+/** Grok's call on one offer or listing. */
+export const RecommendationSchema = z.enum(["buy", "skip", "ask"]);
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+
+/**
+ * Grok's structured decision for one offer/listing. JSON only.
+ * Grok judges identity, mislisting, seller, venue and rights.
+ * The pound comparison (protection premium, switch minimum) stays in code.
+ */
+export const DecisionSchema = z.object({
+  /** Is this the item the user asked for. */
+  same_item: z.boolean(),
+  /** Do the photos contradict the title. A mislisting never reaches the price rule. */
+  mislisting: z.boolean(),
+  /** Which photo gave the mislisting away, or null. */
+  photo_reason: z.string().nullable(),
+  /** Was the row an ad. Never a reason to buy. */
+  sponsored: z.boolean(),
+  seller_type: SellerTypeSchema,
+  venue_trust: VenueTrustSchema,
+  /** Which UK rights apply, in plain words (e.g. "14-day cancellation", "CRA 2015 fault remedy"). */
+  rights: z.array(z.string()),
+  recommendation: RecommendationSchema,
+  /** The one sentence the user sees. */
+  reason: z.string(),
+});
+export type Decision = z.infer<typeof DecisionSchema>;
+
+/** Grok's verdict over a whole shortlist. Keys of `per_offer` are offer/listing ids. */
+export const VerdictSchema = z.object({
+  /** Id of the chosen offer/listing, or null when nothing should be bought. */
+  chosen_id: z.string().nullable(),
+  per_offer: z.record(z.string(), DecisionSchema),
+  summary: z.string(),
+});
+export type Verdict = z.infer<typeof VerdictSchema>;
+
+/** `section` on a Receipt: a grid section, or "fixture" when the chosen item was a fixture Listing. */
+export const ReceiptSectionSchema = z.union([
+  OfferSectionSchema,
+  z.literal("fixture"),
+]);
+export type ReceiptSection = z.infer<typeof ReceiptSectionSchema>;
+
+/** Written to S3 at `receipts/{id}.json` on Approve. */
+export const ReceiptSchema = z.object({
+  id: z.string(),
+  /** ISO 8601 timestamp. */
+  created_at: z.string(),
+  query: z.string(),
+  chosen: z.union([OfferSchema, ListingSchema]),
+  decision: DecisionSchema,
+  section: ReceiptSectionSchema,
+  /** The premium setting in force when this was approved. */
+  protection_premium_pence: z.number().int(),
+});
+export type Receipt = z.infer<typeof ReceiptSchema>;
+
+/** What the user sets once. Defaults: £10 premium, £8 switch minimum, ask before buying. */
+export const UserSettingsSchema = z.object({
+  /** "I will pay up to this much more to keep real buyer rights." Default 1000 (£10). */
+  protection_premium_pence: z.number().int().default(1000),
+  /** "Inside 14 days, only move me if I clear this after postage." Default 800 (£8). */
+  switch_minimum_pence: z.number().int().default(800),
+  /** "ask" texts for a YES; "auto" goes once the number clears. */
+  approval: z.enum(["ask", "auto"]).default("ask"),
+});
+export type UserSettings = z.infer<typeof UserSettingsSchema>;
+
+/** Settings with every default applied. */
+export const DEFAULT_USER_SETTINGS: UserSettings = UserSettingsSchema.parse({});
