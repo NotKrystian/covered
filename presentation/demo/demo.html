@@ -1,0 +1,579 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Covered — 2-minute demo</title>
+<style>
+@font-face{font-family:Geist;src:url(../assets/fonts/Geist-Variable.woff2) format("woff2");font-weight:100 900}
+html,body{margin:0;background:#ebe8e2;overflow:hidden}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#ebe8e2;font-family:Geist,system-ui;color:#111;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+#stage *{box-sizing:border-box}
+.a{position:absolute}
+#cam{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0}
+#dev{position:absolute;background:#0b0b0b}
+#scr{position:absolute;background:#fff;overflow:hidden}
+.L{position:absolute;left:0;top:0}
+.ph{width:430px;height:930px}
+.lp{width:1240px;height:776px}
+.t{letter-spacing:-.03em}
+.h1{font-size:30px;font-weight:700;letter-spacing:-.035em;line-height:1.12}
+.big{font-size:40px;font-weight:700;letter-spacing:-.04em}
+.sec{color:#6f6d67}
+.ter{color:#8a877f}
+.pill{position:absolute;left:24px;width:382px;height:58px;border-radius:29px;background:#0b0b0b;color:#fff;font-size:18px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:13px;font-size:13px;font-weight:600;background:#efeeea;color:#5e5c56;white-space:nowrap}
+.chip.g{background:#e2f6e9;color:#0e2b19}
+.chip.d{background:#232323;color:#fff}
+.card{position:absolute;left:24px;width:382px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 1px #e7e5e0}
+.photo{position:absolute;border-radius:12px;background:#e8e6e1 center/cover no-repeat}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#5fd38a}
+.row{position:absolute;left:24px;width:382px;display:flex;justify-content:space-between;align-items:center}
+.panel{background:#f3f2ef;border-radius:18px}
+#finger{position:absolute;width:0;height:0}
+#fdot{position:absolute;left:-23px;top:-23px;width:46px;height:46px;border-radius:50%;background:rgba(70,70,70,.32);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55)}
+#fring{position:absolute;left:-23px;top:-23px;width:46px;height:46px;border-radius:50%;border:3px solid rgba(60,60,60,.55)}
+#sub{position:absolute;left:0;width:1920px;top:930px;text-align:center;}
+#subT{display:inline-block;padding:6px 26px 10px;border-radius:16px;background:#ebe8e2;font-size:44px;font-weight:600;letter-spacing:-.02em;color:#111}
+#call{position:absolute;left:1210px;top:300px;width:680px}
+#callN{font-size:150px;font-weight:700;letter-spacing:-.05em;line-height:1}
+#callL{font-size:34px;font-weight:500;color:#6f6d67;margin-top:14px;letter-spacing:-.02em}
+.gc{position:absolute;width:278px;height:310px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1px #e7e5e0}
+.gc .photo{left:10px;top:10px;width:258px;height:170px}
+.gc .ti{position:absolute;left:14px;top:192px;width:250px;font-size:16px;font-weight:600;line-height:1.25;letter-spacing:-.02em}
+.gc .pr{position:absolute;left:14px;top:246px;font-size:24px;font-weight:700;letter-spacing:-.03em}
+.gc .me{position:absolute;left:14px;top:278px;font-size:14px;color:#6f6d67}
+.gc .fl{position:absolute;right:12px;top:252px}
+.code{display:inline-flex;width:52px;height:64px;border-radius:12px;background:#f0efec;align-items:center;justify-content:center;font-size:30px;font-weight:700;margin-right:10px}
+.srow{position:absolute;left:24px;width:382px;height:56px;display:flex;justify-content:space-between;align-items:center;font-size:17px;border-bottom:1px solid #e2e0da}
+.bub{position:absolute;right:24px;padding:12px 18px;border-radius:22px;background:#0b0b0b;color:#fff;font-size:17px;font-weight:500}
+#end{position:absolute;left:0;top:0;width:1920px;height:1080px}
+</style>
+<script src="timeline.js"></script>
+</head><body><div id="stage">
+<div id="cam">
+  <div id="deck" class="a"></div>
+  <div id="dev"><div id="scr">
+    <!-- laptop: shopping grid (S1–S2) -->
+    <div id="lgrid" class="L lp">
+      <div class="a" style="left:0;top:0;width:1240px;height:56px;background:#f3f2ef"></div>
+      <div class="a" style="left:24px;top:12px;width:620px;height:32px;border-radius:16px;background:#fff;font-size:15px;line-height:32px;padding-left:16px" class="sec">black fleece jacket medium</div>
+      <div id="gsort" class="chip a" style="left:670px;top:15px">Sort: relevance</div>
+      <div id="gcards"></div>
+    </div>
+    <!-- laptop: Brave reader (S4) -->
+    <div id="lread" class="L lp">
+      <div class="a" style="left:0;top:0;width:1240px;height:40px;background:#e9e7e2"></div>
+      <div class="a" style="left:12px;top:6px;width:230px;height:34px;border-radius:10px 10px 0 0;background:#e9e7e2;font-size:14px;line-height:34px;padding-left:14px;color:#6f6d67">Covered · Demo</div>
+      <div class="a" style="left:246px;top:6px;width:330px;height:34px;border-radius:10px 10px 0 0;background:#f7f6f3;font-size:14px;line-height:34px;padding-left:14px;font-weight:600">black fleece jacket medium <span class="sec" style="font-weight:500">· background tab</span></div>
+      <div class="a" style="left:0;top:40px;width:1240px;height:46px;background:#f7f6f3;border-bottom:1px solid #e7e5e0"></div>
+      <div class="a" style="left:90px;top:48px;width:900px;height:30px;border-radius:15px;background:#fff;font-size:14px;line-height:30px;padding-left:16px;color:#6f6d67">Google Shopping · black fleece jacket medium</div>
+      <img class="a" src="../assets/covered-mark.svg" style="left:1190px;top:51px;width:24px;height:24px">
+      <div id="rcells"></div>
+      <div id="rscan" class="a" style="left:40px;width:1160px;height:2px;background:#5fd38a"></div>
+      <div id="rpop" class="a" style="left:860px;top:88px;width:360px;height:262px;border-radius:16px;background:#fff;box-shadow:0 14px 40px rgba(0,0,0,.16),0 0 0 1px #e7e5e0">
+        <img class="a" src="../assets/covered-mark.svg" style="left:22px;top:22px;width:30px;height:30px">
+        <div class="a" style="left:62px;top:22px;font-size:20px;font-weight:700;letter-spacing:-.03em">Covered reader</div>
+        <div class="a sec" style="left:62px;top:48px;font-size:14px">Paired with Demo's iPhone</div>
+        <div class="a" style="left:22px;top:84px;width:316px;height:1px;background:#ebe9e4"></div>
+        <div class="a" style="left:22px;top:102px;font-size:17px;font-weight:600">Reading Google Shopping</div>
+        <div id="rcount" class="a" style="left:22px;top:132px;font-size:40px;font-weight:700;letter-spacing:-.04em">0 offers</div>
+        <div class="a" style="left:22px;top:192px;width:316px;height:6px;border-radius:3px;background:#e6e4df"></div>
+        <div id="rbar" class="a" style="left:22px;top:192px;height:6px;border-radius:3px;background:#0b0b0b"></div>
+        <div id="rsent" class="a" style="left:22px;top:216px;font-size:15px;font-weight:600"><span class="dot"></span>&nbsp; Sent to your phone</div>
+      </div>
+    </div>
+
+    <!-- phone header -->
+    <div id="phead" class="L ph" style="height:110px">
+      <div class="a" style="left:36px;top:16px;font-size:16px;font-weight:600">9:41</div>
+      <div class="a" style="left:360px;top:19px;width:30px;height:13px;border-radius:4px;box-shadow:inset 0 0 0 1.5px #111"></div>
+      <div class="a" style="left:363px;top:22px;width:20px;height:7px;border-radius:2px;background:#111"></div>
+      <div class="a" style="left:24px;top:56px;font-size:27px;font-weight:700;letter-spacing:-.045em"><span class="dot" style="width:10px;height:10px;margin-right:9px;vertical-align:4px"></span>Covered</div>
+      <div class="a panel" style="left:250px;top:52px;width:156px;height:40px;border-radius:20px"></div>
+      <div class="a sec" style="left:266px;top:63px;font-size:13px;font-weight:600">Demo</div>
+      <div id="wallet" class="a" style="right:40px;top:60px;font-size:18px;font-weight:700;letter-spacing:-.02em">£0.00</div>
+    </div>
+
+    <!-- S3 onboarding -->
+    <div id="on1" class="L ph">
+      <div class="a ter" style="left:24px;top:140px;font-size:14px;font-weight:600">Step 1 of 4</div>
+      <div class="a h1" style="left:24px;top:168px;width:382px">What will you pay to keep UK rights?</div>
+      <div class="a big" style="left:24px;top:282px">Pay up to 25% more</div>
+      <div class="a" style="left:24px;top:362px;width:382px;height:8px;border-radius:4px;background:#e6e4df"></div>
+      <div class="a" style="left:24px;top:362px;width:191px;height:8px;border-radius:4px;background:#0b0b0b"></div>
+      <div class="a" style="left:200px;top:351px;width:30px;height:30px;border-radius:50%;background:#0b0b0b"></div>
+      <div class="a ter" style="left:24px;top:392px;font-size:14px">0%</div><div class="a ter" style="left:374px;top:392px;font-size:14px">50%</div>
+      <div class="a sec" style="left:24px;top:436px;width:382px;font-size:17px;line-height:1.4">Covered pays up to this much more to buy from a UK shop, not a private seller.</div>
+      <div class="pill" style="top:820px">Continue</div>
+    </div>
+    <div id="on2" class="L ph">
+      <div class="a ter" style="left:24px;top:140px;font-size:14px;font-weight:600">Step 2 of 4</div>
+      <div class="a h1" style="left:24px;top:168px;width:382px">When is a switch worth it?</div>
+      <div class="a big" style="left:24px;top:282px">Switch if I clear £8</div>
+      <div class="a" style="left:24px;top:356px;display:flex;gap:10px"><span class="chip" style="height:44px;border-radius:22px;padding:0 22px;font-size:18px">£4</span><span class="chip" style="height:44px;border-radius:22px;padding:0 22px;font-size:18px;background:#0b0b0b;color:#fff">£8</span><span class="chip" style="height:44px;border-radius:22px;padding:0 22px;font-size:18px">£12</span></div>
+      <div class="a sec" style="left:24px;top:436px;width:382px;font-size:17px;line-height:1.4">Inside your 14 days, switch shops when the new price saves this much after postage.</div>
+      <div class="pill" style="top:820px">Continue</div>
+    </div>
+    <div id="on3" class="L ph">
+      <div class="a ter" style="left:24px;top:140px;font-size:14px;font-weight:600">Step 3 of 4</div>
+      <div class="a h1" style="left:24px;top:168px;width:382px">Pair your laptop</div>
+      <div class="a sec" style="left:24px;top:214px;width:382px;font-size:17px">Enter the code from the Covered reader.</div>
+      <div id="codes" class="a" style="left:34px;top:280px;display:flex"></div>
+      <div id="paired" class="a chip g" style="left:24px;top:372px;height:32px;border-radius:16px;font-size:15px">✓ Paired · Brave on your laptop</div>
+      <div class="pill" style="top:820px">Continue</div>
+    </div>
+    <div id="on4" class="L ph">
+      <div class="a ter" style="left:24px;top:140px;font-size:14px;font-weight:600">Step 4 of 4</div>
+      <div class="a h1" style="left:24px;top:168px;width:382px">Top up your demo wallet</div>
+      <div class="a" style="left:24px;top:250px;font-size:96px;font-weight:700;letter-spacing:-.05em">£50</div>
+      <div class="a sec" style="left:24px;top:380px;width:382px;font-size:17px;line-height:1.4">A demo ledger. No card, no real checkout.</div>
+      <div class="pill" style="top:820px">Deposit £50</div>
+    </div>
+
+    <!-- S4 search -->
+    <div id="home" class="L ph">
+      <div class="a h1" style="left:24px;top:150px;width:382px">What are you after?</div>
+      <div id="reading" class="a sec" style="left:24px;top:716px;width:382px;font-size:15px"><span class="dot"></span>&nbsp; Reading Google Shopping on your paired browser…</div>
+      <div class="a" style="left:24px;top:780px;width:382px;height:58px;border-radius:29px;background:#f0efec"></div>
+      <div id="typed" class="a" style="left:46px;top:797px;font-size:18px">black fleece jacket medium</div>
+      <div class="a" style="left:356px;top:789px;width:40px;height:40px;border-radius:50%;background:#0b0b0b;color:#fff;font-size:22px;font-weight:700;text-align:center;line-height:38px">↑</div>
+    </div>
+    <div id="res" class="L ph">
+      <div class="a" style="left:24px;top:112px;width:382px;height:44px;border-radius:22px;background:#f0efec;font-size:16px;font-weight:600;line-height:44px;padding-left:18px">black fleece jacket medium</div>
+      <div id="research" class="a sec" style="left:24px;top:170px;font-size:14px"><span class="dot"></span>&nbsp; Researched: fleece jacket · full zip · black · M</div>
+      <div id="rescards"></div>
+    </div>
+    <div id="iph" class="L ph">
+      <div class="a" style="left:24px;top:112px;width:382px;height:44px;border-radius:22px;background:#f0efec;font-size:16px;font-weight:600;line-height:44px;padding-left:18px">iPhone 17 Pro Max 256GB</div>
+      <div class="a sec" style="left:24px;top:170px;font-size:14px"><span class="dot"></span>&nbsp; Researched: iPhone 17 Pro Max · 256GB · new</div>
+      <div id="iphrows"></div>
+    </div>
+
+    <!-- S5–S6 verdict -->
+    <div id="ver" class="L ph">
+      <div class="a" style="left:24px;top:112px;width:382px;height:44px;border-radius:22px;background:#f0efec;font-size:16px;font-weight:600;line-height:44px;padding-left:18px">black fleece jacket medium</div>
+      <div id="pickA" class="card" style="top:172px;height:206px;box-shadow:inset 0 0 0 2.5px #0b0b0b;border-radius:22px">
+        <div class="a" style="left:18px;top:16px;font-size:13px;font-weight:600"><span class="dot"></span>&nbsp; Covered pick</div>
+        <div class="photo" style="left:18px;top:44px;width:96px;height:106px;background-image:url(../../public/fixtures/fleece-black.jpg)"></div>
+        <div class="a" style="left:130px;top:48px;width:150px;font-size:17px;font-weight:600;line-height:1.25">Men's Full-Zip Fleece Jacket</div>
+        <div class="a sec" style="left:130px;top:98px;font-size:14px">JD Sports · UK shop</div>
+        <div class="a" style="right:18px;top:44px;font-size:28px;font-weight:700;letter-spacing:-.04em">£36.00</div>
+        <div class="chip g a" style="left:18px;top:164px">✓ 14-day cancellation · 30-day fault refund</div>
+      </div>
+      <div id="pickB" class="card" style="top:172px;height:206px;box-shadow:inset 0 0 0 2.5px #0b0b0b;border-radius:22px">
+        <div class="a" style="left:18px;top:16px;font-size:13px;font-weight:600"><span class="dot"></span>&nbsp; Covered pick</div>
+        <div class="photo" style="left:18px;top:44px;width:96px;height:106px;background-image:url(../../public/fixtures/fleece-black-private.jpg)"></div>
+        <div class="a" style="left:130px;top:48px;width:150px;font-size:17px;font-weight:600;line-height:1.25">Black fleece jacket, men's M</div>
+        <div class="a sec" style="left:130px;top:98px;font-size:14px;width:160px">Facebook Marketplace · private seller</div>
+        <div class="a" style="right:18px;top:44px;font-size:28px;font-weight:700;letter-spacing:-.04em">£28.00</div>
+        <div class="chip a" style="left:18px;top:164px">No cancellation · a fault is your problem</div>
+      </div>
+      <div class="a sec" style="left:24px;top:398px;font-size:15px">Pay up to</div>
+      <div id="mval" class="a" style="right:24px;top:392px;font-size:24px;font-weight:700;letter-spacing:-.03em">25%</div>
+      <div class="a" style="left:24px;top:434px;width:382px;height:8px;border-radius:4px;background:#e6e4df"></div>
+      <div id="mfill" class="a" style="left:24px;top:434px;height:8px;border-radius:4px;background:#0b0b0b"></div>
+      <div id="mthumb" class="a" style="top:423px;width:30px;height:30px;margin-left:-15px;border-radius:50%;background:#0b0b0b"></div>
+      <div class="a sec" style="left:24px;top:460px;font-size:14px">Private is 22% cheaper</div>
+      <div id="mnoteA" class="a" style="right:24px;top:460px;font-size:14px;font-weight:600">inside your 25%</div>
+      <div id="mnoteB" class="a" style="right:24px;top:460px;font-size:14px;font-weight:600">outside your 15%</div>
+      <div id="verrows"></div>
+      <div id="setlim" class="a" style="left:24px;top:752px;width:382px;height:52px;border-radius:26px;box-shadow:inset 0 0 0 1.5px #0b0b0b;font-size:17px;font-weight:600;text-align:center;line-height:52px">Set a limit</div>
+      <div id="watch" class="a panel" style="left:24px;top:752px;width:382px;height:52px;border-radius:16px;font-size:15px;line-height:52px;padding-left:16px"><span class="dot"></span>&nbsp; <b>Watching</b> · at or under £30 · checks hourly</div>
+      <div class="pill" style="top:820px"><span id="apA">Approve £36.00</span></div>
+      <div id="apB" class="pill" style="top:820px">Approve £28.00</div>
+      <div id="dim" class="a" style="left:0;top:0;width:430px;height:930px;background:#000"></div>
+      <div id="sheet" class="a" style="left:0;top:450px;width:430px;height:480px;border-radius:30px 30px 0 0;background:#fff">
+        <div class="a" style="left:197px;top:10px;width:36px;height:5px;border-radius:3px;background:#d9d7d1"></div>
+        <div class="a" style="left:24px;top:34px;font-size:22px;font-weight:700;letter-spacing:-.03em">Pay from Covered wallet</div>
+        <div class="srow" style="top:78px;border-color:#ebe9e4"><span>JD Sports · fleece jacket, M</span><b>£36.00</b></div>
+        <div class="srow" style="top:134px;border-color:#ebe9e4"><span class="sec">Demo wallet</span><b id="swal">£50.00</b></div>
+        <svg class="a" style="left:167px;top:212px" width="96" height="96" viewBox="0 0 96 96">
+          <circle id="scanR" cx="48" cy="48" r="42" fill="none" stroke="#0b0b0b" stroke-width="4" stroke-linecap="round" stroke-dasharray="70 194"/>
+          <circle id="okD" cx="48" cy="48" r="46" fill="#5fd38a"/>
+          <path id="okC" d="M28 49 L42 63 L69 34" fill="none" stroke="#0b0b0b" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="64" />
+        </svg>
+        <div id="fidA" class="a" style="left:0;width:430px;top:330px;text-align:center;font-size:17px;font-weight:600">Confirm with Face ID</div>
+        <div id="fidB" class="a" style="left:0;width:430px;top:330px;text-align:center;font-size:17px;font-weight:600">Paid · £36.00</div>
+      </div>
+      <div id="lsheet" class="a" style="left:0;top:560px;width:430px;height:370px;border-radius:30px 30px 0 0;background:#fff;box-shadow:0 -1px 0 #e7e5e0">
+        <div class="a" style="left:197px;top:10px;width:36px;height:5px;border-radius:3px;background:#d9d7d1"></div>
+        <div class="a sec" style="left:24px;top:36px;width:382px;font-size:16px">Buy only when the real item is at or under</div>
+        <div class="a" style="left:24px;top:66px;font-size:72px;font-weight:700;letter-spacing:-.05em">£30</div>
+        <div class="pill" style="top:260px">Watch</div>
+      </div>
+    </div>
+
+    <!-- S7 orders -->
+    <div id="ord" class="L ph">
+      <div class="a h1" style="left:24px;top:118px">Orders</div>
+      <div id="oA" class="a panel" style="left:24px;top:174px;width:382px;height:118px">
+        <div class="photo" style="left:14px;top:14px;width:72px;height:90px;background-image:url(../../public/fixtures/fleece-black.jpg)"></div>
+        <div class="a" style="left:100px;top:18px;font-size:16px;font-weight:600">Men's Full-Zip Fleece Jacket</div>
+        <div class="a sec" style="left:100px;top:44px;font-size:14px">JD Sports · £36.00</div>
+        <div id="oAleft" class="a" style="left:100px;top:76px;font-size:14px;font-weight:600">14 days left</div>
+        <div id="oAret" class="a chip" style="left:100px;top:72px">return started · refund pending</div>
+        <svg id="oAring" class="a" style="left:306px;top:32px" width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#e2e0da" stroke-width="8"/><circle cx="30" cy="30" r="24" fill="none" stroke="#0b0b0b" stroke-width="8" stroke-dasharray="150.8" stroke-dashoffset="0" transform="rotate(-90 30 30)"/><text x="30" y="36" text-anchor="middle" font-size="17" font-weight="700" font-family="Geist">14</text></svg>
+      </div>
+      <div id="oB" class="a panel" style="left:24px;top:304px;width:382px;height:118px">
+        <div class="photo" style="left:14px;top:14px;width:72px;height:90px;background-image:url(../../public/fixtures/fleece-black.jpg)"></div>
+        <div class="a" style="left:100px;top:18px;font-size:16px;font-weight:600">Same fleece jacket</div>
+        <div class="a sec" style="left:100px;top:44px;font-size:14px">Sports Direct · £23.40</div>
+        <div class="a" style="left:100px;top:76px;font-size:14px;font-weight:600">14 days left</div>
+        <svg class="a" style="left:306px;top:32px" width="60" height="60" viewBox="0 0 60 60"><circle cx="30" cy="30" r="24" fill="none" stroke="#0b0b0b" stroke-width="8"/><text x="30" y="36" text-anchor="middle" font-size="17" font-weight="700" font-family="Geist">14</text></svg>
+      </div>
+      <div id="alert" class="a" style="left:24px;top:310px;width:382px;height:196px;border-radius:20px;background:#0b0b0b;color:#fff">
+        <div class="a" style="left:20px;top:18px;font-size:14px;font-weight:600">Price drop <span class="chip d" style="height:20px;font-size:11px;color:#dcdad4;margin-left:6px">demo</span></div>
+        <div class="a" style="left:20px;top:50px;font-size:26px;font-weight:700;letter-spacing:-.03em">Same fleece, £23.40</div>
+        <div class="a" style="left:20px;top:88px;font-size:14px;color:#9a978f">Sports Direct · UK shop · free returns</div>
+        <div class="a" style="left:20px;top:128px;display:flex;gap:6px"><span class="chip d"><b style="color:#5fd38a">✓</b> black</span><span class="chip d"><b style="color:#5fd38a">✓</b> M</span><span class="chip d"><b style="color:#5fd38a">✓</b> fleece</span><span class="chip d"><b style="color:#5fd38a">✓</b> UK trader</span></div>
+      </div>
+      <div id="sum" class="a" style="left:24px;top:522px;width:382px;height:250px;border-radius:18px;box-shadow:inset 0 0 0 1.5px #e6e4df">
+        <div id="su1" class="row" style="left:20px;width:342px;top:20px;font-size:17px"><span class="sec">Paid at JD Sports</span><b>£36.00</b></div>
+        <div id="su2" class="row" style="left:20px;width:342px;top:56px;font-size:17px"><span class="sec">− Sports Direct price</span><b>£23.40</b></div>
+        <div id="su3" class="row" style="left:20px;width:342px;top:92px;font-size:17px"><span class="sec">− Return postage</span><b>£0.00</b></div>
+        <div id="su4" class="a" style="left:20px;top:132px;width:342px;height:1.5px;background:#0b0b0b"></div>
+        <div id="su5" class="row" style="left:20px;width:342px;top:146px"><span style="font-size:17px;font-weight:600">Saved</span><b style="font-size:34px;letter-spacing:-.04em">£12.60</b></div>
+        <div id="su6" class="a chip" style="left:20px;top:202px;background:#5fd38a;color:#0b0b0b">clears your £8</div>
+      </div>
+      <div id="swbtn" class="pill" style="top:820px">Confirm switch</div>
+    </div>
+
+    <!-- S8 aftercare -->
+    <div id="aft" class="L ph">
+      <div class="a h1" style="left:24px;top:118px">Aftercare</div>
+      <div class="a sec" style="left:24px;top:158px;font-size:14px">Sports Direct · fleece jacket · £23.40</div>
+      <div id="u1" class="bub" style="top:200px">The zip broke.</div>
+      <div id="b1" class="card" style="top:262px;height:282px">
+        <div class="a" style="left:18px;top:16px;font-size:18px;font-weight:700;letter-spacing:-.02em">Refund under the 30-day right</div>
+        <div class="a sec" style="left:18px;top:46px;width:346px;font-size:14px;line-height:1.35">A fault inside 30 days: you can reject it for a full refund, not a voucher.</div>
+        <div class="a panel" style="left:14px;top:96px;width:354px;height:170px;border-radius:12px">
+          <div class="a sec" style="left:14px;top:12px;font-size:12px;font-weight:600">Draft · copy to seller</div>
+          <div class="a" style="left:14px;top:34px;width:326px;font-size:14px;line-height:1.4">Hello, the zip on the fleece jacket I bought from you has broken. Under the Consumer Rights Act 2015 I'm rejecting it within 30 days for a full refund.</div>
+          <div class="a chip" style="right:12px;top:132px;background:#fff;box-shadow:inset 0 0 0 1px #e7e5e0">Copy draft</div>
+        </div>
+      </div>
+      <div id="u2" class="bub" style="top:566px">Tell them it arrived broken</div>
+      <div id="b2" class="card" style="top:628px;height:92px">
+        <div class="a" style="left:18px;top:16px;font-size:18px;font-weight:700;letter-spacing:-.02em">Refused: that's a change of mind</div>
+        <div class="a sec" style="left:18px;top:48px;width:346px;font-size:14px">It arrived working. I won't write that it didn't.</div>
+      </div>
+      <div class="a" style="left:24px;top:820px;width:382px;height:58px;border-radius:29px;background:#f0efec;font-size:17px;line-height:58px;padding-left:22px" class="ter"><span class="ter">Message Covered</span></div>
+    </div>
+
+    <!-- S9–S10 settings + year -->
+    <div id="set" class="L ph">
+      <div class="a h1" style="left:24px;top:118px">Settings</div>
+      <div class="srow" style="top:170px"><span>Pay up to</span><b>25%</b></div>
+      <div class="srow" style="top:226px"><span>Switch if I clear</span><b>£8</b></div>
+      <div class="srow" style="top:282px"><span>Demo wallet</span><b>£26.60</b></div>
+      <div id="mem" class="a panel" style="left:24px;top:366px;width:382px;height:156px">
+        <div class="a sec" style="left:18px;top:16px;font-size:13px;font-weight:600">Memory · learned from 1 approval</div>
+        <div class="a" style="left:18px;top:44px;width:346px;font-size:17px;font-weight:500;line-height:1.38">You pick UK shops with return rights over private sellers when the gap is inside your 25%.</div>
+      </div>
+      <div id="kept" class="a panel" style="left:24px;top:540px;width:382px;height:60px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font-size:17px"><b style="font-weight:600">Money kept</b><span><b>£12.60</b> <span class="ter">›</span></span></div>
+      <div id="year" class="a" style="background:#fff;border-radius:24px;box-shadow:0 18px 50px rgba(0,0,0,.14),0 0 0 1px #e7e5e0;overflow:hidden">
+        <div id="yin" class="a" style="left:0;top:0;width:398px;height:640px">
+          <div class="a" style="left:26px;top:28px;font-size:22px;font-weight:700;letter-spacing:-.03em">Your year with Covered</div>
+          <div class="a chip" style="left:26px;top:64px">sample</div>
+          <div id="ykept" class="a" style="left:26px;top:112px;font-size:84px;font-weight:700;letter-spacing:-.05em">£0</div>
+          <div class="a sec" style="left:28px;top:210px;font-size:20px">kept</div>
+          <div id="y1" class="a" style="left:26px;top:270px;width:346px;font-size:18px;line-height:1.3"><b style="font-size:34px;letter-spacing:-.03em">11</b><br>switches inside 14-day windows</div>
+          <div id="y2" class="a" style="left:26px;top:372px;width:346px;font-size:18px;line-height:1.3"><b style="font-size:34px;letter-spacing:-.03em">4</b><br>wrong listings dropped before paying</div>
+          <div id="y3" class="a" style="left:26px;top:474px;width:346px;font-size:18px;line-height:1.3"><b style="font-size:34px;letter-spacing:-.03em">£24.69</b><br>a week</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="finger"><div id="fring"></div><div id="fdot"></div></div>
+  </div></div>
+</div>
+<div id="call"><div id="callN"></div><div id="callL"></div></div>
+<div id="sub"><span id="subT"></span></div>
+<div id="end">
+  <div id="eW1" class="a" style="left:0;width:1920px;text-align:center;top:360px;font-size:110px;font-weight:700;letter-spacing:-.05em">Shopping.</div>
+  <div id="eW2" class="a" style="left:0;width:1920px;text-align:center;top:490px;font-size:110px;font-weight:700;letter-spacing:-.05em">Made simple.</div>
+  <img id="eMark" class="a" src="../assets/covered-mark.svg" style="top:320px;width:180px;height:180px">
+  <div id="eWordWrap" class="a" style="top:320px;height:180px;overflow:hidden"><img id="eWord" class="a" src="../assets/covered-lockup.svg" style="top:0;height:180px;width:716.7px"></div>
+  <div id="eTag" class="a" style="left:0;width:1920px;top:548px;text-align:center;font-size:56px;font-weight:600;letter-spacing:-.03em">Shop with your rights.</div>
+  <div id="eUrl" class="a" style="left:0;width:1920px;top:660px;text-align:center;font-size:72px;font-weight:700;letter-spacing:-.04em">covered.kawuc.uk</div>
+  <div id="eSoon" class="a sec" style="left:0;width:1920px;top:760px;text-align:center;font-size:34px;font-weight:500">iPhone app coming soon</div>
+</div>
+</div>
+<script>
+const BPM = 120, BEAT = 60 / BPM, BAR = 4 * BEAT, DUR = 120;
+const $ = id => document.getElementById(id);
+const Z = 0.86;
+function sp(t, t0, w = 14) { const x = t - t0; if (x <= 0) return 0; const wd = w * Math.sqrt(1 - Z * Z);
+  return 1 - Math.exp(-Z * w * x) * (Math.cos(wd * x) + (Z * w / wd) * Math.sin(wd * x)); }
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const bar = n => (n - 1) * BAR;
+const money = p => "£" + (p / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function vis(el, o, tr = "") { el.style.opacity = clamp(o); el.style.visibility = o < 0.003 ? "hidden" : "visible"; el.style.transform = tr; }
+function win(el, t, a, b, dy = 14) { const e = sp(t, a), x = sp(t, b); vis(el, e * (1 - x), `translateY(${(1 - e) * dy - x * dy * 0.4}px)`); return e * (1 - x); }
+const W = (s, word, n = 0) => { const ws = TL.scenes[s].words.filter(w => w[1].replace(/[^\w-]/g, "") === word); return ws[n][0]; };
+
+// ---------- device morph: 0 phone, 1 laptop ----------
+const PH = { w: 456, h: 956, r: 71, b: 13 }, LP = { w: 1276, h: 812, r: 26, b: 18 };
+const MORPHS = [[-9, 1], [17.5, 0], [27.5, 1], [33.6, 0]];
+function morph(t) { let m = MORPHS[0][1]; for (let i = 1; i < MORPHS.length; i++) m += (MORPHS[i][1] - MORPHS[i - 1][1]) * sp(t, MORPHS[i][0], 9); return m; }
+
+// ---------- camera: keyframes [t, scale, focusX, focusY, screenX] (focus relative to device centre) ----------
+const Pp = (x, y) => [x - 215, y - 465], Lp = (x, y) => [x - 620, y - 388];
+const CAM = [
+  [-9, .8, 0, 0, 960], [2.5, .92, ...Lp(420, 300), 960],
+  [6.0, 1.4, ...Lp(179, 170), 960], [8.0, 1.4, ...Lp(1079, 300), 960], [10.0, 1.4, ...Lp(779, 560), 960], [12.0, .8, 0, 0, 960],
+  [17.5, .92, 0, 0, 800], [19.0, .97, 0, -30, 800], [26.0, .92, 0, 0, 800],
+  [27.5, .8, 0, 0, 960], [28.9, 1.2, ...Lp(1040, 220), 960], [31.8, .8, 0, 0, 960], [33.6, .92, 0, 0, 800],
+  [36.8, 1.4, ...Pp(215, 290), 800], [39.4, .92, 0, 0, 800], [W("s4", "forty-two") - .3, 1.22, ...Pp(215, 560), 800], [45.4, .92, 0, 0, 800],
+  [W("s5", "Private"), 1.3, ...Pp(215, 530), 800], [W("s5", "UK"), 1.3, ...Pp(215, 275), 800], [W("s5", "The"), .92, 0, 0, 800],
+  [57.2, 1.22, ...Pp(215, 420), 800], [61.4, .92, 0, 0, 800],
+  [64.0, 1.24, ...Pp(215, 700), 800], [66.6, .92, 0, 0, 800], [69.4, 1.22, ...Pp(215, 780), 800], [71.6, .92, 0, 0, 800],
+  [72.4, 1.26, ...Pp(215, 240), 800], [W("s7", "Inside"), 1.0, ...Pp(215, 400), 800], [W("s7", "Twelve") - .2, 1.22, ...Pp(215, 640), 800], [81.2, .92, 0, 0, 800],
+  [87.4, 1.2, ...Pp(215, 400), 800], [90.0, 1.0, ...Pp(215, 560), 800], [92.6, .92, 0, 0, 800],
+  [94.3, 1.24, ...Pp(215, 450), 800], [97.6, .92, 0, 0, 800],
+  [103.9, .5, 0, 0, 960],
+];
+function cam(t) { const v = CAM[0].slice(1); for (let i = 1; i < CAM.length; i++) { const k = sp(t, CAM[i][0], 6.5);
+  for (let j = 0; j < 4; j++) v[j] += (CAM[i][j + 1] - CAM[i - 1][j + 1]) * k; } return v; }
+
+// ---------- finger: taps [t, x, y] in phone content px ----------
+const TAPS = [[19.5, 215, 849], [21.5, 215, 849], [23.5, 215, 849], [24.5, 215, 849], [27.0, 376, 809],
+  [62.5, 215, 849], [67.5, 215, 778], [69.0, 215, 849], [81.5, 215, 849], [86.0, 360, 849], [90.0, 360, 849]];
+const DRAG = { land: 57.4, go: 57.9, hold: 60.6, up: 61.0 };
+const TX = v => 24 + v / 50 * 382;
+function dragV(t) { return lerp(25, 15, sp(t, DRAG.go, 5)); }
+function sliderV(t) { if (t < DRAG.up) return dragV(t); const v0 = dragV(DRAG.up); return lerp(v0, 25, sp(t, DRAG.up, 12)); }
+let FLIP_ON = 0, FLIP_OFF = 0;
+for (let t = DRAG.go; t < DRAG.up + 1; t += 1 / 480) { const v = sliderV(t); if (!FLIP_ON && v < 22.2) FLIP_ON = t; if (FLIP_ON && !FLIP_OFF && v >= 22.2) FLIP_OFF = t; }
+
+// ---------- callouts [t0, t1, number, label] ----------
+const CALLS = [
+  [W("s4", "forty-two") + .25, 45.6, "£42/mo", "a contract, listed apart"],
+  [W("s5", "twenty-two") + .25, 57.1, "22%", "cheaper · inside your 25%"],
+  [W("s7", "Twelve") + .25, 85.6, "£12.60", "saved after postage"],
+  [W("s10", "one") + .25, 103.6, "£1,284", "kept · sample year"],
+];
+
+// ---------- static DOM ----------
+const FX = "../../public/fixtures/";
+const GRID = [ // snapshot order (relevance), then price sort
+  { t: "Unisex Fleece Jacket — Alexandra", p: 2399, m: "alexandra.co.uk" },
+  { t: "Craghoppers Morley Fleece Jacket, Black", p: 2400, m: "Craghoppers" },
+  { t: "Men's Full-Zip Fleece Jacket, Black", p: 3600, m: "JD Sports", ph: "fleece-black.jpg" },
+  { t: "Nike Tech Fleece Jacket, Black, M", p: 2200, m: "streetwear-deals", ph: "bomber-black.jpg", flag: "photo: a nylon bomber" },
+  { t: "Strauss dryplexx micro fleece, M, black", p: 2868, m: "Strauss UK" },
+  { t: "Men's Fleece Jacket, Black, M", p: 3400, m: "Global Outlet", ph: "fleece-black-overseas.jpg", flag: "ships from Hong Kong" },
+  { t: "Black fleece jacket, men's M", p: 2800, m: "Facebook Marketplace", ph: "fleece-black-private.jpg", flag: "private seller" },
+  { t: "Craghoppers Corey 200 Fleece Jacket", p: 3000, m: "Craghoppers" },
+];
+const SORTED = GRID.map((g, i) => i).sort((a, b) => GRID[a].p - GRID[b].p);
+const slot = k => [40 + (k % 4) * 300, 76 + Math.floor(k / 4) * 336];
+$("gcards").innerHTML = GRID.map((g, i) => `<div class="gc" id="g${i}"><div class="photo" style="${g.ph ? `background-image:url(${FX + g.ph})` : ""}"></div>
+  <div class="ti">${g.t}</div><div class="pr">${money(g.p)}</div><div class="me">${g.m}</div>
+  ${g.flag ? `<div class="chip fl" id="gf${i}">${g.flag}</div>` : ""}</div>`).join("");
+$("rcells").innerHTML = Array.from({ length: 10 }, (_, i) => `<div class="a" style="left:${40 + (i % 5) * 234}px;top:${110 + Math.floor(i / 5) * 330}px;width:218px;height:310px;border-radius:14px;box-shadow:inset 0 0 0 1px #e7e5e0"><div class="a" style="left:10px;top:10px;width:198px;height:180px;border-radius:10px;background:#e8e6e1"></div><div class="a" style="left:12px;top:206px;width:170px;height:12px;border-radius:6px;background:#efeeea"></div><div class="a" style="left:12px;top:230px;width:110px;height:12px;border-radius:6px;background:#efeeea"></div><div class="a" style="left:12px;top:262px;width:70px;height:18px;border-radius:6px;background:#dddbd5"></div></div>`).join("");
+$("codes").innerHTML = [..."DEMO42"].map((c, i) => `<span class="code"><span id="c${i}">${c}</span></span>`).join("");
+const RES = [
+  { t: "Nike Tech Fleece Jacket, Black, M", m: "streetwear-deals", p: 2200, ph: "bomber-black.jpg", chips: `<span class="chip">Ad</span>` },
+  { t: "Black fleece jacket, men's M", m: "Facebook Marketplace", p: 2800, ph: "fleece-black-private.jpg", chips: `<span class="chip">private sale</span>` },
+  { t: "Men's Fleece Jacket, Black, M", m: "Global Outlet", p: 3400, ph: "fleece-black-overseas.jpg", chips: `<span class="chip">Ad</span><span class="chip">ships from Hong Kong</span>` },
+  { t: "Men's Full-Zip Fleece Jacket", m: "JD Sports", p: 3600, ph: "fleece-black.jpg", chips: `<span class="chip g">✓ 14-day cancellation</span>` },
+];
+$("rescards").innerHTML = RES.map((r, i) => `<div class="card" id="rc${i}" style="top:${204 + i * 172}px;height:160px">
+  <div class="photo" id="rp${i}" style="left:12px;top:12px;width:110px;height:136px;background-image:url(${FX + r.ph})"></div>
+  <div class="a" id="rt${i}" style="left:136px;top:16px;width:150px;font-size:16px;font-weight:600;line-height:1.25">${r.t}</div>
+  <div class="a sec" style="left:136px;top:62px;font-size:14px">${r.m}</div>
+  <div class="a" id="rpr${i}" style="right:16px;top:14px;font-size:22px;font-weight:700;letter-spacing:-.03em">${money(r.p)}${i === 0 ? `<div id="strike" class="a" style="left:0;top:14px;height:2.5px;background:#a3a19b"></div>` : ""}</div>
+  <div class="a" id="rch${i}" style="left:136px;top:116px;display:flex;gap:6px">${r.chips}</div>
+  ${i === 0 ? `<div class="a chip" id="rwhy" style="left:136px;top:116px">photo shows a nylon bomber · not the item</div>` : ""}</div>`).join("");
+const IPH = [
+  ["Pay outright", 204], ["Currys · new · UK shop", 244, "£1,199.00"], ["Argos · new · UK shop", 334, "£1,199.00"],
+  ["Pay monthly", 450], ["Vodafone · 24-month contract", 490, "£42/mo"], ["EE · 24-month contract", 580, "£49/mo"],
+];
+$("iphrows").innerHTML = IPH.map((r, i) => r.length === 2
+  ? `<div class="a" id="ip${i}" style="left:24px;top:${r[1]}px;font-size:20px;font-weight:700;letter-spacing:-.02em">${r[0]}</div>`
+  : `<div class="card" id="ip${i}" style="top:${r[1]}px;height:80px"><div class="a" style="left:18px;top:16px;font-size:16px;font-weight:600">iPhone 17 Pro Max 256GB</div><div class="a sec" style="left:18px;top:44px;font-size:14px">${r[0]}</div><div class="a" style="right:18px;top:22px;font-size:24px;font-weight:700;letter-spacing:-.03em">${r[2]}</div></div>`).join("");
+const VROWS = [
+  ["Black fleece jacket, men's M", "Facebook Marketplace", "£28.00", "private sale", "fleece-black-private.jpg"],
+  ["Men's Fleece Jacket, Black, M", "Global Outlet", "£34.00", "ships from Hong Kong", "fleece-black-overseas.jpg"],
+  ["Nike Tech Fleece Jacket", "streetwear-deals", "£22.00", "not the item", "bomber-black.jpg"],
+];
+$("verrows").innerHTML = VROWS.map((r, i) => `<div class="card" style="top:${496 + i * 84}px;height:76px${i === 2 ? ";color:#a3a19b" : ""}">
+  <div class="photo" style="left:10px;top:10px;width:56px;height:56px;background-image:url(${FX + r[4]})${i === 2 ? ";filter:grayscale(1);opacity:.55" : ""}"></div>
+  <div class="a" style="left:78px;top:12px;font-size:15px;font-weight:600">${r[0]}</div><div class="a sec" style="left:78px;top:34px;font-size:13px">${r[1]}</div>
+  <div class="a" style="right:14px;top:12px;font-size:18px;font-weight:700${i === 2 ? ";text-decoration:line-through" : ""}">${r[2]}</div>
+  <div class="a chip" style="right:14px;top:40px;height:22px;font-size:12px">${r[3]}</div></div>`).join("");
+
+// ---------- subtitles ----------
+function subAt(t) { for (const s of TL.subs) if (t >= s[0] && t < s[1]) return s; return null; }
+
+function wallet(t) {
+  let p = 0;
+  p += 5000 * clamp(sp(t, 24.7, 9));
+  p -= 3600 * clamp(sp(t, 65.6, 7));
+  p += 1260 * clamp(sp(t, 82.9, 7));
+  return money(Math.round(p));
+}
+
+function seek(t) {
+  const m = morph(t);
+  const g = { w: lerp(PH.w, LP.w, m), h: lerp(PH.h, LP.h, m), r: lerp(PH.r, LP.r, m), b: lerp(PH.b, LP.b, m) };
+  const dev = $("dev"), scr = $("scr");
+  Object.assign(dev.style, { left: -g.w / 2 + "px", top: -g.h / 2 + "px", width: g.w + "px", height: g.h + "px", borderRadius: g.r + "px" });
+  Object.assign(scr.style, { left: g.b + "px", top: g.b + "px", width: g.w - 2 * g.b + "px", height: g.h - 2 * g.b + "px", borderRadius: Math.max(6, g.r - g.b) + "px" });
+  const deck = $("deck");
+  Object.assign(deck.style, { left: -g.w * 0.56 + "px", top: g.h / 2 - 2 + "px", width: g.w * 1.12 + "px", height: "20px", borderRadius: "0 0 18px 18px", background: "#1b1b1b", opacity: clamp((m - 0.6) / 0.4) });
+  const [s, fx, fy, cx] = cam(t);
+  const away = sp(t, 104.0, 8);
+  const S = s, C = $("cam");
+  C.style.transform = `translate(${cx - fx * S}px, ${452 - fy * S}px) scale(${S})`;
+  C.style.opacity = 1 - away;
+  C.style.visibility = away > 0.995 ? "hidden" : "visible";
+
+  // phone vs laptop layer visibility: each side has its own enter/exit around the morph midpoint
+  const lapOn = clamp((m - 0.55) / 0.3), phOn = clamp((0.45 - m) / 0.3);
+  // laptop grid
+  $("lgrid").style.opacity = lapOn * (t < 20 ? 1 : 0); $("lgrid").style.visibility = t < 20 && lapOn > 0 ? "visible" : "hidden";
+  const so = sp(t, 1.0, 9);
+  $("gsort").textContent = t < 1.0 ? "Sort: relevance" : "Sort: price, low to high";
+  GRID.forEach((gg, i) => {
+    const a = slot(i), b = slot(SORTED.indexOf(i)), k = sp(t, 1.0 + 0.06 * SORTED.indexOf(i), 9);
+    const el = $("g" + i);
+    el.style.left = lerp(a[0], b[0], k) + "px"; el.style.top = lerp(a[1], b[1], k) + "px";
+    el.style.boxShadow = i === 3 ? `inset 0 0 0 ${lerp(1, 3, sp(t, 2.0))}px ${sp(t, 2.0) > 0.3 ? "#0b0b0b" : "#e7e5e0"}` : "";
+    const f = $("gf" + i); if (f) { const at = { 3: 6.4, 6: 8.4, 5: 10.4 }[i]; vis(f, sp(t, at), `scale(${lerp(.85, 1, sp(t, at))})`); }
+  });
+  // laptop reader
+  const rd = lapOn * (t > 20 && t < 40 ? 1 : 0);
+  $("lread").style.opacity = rd; $("lread").style.visibility = rd > 0 ? "visible" : "hidden";
+  const rk = clamp((t - 29.0) / 3.0);
+  $("rscan").style.top = lerp(100, 760, rk) + "px"; $("rscan").style.opacity = rk > 0 && rk < 1 ? 1 : 0;
+  $("rcount").textContent = Math.round(79 * rk) + " offers";
+  $("rbar").style.width = 316 * rk + "px";
+  vis($("rpop"), sp(t, 28.4), `translateY(${(1 - sp(t, 28.4)) * -10}px)`);
+  vis($("rsent"), sp(t, 32.3));
+
+  // phone header
+  const phVis = phOn * (t > 17 && t < 104.5 ? 1 : 0);
+  $("phead").style.opacity = phVis; $("phead").style.visibility = phVis > 0 ? "visible" : "hidden";
+  $("wallet").textContent = wallet(t);
+  const P = (id, a, b, dy) => { const o = win($(id), t, a, b, dy); $(id).style.opacity = clamp(o) * phOn; if (phOn <= 0) $(id).style.visibility = "hidden"; return o; };
+  P("on1", 18.2, 20.0); P("on2", 20.0, 22.0); P("on3", 22.0, 24.0); P("on4", 24.0, 26.0);
+  for (let i = 0; i < 6; i++) vis($("c" + i), sp(t, 22.3 + i * 0.12, 18));
+  vis($("paired"), sp(t, 23.1), `scale(${lerp(.9, 1, sp(t, 23.1))})`);
+  P("home", 26.0, 27.55);
+  const typed = "black fleece jacket medium"; $("typed").textContent = typed.slice(0, Math.floor(clamp((t - 26.05) / 0.85) * typed.length)) || " ";
+  vis($("reading"), sp(t, 27.15));
+  P("res", 34.2, W("s4", "Contracts") - 0.1);
+  vis($("research"), sp(t, 34.5));
+  RES.forEach((r, i) => { const a = 35.0 + i * 0.5; vis($("rc" + i), sp(t, a), `translateY(${(1 - sp(t, a)) * 24}px)`); });
+  const gone = sp(t, W("s4", "Gone"), 10);
+  $("rp0").style.filter = `grayscale(${gone})`; $("rp0").style.opacity = lerp(1, .55, gone);
+  $("rt0").style.color = $("rpr0").style.color = `rgb(${lerp(17, 163, gone)},${lerp(17, 161, gone)},${lerp(17, 155, gone)})`;
+  $("strike").style.width = 100 * clamp(gone) + "%";
+  vis($("rch0"), 1 - gone); vis($("rwhy"), gone);
+  P("iph", W("s4", "Contracts"), 45.9);
+  IPH.forEach((r, i) => { const a = W("s4", "Contracts") + 0.25 + i * 0.25; vis($("ip" + i), sp(t, a), `translateY(${(1 - sp(t, a)) * 18}px)`); });
+  const hl = sp(t, W("s4", "forty-two"));
+  $("ip4").style.boxShadow = `inset 0 0 0 ${lerp(1, 2.5, hl)}px ${hl > 0.3 ? "#0b0b0b" : "#e7e5e0"}`;
+
+  // verdict + drag
+  P("ver", 45.9, 71.9);
+  const v = sliderV(t);
+  $("mval").textContent = Math.round(v) + "%";
+  $("mfill").style.width = (v / 50) * 382 + "px"; $("mthumb").style.left = TX(v) + "px";
+  const flip = FLIP_ON ? sp(t, FLIP_ON, 12) * (1 - sp(t, FLIP_OFF || 999, 12)) : 0;
+  vis($("pickA"), 1 - flip, `scale(${lerp(1, .97, flip)})`); vis($("pickB"), flip, `scale(${lerp(.97, 1, flip)})`);
+  vis($("mnoteA"), 1 - flip); vis($("mnoteB"), flip); vis($("apA"), 1 - flip); vis($("apB"), flip);
+  $("mnoteB").textContent = `outside your ${Math.round(v)}%`;
+  const sheetIn = sp(t, 62.9, 11), sheetOut = sp(t, 66.7, 11);
+  $("dim").style.opacity = 0.38 * sheetIn * (1 - sheetOut); $("dim").style.visibility = sheetIn * (1 - sheetOut) > 0.003 ? "visible" : "hidden";
+  $("sheet").style.transform = `translateY(${(1 - sheetIn + sheetOut) * 500}px)`;
+  $("sheet").style.visibility = sheetIn * (1 - sheetOut) > 0.002 ? "visible" : "hidden";
+  const ok = sp(t, 65.4, 12);
+  $("scanR").setAttribute("transform", `rotate(${(t - 64) * 360} 48 48)`);
+  $("scanR").style.opacity = clamp((t - 63.8) / 0.2) * (1 - ok);
+  $("okD").style.opacity = ok; $("okD").setAttribute("r", 46 * clamp(ok, 0, 1.02));
+  $("okC").style.strokeDashoffset = 64 * (1 - clamp((t - 65.55) / 0.35));
+  $("okC").style.opacity = t > 65.5 ? 1 : 0;
+  vis($("fidA"), 1 - ok); vis($("fidB"), ok);
+  $("swal").textContent = t < 65.6 ? "£50.00" : wallet(t);
+  vis($("setlim"), sp(t, 67.0) * (1 - sp(t, 69.4)));
+  const ls = sp(t, 67.8, 11) * (1 - sp(t, 69.25, 11));
+  $("lsheet").style.transform = `translateY(${(1 - ls) * 400}px)`; $("lsheet").style.visibility = ls > 0.002 ? "visible" : "hidden";
+  vis($("watch"), sp(t, 69.5), `translateY(${(1 - sp(t, 69.5)) * 12}px)`);
+
+  // orders
+  P("ord", 71.9, 85.9);
+  const sw = sp(t, 82.2);
+  vis($("oAleft"), 1 - sw); vis($("oAret"), sw); $("oAring").style.opacity = lerp(1, .25, sw);
+  vis($("oB"), sp(t, 82.6), `translateY(${(1 - sp(t, 82.6)) * 20}px)`);
+  const al = sp(t, W("s7", "Inside"), 11) * (1 - sp(t, 81.9));
+  vis($("alert"), al, `translateY(${(1 - sp(t, W("s7", "Inside"), 11)) * -40}px)`);
+  const s0 = W("s7", "Twelve") - 0.4;
+  vis($("sum"), sp(t, s0) * (1 - sp(t, 81.9)));
+  ["su1", "su2", "su3", "su4", "su5"].forEach((id, i) => vis($(id), sp(t, s0 + 0.1 + i * 0.22), `translateY(${(1 - sp(t, s0 + 0.1 + i * 0.22)) * 10}px)`));
+  const clr = sp(t, W("s7", "clears"));
+  vis($("su6"), clr, `scale(${lerp(.8, 1, clr)})`);
+  vis($("swbtn"), sp(t, 80.9) * (1 - sp(t, 82.0)));
+
+  // aftercare
+  P("aft", 85.9, 93.9);
+  vis($("u1"), sp(t, 86.2), `translateY(${(1 - sp(t, 86.2)) * 16}px)`);
+  vis($("b1"), sp(t, W("s8", "A")), `translateY(${(1 - sp(t, W("s8", "A"))) * 16}px)`);
+  vis($("u2"), sp(t, 90.2), `translateY(${(1 - sp(t, 90.2)) * 16}px)`);
+  vis($("b2"), sp(t, 91.4), `translateY(${(1 - sp(t, 91.4)) * 16}px)`);
+
+  // settings + year
+  P("set", 93.9, 104.6, 0);
+  const mh = sp(t, 94.4);
+  $("mem").style.boxShadow = `inset 0 0 0 ${2 * mh}px #0b0b0b`;
+  const yo = sp(t, 98.3, 9);
+  const r0 = [24, 540, 382, 60], r1 = [16, 150, 398, 640];
+  const yr = r0.map((a, i) => lerp(a, r1[i], yo));
+  Object.assign($("year").style, { left: yr[0] + "px", top: yr[1] + "px", width: yr[2] + "px", height: yr[3] + "px", opacity: clamp(yo * 3), visibility: yo > 0.003 ? "visible" : "hidden" });
+  $("yin").style.opacity = sp(t, 98.7);
+  $("ykept").textContent = "£" + Math.round(1284 * clamp(sp(t, 98.9, 3.2))).toLocaleString("en-GB");
+  ["y1", "y2", "y3"].forEach((id, i) => { const a = W("s10", "one") + 0.9 + i * 0.5; vis($(id), sp(t, a), `translateY(${(1 - sp(t, a)) * 14}px)`); });
+
+  // finger
+  let fo = 0, fx2 = 0, fy2 = 0, press = 0, ring = -1;
+  for (const [tt, x, y] of TAPS) {
+    if (t > tt - 0.5 && t < tt + 0.6) { const e = sp(t, tt - 0.45, 12) * (1 - sp(t, tt + 0.3, 12)); fo = e; fx2 = x; fy2 = y + (1 - sp(t, tt - 0.45, 12)) * 40; press = t > tt ? Math.exp(-(t - tt) * 10) : 0; ring = t - tt; }
+  }
+  if (t > DRAG.land - 0.45 && t < DRAG.up + 0.6) {
+    const e = sp(t, DRAG.land - 0.45, 12) * (1 - sp(t, DRAG.up, 12));
+    fo = e; fx2 = TX(t < DRAG.up ? dragV(t) : dragV(DRAG.up)); fy2 = 438 + (1 - sp(t, DRAG.land - 0.45, 12)) * 40;
+    press = t > DRAG.land && t < DRAG.up ? 1 : 0; ring = t - DRAG.land;
+  }
+  const F = $("finger"); F.style.left = fx2 + "px"; F.style.top = fy2 + "px"; F.style.opacity = clamp(fo) * phOn; F.style.visibility = fo > 0.003 && phOn > 0 ? "visible" : "hidden";
+  $("fdot").style.transform = `scale(${1 - 0.14 * press})`;
+  const rp = ring >= 0 && ring < 0.45 ? ring / 0.45 : 1;
+  $("fring").style.transform = `scale(${1 + 1.3 * rp})`; $("fring").style.opacity = ring >= 0 ? 0.7 * (1 - rp) : 0;
+
+  // callout
+  let co = 0, cn = "", cl = "", cdy = 0;
+  for (const [a, b, n, l] of CALLS) if (t > a - 0.01 && t < b + 0.8) { const e = sp(t, a), x = sp(t, b); co = e * (1 - x); cn = n; cl = l; cdy = (1 - e) * 24; }
+  $("callN").textContent = cn; $("callL").textContent = cl; vis($("call"), co, `translateY(${cdy}px)`);
+
+  // subtitle
+  const sb = subAt(t);
+  $("subT").textContent = sb ? sb[2] : "";
+  $("sub").style.opacity = sb ? clamp((t - sb[0]) / 0.06) : 0;
+
+  // end card
+  const e1 = sp(t, 104.5), e2 = sp(t, 105.0), eo = sp(t, 105.9);
+  const w1 = $("eW1"), w2 = $("eW2");
+  vis(w1, e1 * (1 - eo), `translateY(${(1 - e1) * 30}px)`); vis(w2, e2 * (1 - eo), `translateY(${(1 - e2) * 30}px)`);
+  const mk = sp(t, 106.0, 11), sl = sp(t, 107.0, 8);
+  const LW = 716.7, markW = 180, lockLeft = 960 - LW / 2;
+  const markX = lerp(960 - markW / 2, lockLeft, sl);
+  vis($("eMark"), mk, `scale(${lerp(.6, 1, mk)})`); $("eMark").style.left = markX + "px";
+  const wr = $("eWordWrap"), revealW = (LW - 180) * clamp(sl * 1.02);
+  wr.style.left = markX + 180 + "px"; wr.style.width = revealW + "px"; wr.style.visibility = t > 107 ? "visible" : "hidden";
+  $("eWord").style.left = -180 + "px";
+  win($("eTag"), t, 110.0, 999, 20); win($("eUrl"), t, 112.0, 999, 20); win($("eSoon"), t, 112.5, 999, 20);
+}
+window.seek = seek;
+window.FILM = { duration: DUR, bpm: BPM, taps: TAPS.map(x => x[0]).concat([DRAG.land]) };
+seek(0);
+</script>
+</body></html>

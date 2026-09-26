@@ -1,0 +1,13 @@
+[
+ {"id": "s1", "bars": [1, 3], "ssml": "The cheapest listing is usually cheap for a reason. Covered knows the difference."},
+ {"id": "s2", "bars": [4, 9], "ssml": "The photo shows the wrong item. The seller owes you nothing. The 'shop' ships from abroad. A price sort can't see any of it."},
+ {"id": "s3", "bars": [10, 13], "ssml": "Set it up once: what you'll pay for UK rights, and what's worth a switch. Pair your laptop. Top up."},
+ {"id": "s4", "bars": [14, 23], "ssml": "Search from your phone. Covered reads Google Shopping in your own browser, works out what the product is, and judges every listing, ads included, from the photos. This one says fleece. The photo says bomber. Gone. Contracts get their own list, so forty-two a month never passes for a cheap phone."},
+ {"id": "s5", "bars": [24, 31], "ssml": "Now the real choice. Private seller, twenty-eight. UK shop, thirty-six. The private one is twenty-two percent cheaper, inside your twenty-five, so Covered keeps your rights. Set fifteen, and it takes the private deal, and says what you gave up."},
+ {"id": "s6", "bars": [32, 36], "ssml": "Buy it now with Face ID, from your Covered wallet. Or set a limit, and it buys only when the real item hits your price."},
+ {"id": "s7", "bars": [37, 43], "ssml": "Then it keeps watching. Inside your fourteen days, the same fleece drops at another UK shop. Twelve pounds sixty saved after postage. That clears your eight, so it switches."},
+ {"id": "s8", "bars": [44, 47], "ssml": "Something breaks? A refund under the thirty-day right, not a voucher. Ask it to fake a fault, and it won't."},
+ {"id": "s9", "bars": [48, 49], "ssml": "It learns only from what you approve."},
+ {"id": "s10", "bars": [50, 52], "ssml": "It adds up. A sample year: one thousand, two hundred and eighty-four pounds kept."},
+ {"id": "s11", "bars": [53, 60], "ssml": "Covered. It doesn't buy the cheapest listing. It buys the cheapest one that's actually the item, and still has your rights."}
+]
