@@ -85,6 +85,7 @@ export async function fulfillPurchase(input: FulfillInput): Promise<FulfillOk | 
         merchant: chosenMerchant(receipt.chosen),
         price_pence: pricePence,
         section: receipt.section,
+        aftercare: [],
       },
       event: {
         kind: "approve",

@@ -30,6 +30,7 @@ export const QUERY_MAX = 200;
 export const DISPLAY_NAME_MAX = 40;
 export const ORDERS_MAX = 50;
 export const DEPOSITS_MAX = 20;
+export const AFTERCARE_MAX = 20;
 export const TITLE_MAX = 200;
 export const MERCHANT_MAX = 120;
 /** A single deposit cannot exceed £500. */
@@ -56,6 +57,19 @@ export const MemoryEventSchema = z.object({
 });
 export type MemoryEvent = z.infer<typeof MemoryEventSchema>;
 
+export const AftercareRemedySchema = z.enum(["refund", "replace", "repair", "none"]);
+export type AftercareRemedy = z.infer<typeof AftercareRemedySchema>;
+
+/** One returns / fault request drafted on an approved order. Never a purchase event. */
+export const AftercareEntrySchema = z.object({
+  /** ISO 8601 timestamp. */
+  t: z.string(),
+  remedy: AftercareRemedySchema,
+  refused: z.boolean(),
+  note: z.string().max(NOTE_MAX),
+});
+export type AftercareEntry = z.infer<typeof AftercareEntrySchema>;
+
 export const OrderRecordSchema = z.object({
   id: z.string().max(80),
   /** ISO 8601 timestamp. */
@@ -65,6 +79,8 @@ export const OrderRecordSchema = z.object({
   merchant: z.string().max(MERCHANT_MAX),
   price_pence: z.number().int(),
   section: ReceiptSectionSchema,
+  /** Returns and fault requests on this order. Capped at AFTERCARE_MAX. */
+  aftercare: z.array(AftercareEntrySchema).max(AFTERCARE_MAX).default([]),
 });
 export type OrderRecord = z.infer<typeof OrderRecordSchema>;
 
@@ -205,6 +221,10 @@ export function capMemory(memory: Memory): Memory {
       query: o.query.slice(0, QUERY_MAX),
       title: o.title.slice(0, TITLE_MAX),
       merchant: o.merchant.slice(0, MERCHANT_MAX),
+      aftercare: (o.aftercare ?? []).slice(-AFTERCARE_MAX).map((entry) => ({
+        ...entry,
+        note: entry.note.slice(0, NOTE_MAX),
+      })),
     })),
     deposits: memory.deposits.slice(-DEPOSITS_MAX),
     limits: (memory.limits ?? []).slice(-LIMITS_MAX).map((limit) => ({
@@ -348,6 +368,28 @@ export async function debitAndRecordPurchase(
   };
   const memory = await saveMemory(userId, next);
   return { ok: true, memory };
+}
+
+/**
+ * Append one aftercare request to an approved order. Does not write an approve
+ * event and does not debit the wallet.
+ */
+export async function recordAftercare(
+  userId: string,
+  orderId: string,
+  entry: AftercareEntry,
+): Promise<Memory | null> {
+  const current = await getMemory(userId);
+  const index = current.orders.findIndex((o) => o.id === orderId);
+  if (index === -1) return null;
+  const orders = current.orders.map((order, i) => {
+    if (i !== index) return order;
+    return {
+      ...order,
+      aftercare: [...(order.aftercare ?? []), entry].slice(-AFTERCARE_MAX),
+    };
+  });
+  return saveMemory(userId, { ...current, orders });
 }
 
 /**
