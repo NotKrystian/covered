@@ -26,6 +26,9 @@ BEDROCK_REGION="${BEDROCK_REGION:-$REGION}"
 BEDROCK_MODEL_ID="${1:-${BEDROCK_MODEL_ID:-}}"
 CODEBUILD_PROJECT="${CODEBUILD_PROJECT:-covered-image}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
+# Browser-less runtime stage: App Runner runs with COVERED_READER_DISABLED=1, so
+# the Dockerfile's default Playwright runtime image (for the EC2 path) is not wanted here.
+RUNTIME_IMAGE="${RUNTIME_IMAGE:-node:22-slim}"
 
 log() { printf '\033[1;34m[deploy]\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31m[deploy] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -50,7 +53,7 @@ build_local() {
   log "docker daemon found: building linux/amd64 locally"
   aws ecr get-login-password --region "$REGION" \
     | docker login --username AWS --password-stdin "${ECR_URI%%/*}" >/dev/null
-  docker buildx build --platform linux/amd64 \
+  docker buildx build --platform linux/amd64 --build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}" \
     -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" --push .
 }
 
@@ -73,6 +76,7 @@ build_remote() {
     --environment-variables-override \
       "name=ECR_URI,value=${ECR_URI},type=PLAINTEXT" \
       "name=IMAGE_TAG,value=${IMAGE_TAG},type=PLAINTEXT" \
+      "name=RUNTIME_IMAGE,value=${RUNTIME_IMAGE},type=PLAINTEXT" \
     --query 'build.id' --output text)"
   log "codebuild $build_id started (logs: CloudWatch /aws/codebuild/${CODEBUILD_PROJECT})"
   while :; do
