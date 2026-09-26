@@ -64,11 +64,11 @@ run_ssm() {
     --query 'Command.CommandId' --output text)
   log "ssm command ${cmd_id}: ${comment}"
 
-  local status
+  local ssm_status
   while :; do
-    status=$(aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$id" \
+    ssm_status=$(aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$id" \
       --query Status --output text 2>/dev/null || echo Pending)
-    case "$status" in
+    case "$ssm_status" in
       Pending|InProgress|Delayed) sleep 5 ;;
       *) break ;;
     esac
@@ -79,8 +79,8 @@ run_ssm() {
   aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$id" \
     --query 'StandardErrorContent' --output text >&2
 
-  if [ "$status" != "Success" ]; then
-    log "remote status: ${status} (full log: s3://${DEPLOY_BUCKET}/ssm/${cmd_id}/)"
+  if [ "$ssm_status" != "Success" ]; then
+    log "remote status: ${ssm_status} (full log: s3://${DEPLOY_BUCKET}/ssm/${cmd_id}/)"
     return 1
   fi
 }
