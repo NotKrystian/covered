@@ -84,3 +84,49 @@ run_ssm() {
     return 1
   fi
 }
+
+# Published Cloudflare IPv4 ranges (https://www.cloudflare.com/ips-v4). Used to
+# lock origin :443 to the proxy so we can terminate TLS on the box.
+CLOUDFLARE_IPV4=(
+  173.245.48.0/20
+  103.21.244.0/22
+  103.22.200.0/22
+  103.31.4.0/22
+  141.101.64.0/18
+  108.162.192.0/18
+  190.93.240.0/20
+  188.114.96.0/20
+  197.234.240.0/22
+  198.41.128.0/17
+  162.158.0.0/15
+  104.16.0.0/13
+  104.24.0.0/14
+  172.64.0.0/13
+  131.0.72.0/22
+)
+
+# Open 443/tcp on the covered-web SG if missing. Prefer Cloudflare IPv4 only;
+# fall back to 0.0.0.0/0 so a hackathon demo still works if the list is rejected.
+ensure_https_sg() {
+  local sg_id="$1"
+  local existing
+  existing=$(aws ec2 describe-security-groups --group-ids "$sg_id" \
+    --query 'SecurityGroups[0].IpPermissions[?FromPort==`443`]' --output json)
+  if [ "$existing" != "[]" ]; then
+    log "security group ${sg_id} already allows 443"
+    return 0
+  fi
+  local ranges perm
+  ranges=$(printf '%s\n' "${CLOUDFLARE_IPV4[@]}" | jq -R . | jq -s .)
+  perm=$(jq -cn --argjson cidrs "$ranges" '[{
+    IpProtocol: "tcp", FromPort: 443, ToPort: 443,
+    IpRanges: [ $cidrs[] | {CidrIp: ., Description: "cloudflare"} ]
+  }]')
+  if aws ec2 authorize-security-group-ingress --group-id "$sg_id" --ip-permissions "$perm" >/dev/null; then
+    log "opened 443/tcp from Cloudflare IPv4 on ${sg_id}"
+    return 0
+  fi
+  log "Cloudflare-only 443 failed; opening 443/tcp from 0.0.0.0/0"
+  aws ec2 authorize-security-group-ingress --group-id "$sg_id" \
+    --ip-permissions 'IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0,Description=https}]' >/dev/null
+}

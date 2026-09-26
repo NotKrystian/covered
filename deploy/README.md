@@ -1,9 +1,11 @@
 # Deploy — Covered on AWS
 
 One `t4g.medium` (Graviton, arm64) in `eu-west-2` runs the app as a Docker
-container. Cloudflare proxies `covered.kawuc.uk` to the instance's public IP and
-terminates TLS; the box only listens on port 80. No SSH, no key pairs: shell
-access is `aws ssm start-session`.
+container. Cloudflare proxies `covered.kawuc.uk` to the instance's public IP.
+The Next container still listens on host `:80`; nginx on the box terminates
+TLS on `:443` and `proxy_pass`es to `http://127.0.0.1:80`. Zone SSL is left
+alone (other `kawuc.uk` hostnames keep Full / Full (strict)); do not flip the
+zone to Flexible. No SSH, no key pairs: shell access is `aws ssm start-session`.
 
 Everything is scripted and idempotent under `deploy/aws/`. All resources are
 tagged `Project=covered`. No secrets anywhere: the container authenticates to
@@ -16,7 +18,7 @@ Bedrock, S3 and DynamoDB with the instance's IAM role.
 | ECR repository | `covered` → `616532055961.dkr.ecr.eu-west-2.amazonaws.com/covered` | `:latest` + one tag per deploy; lifecycle keeps the last 5 images |
 | S3 bucket | `covered-deploy-616532055961` | source tarballs for remote builds + SSM command output; objects expire after 7 days; public access blocked |
 | IAM role + instance profile | `covered-ec2` | `AmazonSSMManagedInstanceCore` + inline `covered-app`: `bedrock:InvokeModel*` on `*`, `s3:Get/Put/List` on `covered-hack-616532055961` and the deploy bucket, `dynamodb:Get/Put/Update/DeleteItem` on `covered-memory`, ECR pull + push on `covered` |
-| Security group | `covered-web` (default VPC) | inbound `80/tcp` from `0.0.0.0/0`; no `22` |
+| Security group | `covered-web` (default VPC) | inbound `80/tcp` from `0.0.0.0/0`; inbound `443/tcp` from Cloudflare IPv4 (fallback `0.0.0.0/0`); no `22` |
 | EC2 instance | tag `Name=covered-web`, `t4g.medium`, 20 GB gp3, latest AL2023 arm64 | public IP, IMDSv2 (hop limit 2 so the container can reach the role), Docker from user-data, 2 GB swap |
 
 The receipts bucket `covered-hack-616532055961` is **not** created or modified
@@ -26,11 +28,12 @@ here (Infra owns it); the role is only granted access to it. Same for the
 Current deployment: instance `i-0be6351eb53244b66`, public IP `3.8.77.227`
 (`deploy/aws/status.sh` prints the live value).
 
-## The three commands
+## The commands
 
 ```bash
-deploy/aws/up.sh        # create anything missing, launch the box, first deploy
+deploy/aws/up.sh        # create anything missing, launch the box, first deploy, origin TLS
 deploy/aws/redeploy.sh  # after every code change: build image, push, restart
+deploy/aws/tls.sh       # nginx :443 + origin cert (idempotent; up.sh runs this)
 deploy/aws/status.sh    # state, public IP, curl -sI, last 30 container log lines
 ```
 
@@ -63,7 +66,8 @@ deploy/aws/redeploy.sh
 - `next.config.ts` also sets `outputFileTracingIncludes` for `playwright`/`playwright-core`: Next's tracer misses `browsers.json` and the reader crashes in the standalone bundle without it.
 
 On the box: `/opt/covered/run.sh` (pull + restart), `/opt/covered/env`,
-`/opt/covered/build.log` (last remote build), `/opt/covered/src` (last shipped tree).
+`/opt/covered/build.log` (last remote build), `/opt/covered/src` (last shipped tree),
+`/opt/covered/tls/` (origin cert + key; nginx only, never logged).
 
 ```bash
 aws ssm start-session --target <instance-id>     # needs the session-manager-plugin
@@ -75,15 +79,34 @@ sudo docker logs -f covered
 ```bash
 IP=$(deploy/aws/status.sh | awk '/public ip/ {print $3}')
 curl -sI "http://$IP/"                                              # 200 from Next
+curl -sI "https://covered.kawuc.uk/"                                # 200 via Cloudflare → origin :443
 curl -s -X POST "http://$IP/api/decide" -H 'content-type: application/json' \
   -d '{"query":"black fleece jacket medium","source":"fixture"}'    # JSON verdict
 curl -s -X POST "http://$IP/api/search" -H 'content-type: application/json' \
   -d '{"query":"black fleece jacket medium"}'                       # from an AWS IP Google serves /sorry/ → typed `challenge` live error → snapshot fallback
 ```
 
-Verified 2026-09-26: `/` 200; `/api/decide` returns a verdict with `mode: "bedrock"`
-(~13 s); `/api/search` returns 200 with `source: "snapshot"` after Chromium hit
-Google's interstitial (visible in `docker logs`).
+## HTTPS
+
+Cloudflare's zone SSL mode for `kawuc.uk` stays whatever it already is (Full
+or Full (strict) on this zone). A 522 on `https://covered.kawuc.uk` with
+`http://3.8.77.227/` returning 200 means Cloudflare is connecting to origin
+`:443` and nothing was listening.
+
+`deploy/aws/tls.sh` installs host nginx on `:443` only and proxies to the
+existing Docker mapping `80:3000`. Cert order: Cloudflare Origin CA (15 year,
+`POST /certificates`) → Let's Encrypt DNS-01 → self-signed on the instance.
+The token in `~/.config/covered/cloudflare.env` can edit DNS but cannot mint
+Origin CA (API 1016), cannot read `/zones/.../settings/ssl` (9109), and cannot
+write Page / Configuration Rules. Zone SSL is **Full (strict)** (526 against
+a self-signed origin; the GET is unauthorized). DNS-01 Let's Encrypt is what
+makes HTTPS work without changing the zone default. Do not flip the zone to
+Flexible.
+
+Verified 2026-09-26: `https://covered.kawuc.uk` → 200, title Covered;
+`http://3.8.77.227/` still 200; `/api/decide` returns a verdict with
+`mode: "bedrock"` (~13 s); `/api/search` returns 200 with `source: "snapshot"`
+after Chromium hit Google's interstitial (visible in `docker logs`).
 
 ## Cost (eu-west-2, on-demand, USD)
 

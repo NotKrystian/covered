@@ -23,6 +23,9 @@ if [ -n "$IP" ]; then
   echo
   echo "== curl -sI http://${IP}/"
   curl -sI -m 10 "http://${IP}/" | head -n 12 || echo "(no answer)"
+  echo
+  echo "== curl -sI https://covered.kawuc.uk/"
+  curl -sI -m 15 "https://covered.kawuc.uk/" | head -n 12 || echo "(no answer)"
 fi
 
 if [ "$STATE" = "running" ]; then

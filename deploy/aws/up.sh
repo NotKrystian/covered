@@ -90,7 +90,7 @@ if ! aws iam get-instance-profile --instance-profile-name "$PROFILE_NAME" \
   log "waiting for instance profile to propagate"; sleep 10
 fi
 
-# ---- security group (80/tcp in from anywhere; Cloudflare proxies + TLS) -----
+# ---- security group (80/tcp anywhere; 443/tcp from Cloudflare for origin TLS) -----
 VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
 [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ] || die "no default VPC in ${AWS_REGION}"
 SG_ID=$(aws ec2 describe-security-groups \
@@ -99,7 +99,7 @@ SG_ID=$(aws ec2 describe-security-groups \
 if [ -z "$SG_ID" ]; then
   log "creating security group ${SG_NAME}"
   SG_ID=$(aws ec2 create-security-group --group-name "$SG_NAME" --vpc-id "$VPC_ID" \
-    --description "Covered web: 80/tcp from the internet (Cloudflare-proxied)" \
+    --description "Covered web: 80/tcp from the internet; 443/tcp from Cloudflare" \
     --tag-specifications "ResourceType=security-group,Tags=[{Key=Project,Value=${PROJECT}}]" \
     --query GroupId --output text)
   aws ec2 authorize-security-group-ingress --group-id "$SG_ID" \
@@ -107,6 +107,7 @@ if [ -z "$SG_ID" ]; then
 else
   log "security group ${SG_NAME} = ${SG_ID}"
 fi
+ensure_https_sg "$SG_ID"
 
 # ---- EC2 instance -----------------------------------------------------------
 INSTANCE_ID=$(find_instance)
@@ -191,5 +192,6 @@ aws ec2 wait instance-status-ok --instance-ids "$INSTANCE_ID"
 wait_for_ssm "$INSTANCE_ID"
 log "public IP: $(instance_ip "$INSTANCE_ID")"
 
-# ---- first deploy ---------------------------------------------------------------
-exec "$HERE/redeploy.sh"
+# ---- first deploy, then origin TLS (nginx :443 → container :80) -----------------
+"$HERE/redeploy.sh"
+exec "$HERE/tls.sh"
