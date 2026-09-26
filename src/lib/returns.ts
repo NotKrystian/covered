@@ -70,10 +70,10 @@ export function returnState(order: OrderRecord, now: number = Date.now()): Retur
           : `Returned. ${order.refund_pence !== undefined ? `${formatPence(order.refund_pence)} went back to your demo wallet.` : ""}`.trim(),
     };
   }
-  if (likelyPrivateSeller(order.merchant)) {
+  if (order.seller_type === "private" || likelyPrivateSeller(order.merchant)) {
     return {
       kind: "private",
-      note: `${order.merchant} looks like a private seller: no 14-day cooling-off and no Consumer Rights Act quality right. You can only challenge a false description.`,
+      note: `${order.merchant} ${order.seller_type === "private" ? "is" : "looks like"} a private seller: no 14-day cooling-off and no Consumer Rights Act quality right. You can only challenge a false description.`,
     };
   }
 

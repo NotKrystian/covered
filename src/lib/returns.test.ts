@@ -53,6 +53,12 @@ test("a private seller gets no statutory options", () => {
   assert.equal(state.kind, "private");
 });
 
+test("an order the judge rated private gets no options even when the merchant name does not say so", () => {
+  const state = returnState(order({ merchant: "eBay · jess_k", seller_type: "private" }), T0 + DAY);
+  assert.equal(state.kind, "private");
+  assert.match(state.kind === "private" ? state.note : "", /^eBay · jess_k is a private seller/);
+});
+
 test("returned and switched orders are done; requests show as a status", () => {
   assert.equal(returnState(order({ cancelled_at: new Date(T0).toISOString(), refund_pence: 3600 }), T0).kind, "done");
   assert.equal(returnStatus(order({ cancelled_at: "x", switched_to: "o2" })), "switched");
