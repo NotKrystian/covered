@@ -26,6 +26,9 @@ import {
 } from "@/lib/memory";
 import {
   coolingOffBlock,
+  demoDrop,
+  demoDropPending,
+  demoMarketOffers,
   evaluateSwitch,
   isSwitchWatching,
   returnPostagePence,
@@ -76,14 +79,10 @@ export type SwitchRunResult =
 
 /**
  * Judge a fresh grid for the order's query and store the outcome on the order.
- * `simulated` marks the labelled demo grid so the UI never passes it off as real.
+ * The demo market's price cut, once due, joins every check first (so it replaces the
+ * shop's old listing, as a real cut would); an offer it wins is marked `simulated`.
  */
-export async function runSwitchCheck(
-  userId: string,
-  orderId: string,
-  offers: Offer[],
-  options: { simulated: boolean },
-): Promise<SwitchRunResult> {
+export async function runSwitchCheck(userId: string, orderId: string, offers: Offer[]): Promise<SwitchRunResult> {
   const current = await getMemory(userId);
   const order = current.orders.find((o) => o.id === orderId);
   if (!order) return { ok: false, status: 404, error: "Order not found" };
@@ -91,16 +90,16 @@ export async function runSwitchCheck(
     return { ok: false, status: 409, error: notWatchingError(order) };
   }
 
-  const parsed = offers
+  const market = demoMarketOffers(order);
+  const parsed = [...market, ...offers]
     .map((offer) => OfferSchema.safeParse(offer))
     .filter((result) => result.success)
     .map((result) => result.data);
   const checkedAt = new Date().toISOString();
-  const prefix = options.simulated ? "demo simulation: " : "";
 
   let check: SwitchCheck;
   if (parsed.length === 0) {
-    check = { checked_at: checkedAt, note: `${prefix}no listings came back`, offer: null };
+    check = { checked_at: checkedAt, note: "no listings came back", offer: null };
   } else {
     const researched = await researchProduct(order.query);
     const hydrated = await hydrateOfferPhotos(parsed);
@@ -111,16 +110,20 @@ export async function runSwitchCheck(
     });
     const verdict = evaluateSwitch(order, built.all, judged.decisions, current.settings);
     if (verdict.ok && verdict.item.price_pence !== null) {
+      const { item } = verdict;
+      const fromMarket = market.some(
+        (m) => m.title === item.title && m.merchant === item.merchant && m.price_pence === item.price_pence,
+      );
       const chosen =
         verdict.item.raw.kind === "offer"
           ? { ...verdict.item.raw.offer, image_data_url: null } // keep the memory item small
           : verdict.item.raw.listing;
       check = {
         checked_at: checkedAt,
-        note: `${prefix}${verdict.note}`,
+        note: verdict.note,
         offer: {
           found_at: checkedAt,
-          simulated: options.simulated,
+          simulated: fromMarket,
           chosen_id: verdict.item.id,
           chosen,
           decision: verdict.decision,
@@ -134,7 +137,7 @@ export async function runSwitchCheck(
         },
       };
     } else {
-      check = { checked_at: checkedAt, note: `${prefix}${verdict.note}`, offer: null };
+      check = { checked_at: checkedAt, note: verdict.note, offer: null };
     }
   }
 
@@ -143,6 +146,25 @@ export async function runSwitchCheck(
   const saved = await saveMemory(userId, patchOrder(latest, orderId, (o) => ({ ...o, switch_check: check })));
   const updated = saved.orders.find((o) => o.id === orderId) ?? { ...order, switch_check: check };
   return { ok: true, order: updated, found: check.offer !== null };
+}
+
+/**
+ * The dashboard's watcher at demo cadence: checks each watching order whose demo-market
+ * cut is due and has not been checked since, with no browser read. Nothing else is
+ * judged, so polling costs nothing until a price moves. Returns the orders re-checked.
+ */
+export async function runDueSwitchChecks(userId: string, now: Date = new Date()): Promise<OrderRecord[]> {
+  const memory = await getMemory(userId);
+  const due = memory.orders.filter((order) => {
+    const drop = demoDrop(order);
+    return isSwitchWatching(order, now) && drop !== null && drop.due_at <= now && demoDropPending(order);
+  });
+  const checked: OrderRecord[] = [];
+  for (const order of due) {
+    const result = await runSwitchCheck(userId, order.id, []);
+    if (result.ok) checked.push(result.order);
+  }
+  return checked;
 }
 
 export type SwitchAcceptResult =

@@ -14,7 +14,7 @@
  */
 import type { Decision, Offer, SellerType, UserSettings } from "@/lib/types";
 import { isProtected, type ShortlistItem } from "@/lib/decision";
-import type { OrderRecord } from "@/lib/memory";
+import type { OrderRecord, SwitchOffer } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
 import { shippingPence } from "@/lib/sort-listings";
 
@@ -23,8 +23,8 @@ const HOUR_MS = 3_600_000;
 const UK_TIME_ZONE = "Europe/London";
 /** A typical UK tracked return label for a small parcel. Always shown as an estimate. */
 export const RETURN_POSTAGE_PENCE = 399;
-/** How far the labelled demo simulation drops the price. */
-export const SIMULATED_DROP = 0.35;
+/** Demo market: how long after purchase the shop cuts its price. */
+export const DEMO_DROP_AFTER_MS = 30_000;
 
 const ukParts = new Intl.DateTimeFormat("en-GB", {
   timeZone: UK_TIME_ZONE,
@@ -109,14 +109,25 @@ export type SwitchEvaluation =
       postage_pence: number;
       delivery_pence: number;
       clear_pence: number;
+      /** True when the saving reaches the buyer's switch minimum: worth an alert. */
+      clears_minimum: boolean;
       note: string;
     }
   | { ok: false; note: string };
 
+/** Old price − new price − new delivery: how much less the item costs now. */
+export function lessByPence(
+  order: Pick<OrderRecord, "price_pence">,
+  offer: Pick<SwitchOffer, "price_pence" | "delivery_pence">,
+): number {
+  return order.price_pence - offer.price_pence - offer.delivery_pence;
+}
+
 /**
  * Pick the listing the judge rates as the same item from a UK business with the lowest
- * price plus delivery, and switch only if old price − new price − new delivery − return
- * postage clears the buyer's minimum. Delivery the grid does not state counts as £0.
+ * price plus delivery. It is a find whenever old price − new price − new delivery − return
+ * postage leaves the buyer something; the buyer's switch minimum only decides whether
+ * Covered raises an alert. Delivery the grid does not state counts as £0.
  */
 export function evaluateSwitch(
   order: OrderRecord,
@@ -136,17 +147,11 @@ export function evaluateSwitch(
       best = { item, price: item.price_pence, delivery };
     }
   }
-  if (!best) {
-    return { ok: false, note: "no cheaper listing from a UK business" };
-  }
-  const clear = order.price_pence - best.price - best.delivery - postage;
-  const priceText = `${best.item.merchant} at ${formatPence(best.price)}${best.delivery > 0 ? ` + ${formatPence(best.delivery)} delivery` : ""}`;
-  const postageText = postage > 0 ? `after ${formatPence(postage)} return postage` : "with free returns";
-  if (clear < settings.switch_minimum_pence) {
-    return {
-      ok: false,
-      note: `best is ${priceText}: you would clear ${formatPence(clear)} ${postageText}, under your ${formatPence(settings.switch_minimum_pence)}`,
-    };
+  if (!best) return { ok: false, note: "nothing cheaper yet" };
+  const less = order.price_pence - best.price - best.delivery;
+  const clear = less - postage;
+  if (clear <= 0) {
+    return { ok: false, note: `${formatPence(less)} less at ${best.item.merchant}, but return postage costs more` };
   }
   const decision = decisions[best.item.id] as Decision;
   return {
@@ -156,27 +161,54 @@ export function evaluateSwitch(
     postage_pence: postage,
     delivery_pence: best.delivery,
     clear_pence: clear,
-    note: `${priceText}: you clear ${formatPence(clear)} ${postageText}`,
+    clears_minimum: clear >= settings.switch_minimum_pence,
+    note: `found for ${formatPence(less)} less at ${best.item.merchant}`,
   };
 }
 
 /**
- * The labelled demo: the same listing at SIMULATED_DROP off. It still goes through the
- * real judge and the real rule; only the price is made up, and the UI says so.
+ * The demo market: the shop cuts its own price once, 25–40% (fixed per order) and
+ * priced the way shops price (£24.99, not £23.40), DEMO_DROP_AFTER_MS after purchase.
+ * An order that is itself a switch never drops again.
  */
-export function simulatedDropOffers(order: OrderRecord): Offer[] {
-  const price = Math.round(order.price_pence * (1 - SIMULATED_DROP));
+export function demoDrop(order: OrderRecord): { due_at: Date; price_pence: number } | null {
+  if (order.switched_from || order.price_pence <= 0) return null;
+  let hash = 0;
+  for (const ch of order.id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const raw = Math.round(order.price_pence * (1 - (25 + (hash % 16)) / 100));
+  const pounds = Math.floor(raw / 100);
+  return {
+    due_at: new Date(new Date(order.t).getTime() + DEMO_DROP_AFTER_MS),
+    price_pence: pounds >= 2 ? pounds * 100 - 1 : raw,
+  };
+}
+
+/** True until a check has run since the order's demo drop came due (or would). */
+export function demoDropPending(order: OrderRecord): boolean {
+  const drop = demoDrop(order);
+  if (!drop) return false;
+  const checked = order.switch_check ? new Date(order.switch_check.checked_at).getTime() : NaN;
+  return !(checked >= drop.due_at.getTime());
+}
+
+/**
+ * The shop's cut listing once it is due, as the reader would see it on the shelf.
+ * It joins the same check as a real read, so the real judge and the real rule decide.
+ */
+export function demoMarketOffers(order: OrderRecord, now: Date = new Date()): Offer[] {
+  const drop = demoDrop(order);
+  if (!drop || now.getTime() < drop.due_at.getTime()) return [];
   return [
     {
       section: "browse",
       title: order.title,
-      price: formatPence(price),
-      price_pence: price,
+      price: formatPence(drop.price_pence),
+      price_pence: drop.price_pence,
       compare_at: formatPence(order.price_pence),
       merchant: order.merchant,
       badge: "Price drop",
-      delivery: "Free delivery",
-      returns: "Free 30-day returns",
+      delivery: null,
+      returns: order.returns ?? null,
       rating: null,
       rating_count: null,
       summary: null,

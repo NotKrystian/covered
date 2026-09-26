@@ -1,7 +1,7 @@
 /**
  * Client calls for the 14-day price-drop switch. "Check now" reads the grid in the
  * buyer's own browser session (same path as a search), then asks the server to judge
- * it; the demo simulation is built server-side and always labelled as such.
+ * it; the dashboard's watcher asks the server to re-check anything whose price moved.
  */
 import type { SwitchWatch } from "@/lib/switch";
 import type { OrderRecord } from "@/lib/memory";
@@ -48,13 +48,13 @@ export async function checkSwitchNow(order: OrderRecord): Promise<SwitchCheckRes
   }
 }
 
-/** The labelled demo: the same listing cheaper, through the real judge and rule. */
-export async function simulateSwitch(orderId: string): Promise<SwitchCheckResult> {
+/** One watcher tick: re-checks orders whose price moved; null when the call failed. */
+export async function watchSwitches(): Promise<{ watches: SwitchWatch[]; found: string[] } | null> {
   try {
-    const { json } = await postJson<SwitchCheckResult>("/api/switch/simulate", { order_id: orderId });
-    return json ?? { ok: false, error: "Simulation failed." };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Simulation failed." };
+    const { json } = await postJson<{ ok?: boolean; watches?: SwitchWatch[]; found?: string[] }>("/api/switch/watch", {});
+    return json?.ok && Array.isArray(json.watches) ? { watches: json.watches, found: json.found ?? [] } : null;
+  } catch {
+    return null;
   }
 }
 

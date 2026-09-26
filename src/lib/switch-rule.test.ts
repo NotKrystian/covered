@@ -4,12 +4,14 @@ import type { Decision, Offer } from "./types";
 import type { OrderRecord } from "./memory";
 import { offerToItem } from "./decision";
 import {
+  DEMO_DROP_AFTER_MS,
   RETURN_POSTAGE_PENCE,
   coolingOffBlock,
+  demoDropPending,
+  demoMarketOffers,
   evaluateSwitch,
   isSwitchWatching,
   returnPostagePence,
-  simulatedDropOffers,
   switchLastDayLabel,
   switchWindowEnds,
 } from "./switch-rule";
@@ -120,21 +122,36 @@ test("switches to the cheapest protected same item when it clears the minimum", 
   }
 });
 
-test("return postage counts against the saving", () => {
+test("return postage counts against the saving; under the minimum it is a find without an alert", () => {
   const items = [offer("fleece", 2600, "Next")].map(offerToItem);
   const decisions = { [items[0].id]: protectedDecision };
   // £36 − £26 − £3.99 = £6.01, under the £8 minimum.
   const result = evaluateSwitch(order({ returns: "Returns in 30 days" }), items, decisions, settings);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.clear_pence, 601);
+    assert.equal(result.clears_minimum, false);
+    assert.equal(result.note, "found for £10.00 less at Next");
+  }
+});
+
+test("a saving that return postage eats is not a find", () => {
+  const items = [offer("fleece", 3300, "Next")].map(offerToItem);
+  // £36 − £33 = £3.00 less, but £3.99 to send the first one back.
+  const result = evaluateSwitch(order({ returns: "Returns in 30 days" }), items, { [items[0].id]: protectedDecision }, settings);
   assert.equal(result.ok, false);
-  assert.match(result.note, /clear £6\.01 after £3\.99 return postage, under your £8\.00/);
+  assert.equal(result.note, "£3.00 less at Next, but return postage costs more");
 });
 
 test("the new listing's delivery counts against the saving and the ranking", () => {
   // £36 − £26 − £4.99 delivery = £5.01, under the £8 minimum (free returns on the first order).
   const charged = [offer("fleece", 2600, "Next", "£4.99 delivery")].map(offerToItem);
   const under = evaluateSwitch(order(), charged, { [charged[0].id]: protectedDecision }, settings);
-  assert.equal(under.ok, false);
-  assert.match(under.note, /Next at £26\.00 \+ £4\.99 delivery: you would clear £5\.01/);
+  assert.equal(under.ok, true);
+  if (under.ok) {
+    assert.equal(under.clear_pence, 501);
+    assert.equal(under.clears_minimum, false);
+  }
 
   // £24 + £5 delivery loses to £27 with free delivery.
   const items = [offer("fleece", 2400, "Argos", "£5.00 delivery"), offer("fleece", 2700, "Next", "Free delivery")].map(
@@ -147,6 +164,7 @@ test("the new listing's delivery counts against the saving and the ranking", () 
     assert.equal(result.item.merchant, "Next");
     assert.equal(result.delivery_pence, 0);
     assert.equal(result.clear_pence, 900);
+    assert.equal(result.clears_minimum, true);
   }
 });
 
@@ -161,12 +179,29 @@ test("never switches to a private seller, a mislisting, or a different item, how
   };
   const result = evaluateSwitch(order(), items, decisions, settings);
   assert.equal(result.ok, false);
-  assert.equal(result.note, "no cheaper listing from a UK business");
+  assert.equal(result.note, "nothing cheaper yet");
 });
 
-test("the demo simulation is the same listing 35% cheaper, labelled as a price drop", () => {
-  const [sim] = simulatedDropOffers(order());
-  assert.equal(sim?.price_pence, 2340);
-  assert.equal(sim?.title, order().title);
-  assert.equal(sim?.badge, "Price drop");
+test("the demo market cuts the shop's own price once, 30 seconds after purchase, at a shop-style price", () => {
+  const bought = order();
+  const at = new Date(bought.t).getTime();
+  assert.deepEqual(demoMarketOffers(bought, new Date(at + DEMO_DROP_AFTER_MS - 1)), []);
+  const [cut] = demoMarketOffers(bought, new Date(at + DEMO_DROP_AFTER_MS));
+  assert.equal(cut?.title, bought.title);
+  assert.equal(cut?.merchant, bought.merchant);
+  assert.equal(cut?.badge, "Price drop");
+  const pence = cut?.price_pence ?? 0;
+  assert.ok(pence >= bought.price_pence * 0.6 - 100 && pence <= bought.price_pence * 0.75, `cut to ${pence}`);
+  assert.equal(pence % 100, 99);
+  assert.equal(demoMarketOffers({ ...bought, switched_from: "o0" }, new Date(at + DAY)).length, 0);
+});
+
+test("a demo drop stays pending until a check runs after it is due", () => {
+  const bought = order();
+  const due = new Date(bought.t).getTime() + DEMO_DROP_AFTER_MS;
+  assert.equal(demoDropPending(bought), true);
+  const early = { ...bought, switch_check: { checked_at: new Date(due - 1000).toISOString(), note: "", offer: null } };
+  assert.equal(demoDropPending(early), true);
+  const after = { ...bought, switch_check: { checked_at: new Date(due).toISOString(), note: "", offer: null } };
+  assert.equal(demoDropPending(after), false);
 });

@@ -319,6 +319,7 @@ export function DevWorkbench() {
           priceLabel={chosenItem.price_label}
           balancePence={balancePence}
           rights={chosenRights}
+          decision={liveResult?.decisions[chosenItem.id] ?? null}
           paying={approving}
           error={payError}
           onPay={() => void approve()}

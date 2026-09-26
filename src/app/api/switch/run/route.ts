@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse<RunOk | RunEr
   }
   if (!user) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
 
-  const result = await runSwitchCheck(user.userId, body.order_id, body.offers, { simulated: false });
+  const result = await runSwitchCheck(user.userId, body.order_id, body.offers);
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, order: result.order, found: result.found });
 }

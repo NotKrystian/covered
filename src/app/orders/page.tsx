@@ -1,11 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import type { OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
-import { WalletStrip } from "@/components/WalletStrip";
-import { AftercareChat } from "@/components/AftercareChat";
+import { AppHeader } from "@/components/AppHeader";
+import { OrderSheet } from "@/components/OrderSheet";
+import { returnStatus, switchOfferFor } from "@/lib/returns";
+import { lessByPence } from "@/lib/switch-rule";
 
 type OrdersResponse = {
   orders: OrderRecord[];
@@ -32,9 +33,14 @@ export default function OrdersPage() {
   const [count, setCount] = useState(0);
   const [balancePence, setBalancePence] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Order whose returns popup is open. */
+  const [sheetId, setSheetId] = useState<string | null>(null);
+  /** Last return or request, shown above the table so it is visible after the popup closes. */
+  const [notice, setNotice] = useState<string | null>(null);
   /** Row whose order id, query and section are shown (one at a time). */
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  /** Signs the return email. */
+  const [buyerName, setBuyerName] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -44,7 +50,6 @@ export default function OrdersPage() {
         setOrders(json.orders);
         setTotalPence(json.total_pence);
         setCount(json.count);
-        setSelectedId((current) => current ?? json.orders[0]?.id ?? null);
       }
       if (walletRes.ok) {
         const json = (await walletRes.json()) as { ok?: boolean; balance_pence?: number };
@@ -56,34 +61,40 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // A price-drop banner links here as /orders?return=<order id>: open that order's popup.
+    const target = new URLSearchParams(window.location.search).get("return");
+    void refresh().then(() => {
+      if (!target) return;
+      setSheetId(target);
+      window.history.replaceState(null, "", "/orders");
+    });
+    fetch("/api/memory")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { memory?: { display_name?: string } } | null) => setBuyerName(json?.memory?.display_name ?? null))
+      .catch(() => undefined);
   }, [refresh]);
+
+  const sheetOrder = sheetId ? orders.find((o) => o.id === sheetId) ?? null : null;
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-panel px-5 py-2.5 text-sm">
-        <div className="flex items-baseline gap-3">
-          <Link href="/" className="font-semibold tracking-tight text-foreground">
-            Covered
-          </Link>
-          <span className="text-accent">Orders</span>
-          <span className="text-muted">
-            buys the cheapest listing that is actually the item and still has your rights
-          </span>
-        </div>
-        <WalletStrip compact balancePence={balancePence} onBalance={setBalancePence} />
-      </header>
-      <main className="mx-auto max-w-6xl px-5 py-8">
+      <AppHeader balancePence={balancePence} />
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Approved orders</h1>
-            <p className="mt-1 text-sm text-muted">Receipts this browser has approved. Approve spends the bot wallet.</p>
+            <p className="mt-1 text-sm text-muted">
+              Click an order to return it or report a fault. Covered knows which of your rights still apply.
+            </p>
           </div>
           <div className="tnum text-sm text-muted">
             {count} order{count === 1 ? "" : "s"} · {formatPence(totalPence)} spent
           </div>
         </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+        {notice && (
+          <p className="mb-6 rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">✓ {notice}</p>
+        )}
+        <div>
           <div>
             {loading ? (
               <p className="text-sm text-muted">Loading orders…</p>
@@ -106,19 +117,30 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-line">
                     {orders.map((o) => {
                       const open = detailsId === o.id;
-                      const rowTone = o.id === selectedId ? "bg-accent-soft" : "bg-background";
+                      const offer = switchOfferFor(o);
+                      const status = offer
+                        ? `found for ${formatPence(lessByPence(o, offer))} less`
+                        : returnStatus(o);
+                      const rowTone = "bg-background hover:bg-panel-raised";
                       return (
                         <Fragment key={o.id}>
-                          <tr className={`cursor-pointer ${rowTone}`} onClick={() => setSelectedId(o.id)}>
+                          <tr
+                            className={`cursor-pointer ${rowTone}`}
+                            onClick={() => setSheetId(o.id)}
+                            title="Return it or report a fault"
+                          >
                             <td className="tnum whitespace-nowrap px-4 py-2.5 text-muted">{when(o.t)}</td>
                             {/* w-full + max-w-0: the title takes whatever width is left and truncates. */}
                             <td className="w-full max-w-0 truncate px-4 py-2.5" title={o.title}>
                               {o.cancelled_at ? (
                                 <span className="text-muted">
-                                  <span className="line-through">{o.title}</span> · switched
+                                  <span className="line-through">{o.title}</span> · {status}
                                 </span>
                               ) : (
-                                o.title
+                                <>
+                                  {o.title}
+                                  {status && <span className={offer ? "text-accent" : "text-muted"}> · {status}</span>}
+                                </>
                               )}
                             </td>
                             <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted" title={o.merchant}>
@@ -130,7 +152,7 @@ export default function OrdersPage() {
                                 type="button"
                                 aria-expanded={open}
                                 onClick={(e) => {
-                                  e.stopPropagation(); // details only; leave the chat's selected order alone
+                                  e.stopPropagation(); // details only; do not open the returns popup
                                   setDetailsId(open ? null : o.id);
                                 }}
                                 className="text-xs text-muted hover:text-foreground"
@@ -165,14 +187,20 @@ export default function OrdersPage() {
               </div>
             )}
           </div>
-          <AftercareChat orders={orders} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
-        <p className="mt-6 text-xs text-muted">
-          <Link href="/" className="text-accent hover:underline">
-            ← Back to the shop
-          </Link>
-        </p>
       </main>
+      {sheetOrder && (
+        <OrderSheet
+          order={sheetOrder}
+          buyerName={buyerName}
+          onClose={() => setSheetId(null)}
+          onDone={(balance, message) => {
+            setBalancePence(balance);
+            setNotice(message);
+            void refresh(); // the returned order, a rebought one, and the net "spent" total
+          }}
+        />
+      )}
     </div>
   );
 }

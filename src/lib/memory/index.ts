@@ -92,7 +92,7 @@ export type AftercareEntry = z.infer<typeof AftercareEntrySchema>;
 export const SwitchOfferSchema = z.object({
   /** ISO 8601 timestamp. */
   found_at: z.string(),
-  /** True when the grid was the labelled demo simulation, not a real read. */
+  /** True when the winning listing was the demo market's staged price cut, not a shelf read. */
   simulated: z.boolean(),
   chosen_id: z.string().max(80),
   chosen: z.union([OfferSchema, ListingSchema]),

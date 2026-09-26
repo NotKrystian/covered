@@ -29,7 +29,8 @@ import { PaySheet } from "@/components/PaySheet";
 import { PercentField } from "@/components/PercentField";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
-import { WalletStrip } from "@/components/WalletStrip";
+import { AppHeader } from "@/components/AppHeader";
+import { LoadingDots } from "@/components/LoadingDots";
 
 type Props = {
   memoryState: MemoryState;
@@ -39,16 +40,17 @@ type Props = {
 type SearchError = { kind: "no_extension" | "challenge" | "other"; message: string };
 type SearchPhase = LiveGridPhase | "judging";
 
+/** The working line while a search runs; the page adds animated dots. */
 function phaseLine(phase: SearchPhase): string {
   switch (phase) {
     case "extension":
-      return "Reading Google Shopping in this browser…";
+      return "Reading Google Shopping in this browser";
     case "remote_reader":
-      return "Reading Google Shopping on your paired browser…";
+      return "Reading Google Shopping on your paired browser";
     case "server":
-      return "Reading the shelf…";
+      return "Reading the shelf";
     case "judging":
-      return "Judging every listing…";
+      return "Judging every listing";
     default: {
       const never: never = phase;
       return String(never);
@@ -160,13 +162,15 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const greeting = memory.display_name?.trim() ? `Hello, ${memory.display_name.trim()}` : "Hello";
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState<UserSettings>(memory.settings);
-  const [prefsOpen, setPrefsOpen] = useState(false);
+  // The cog on other pages links to /?preferences. The dashboard only mounts in the browser.
+  const [prefsOpen, setPrefsOpen] = useState(() => new URLSearchParams(window.location.search).has("preferences"));
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState<SearchPhase>("extension");
   const [approving, setApproving] = useState(false);
   const [result, setResult] = useState<DecideResponse | null>(null);
   const [error, setError] = useState<SearchError | null>(null);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  /** The last purchase, shown after the search clears; `switchBlock` says why it has no 14-day watch. */
+  const [receipt, setReceipt] = useState<{ line: string; switchBlock: string | null } | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [balancePence, setBalancePence] = useState(memory.balance_pence);
   const [payOpen, setPayOpen] = useState(false);
@@ -175,7 +179,11 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [limits, setLimits] = useState<Limit[]>(memory.limits ?? []);
   const [limitDraft, setLimitDraft] = useState<{ query: string; defaultPence: number | null } | null>(null);
   const [watches, setWatches] = useState<SwitchWatch[]>([]);
-  const [switchNote, setSwitchNote] = useState<string | null>(null);
+
+  // Opened from /?preferences: drop the query so a reload does not reopen it.
+  useEffect(() => {
+    if (window.location.search) window.history.replaceState(null, "", "/");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,9 +273,13 @@ export function Dashboard({ memoryState, onMemory }: Props) {
       setBalancePence(done.balance_pence);
       const chosen = live.listings.find((i) => i.id === live.verdict.chosen_id);
       setPayOpen(false);
-      setReceipt(
-        `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
-      );
+      setReceipt({
+        line: `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
+        switchBlock: coolingOffBlock(chosen ? live.decisions[chosen.id]?.seller_type : undefined),
+      });
+      // Bought: clear the search so the next one starts fresh and nothing can be approved twice.
+      setResult(null);
+      setQuery("");
       void refreshWatches();
     } finally {
       setApproving(false);
@@ -288,41 +300,17 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   );
   const chosenId = live?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
-  const paidSwitchBlock = coolingOffBlock(chosenId ? live?.decisions[chosenId]?.seller_type : undefined);
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <header className="border-b border-line px-6 py-5">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold tracking-tight">Covered</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{greeting}</h1>
-            <p className="mt-1 text-sm text-muted">
-              Wallet {formatPence(balancePence)}
-              <span className="mx-2 text-line">·</span>
-              <Link href="/orders" className="hover:text-foreground">
-                Orders
-              </Link>
-              <span className="mx-2 text-line">·</span>
-              <Link href="/ext" className="hover:text-foreground">
-                reader
-              </Link>
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <WalletStrip compact balancePence={balancePence} onBalance={setBalancePence} />
-            <button
-              type="button"
-              onClick={() => setPrefsOpen((o) => !o)}
-              className="text-sm text-muted hover:text-foreground"
-            >
-              Preferences
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        balancePence={balancePence}
+        onSettings={() => setPrefsOpen((o) => !o)}
+        settingsOpen={prefsOpen}
+      />
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <h1 className="mb-6 text-2xl font-semibold tracking-tight">{greeting}</h1>
         {prefsOpen && (
           <section className="mb-10 rounded-xl border border-line bg-panel px-5 py-5">
             <h2 className="text-sm font-semibold">Preferences</h2>
@@ -377,7 +365,14 @@ export function Dashboard({ memoryState, onMemory }: Props) {
             disabled={running || query.trim().length === 0}
             className="rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
           >
-            {running ? "Searching…" : "Search"}
+            {running ? (
+              <>
+                Searching
+                <LoadingDots />
+              </>
+            ) : (
+              "Search"
+            )}
           </button>
           <button
             type="button"
@@ -398,21 +393,15 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           </div>
         )}
         <ActiveLimits limits={limits} onRemove={(id) => void cancelLimit(id)} />
-        {switchNote && (
-          <p className="mt-8 rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{switchNote}</p>
-        )}
-        <SwitchWatchList
-          watches={watches}
-          balancePence={balancePence}
-          onBalance={setBalancePence}
-          onRefresh={refreshWatches}
-          onSwitched={setSwitchNote}
-        />
+        <SwitchWatchList watches={watches} onWatches={setWatches} onRefresh={refreshWatches} />
 
         <div className="mt-10">
           {running && (
             <div className="rounded-xl border border-line bg-panel px-6 py-16 text-center">
-              <p className="text-sm text-muted">{phaseLine(phase)}</p>
+              <p className="text-sm text-muted">
+                {phaseLine(phase)}
+                <LoadingDots />
+              </p>
               {phase === "remote_reader" && (
                 <p className="mt-2 text-xs text-muted">
                   The Covered reader is not in this browser, so the job went to the Brave you paired. Up to 45 seconds.
@@ -452,7 +441,31 @@ export function Dashboard({ memoryState, onMemory }: Props) {
             </div>
           )}
 
-          {!running && !error && !result && (
+          {!running && receipt && (
+            <div className="space-y-3">
+              <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt.line}</p>
+              {receipt.switchBlock ? (
+                <p className="rounded-xl border border-line px-5 py-4 text-sm text-muted">
+                  No 14-day price-drop watch on this order: {receipt.switchBlock}.
+                </p>
+              ) : (
+                <div className="rounded-xl border border-line px-5 py-4">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    14-day price-drop watch
+                    <span className="rounded-full border border-accent/40 px-2 py-px text-[10px] font-normal uppercase tracking-wide text-accent">
+                      On
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted">
+                    For your 14-day cooling-off window, Covered re-checks this price and tells you when a UK shop has it
+                    for at least {formatPence(settings.switch_minimum_pence)} less after return postage. See the watch above.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!running && !error && !result && !receipt && (
             <div className="rounded-xl border border-dashed border-line px-6 py-16 text-center">
               <p className="text-sm text-muted">
                 Search for something. Covered buys the cheapest listing that is actually the item and still has your rights.
@@ -474,34 +487,8 @@ export function Dashboard({ memoryState, onMemory }: Props) {
               {walletError && (
                 <div className="rounded-xl border border-danger/40 bg-danger-soft px-5 py-4 text-sm">
                   <p className="font-medium">Wallet is short</p>
-                  <p className="mt-1 text-muted">{walletError} Deposit above, then Approve again.</p>
+                  <p className="mt-1 text-muted">{walletError} Approve again and use Add money on the pay sheet.</p>
                 </div>
-              )}
-              {receipt && paidSwitchBlock && (
-                <>
-                  <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
-                  <p className="rounded-xl border border-line px-5 py-4 text-sm text-muted">
-                    No 14-day price-drop watch on this order: {paidSwitchBlock}.
-                  </p>
-                </>
-              )}
-              {receipt && !paidSwitchBlock && (
-                <>
-                  <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
-                  <div className="rounded-xl border border-line px-5 py-4">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                      14-day price-drop watch
-                      <span className="rounded-full border border-accent/40 px-2 py-px text-[10px] font-normal uppercase tracking-wide text-accent">
-                        On
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-muted">
-                      For your 14-day cooling-off window, Covered re-checks this price and offers a switch if a UK shop has
-                      it for less and you would clear {formatPence(settings.switch_minimum_pence)} after return postage. See
-                      the watch above.
-                    </p>
-                  </div>
-                </>
               )}
               {rows.length === 0 ? (
                 <p className="text-sm text-muted">No listings came back for that search.</p>
@@ -551,6 +538,8 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           priceLabel={chosenItem.price_label}
           balancePence={balancePence}
           rights={live?.decisions[chosenItem.id]?.rights ?? []}
+          decision={live?.decisions[chosenItem.id] ?? null}
+          onBalance={setBalancePence}
           paying={approving}
           error={payError}
           onPay={() => void approve()}
