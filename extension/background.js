@@ -1,13 +1,20 @@
 /**
- * Covered reader — background service worker.
+ * Covered reader — background script (Chrome/Brave service worker, Firefox event page).
  *
- * The Covered page sends `{ type: "search", query }`. We open an inactive
- * Shopping tab in this browser session, wait for the content script, close
- * the tab, and reply with offers or `{ error }`. We do not focus the tab,
- * solve captchas, or attach a debugger.
+ * The Covered page asks for `{ type: "search", query }`, either through the page
+ * bridge content script (every browser) or `externally_connectable` (Chrome/Brave
+ * only; Firefox has no such thing). We open an inactive Shopping tab in this
+ * browser session, wait for the content script, close the tab, and reply with
+ * offers or `{ error }`. We do not focus the tab, solve captchas, or attach a debugger.
  */
 
+// Firefox exposes promise-based `browser`; Chrome MV3's `chrome` also returns promises.
+const api = globalThis.browser ?? globalThis.chrome;
+
 const SEARCH_TIMEOUT_MS = 20_000;
+const QUERY_MAX = 200;
+/** Pages allowed to ask for a search. Mirrors the bridge content script's matches. */
+const COVERED_ORIGINS = ["https://covered.kawuc.uk", "http://localhost:3000", "http://127.0.0.1:3000"];
 
 function gridUrl(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=28&hl=en&gl=uk`;
@@ -15,6 +22,14 @@ function gridUrl(query) {
 
 function isSorryUrl(url) {
   return typeof url === "string" && (/\/sorry\//.test(url) || /sorry\./i.test(url));
+}
+
+function isCoveredSender(sender) {
+  try {
+    return COVERED_ORIGINS.includes(new URL(sender.url ?? sender.tab?.url ?? "").origin);
+  } catch {
+    return false;
+  }
 }
 
 function runSearch(query) {
@@ -26,11 +41,11 @@ function runSearch(query) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      chrome.runtime.onMessage.removeListener(onMessage);
-      chrome.tabs.onUpdated.removeListener(onUpdated);
-      chrome.tabs.onRemoved.removeListener(onRemoved);
+      api.runtime.onMessage.removeListener(onMessage);
+      api.tabs.onUpdated.removeListener(onUpdated);
+      api.tabs.onRemoved.removeListener(onRemoved);
       if (tabId !== undefined) {
-        chrome.tabs.remove(tabId).catch(() => undefined);
+        Promise.resolve(api.tabs.remove(tabId)).catch(() => undefined);
       }
       resolve(payload);
     };
@@ -59,17 +74,17 @@ function runSearch(query) {
       if (id === tabId) finish({ error: "tab_closed" });
     };
 
-    chrome.runtime.onMessage.addListener(onMessage);
-    chrome.tabs.onUpdated.addListener(onUpdated);
-    chrome.tabs.onRemoved.addListener(onRemoved);
+    api.runtime.onMessage.addListener(onMessage);
+    api.tabs.onUpdated.addListener(onUpdated);
+    api.tabs.onRemoved.addListener(onRemoved);
 
-    chrome.tabs.create({ url: gridUrl(query), active: false }, (tab) => {
-      if (chrome.runtime.lastError || !tab?.id) {
-        finish({ error: chrome.runtime.lastError?.message || "tab_create_failed" });
-        return;
-      }
-      tabId = tab.id;
-    });
+    Promise.resolve(api.tabs.create({ url: gridUrl(query), active: false })).then(
+      (tab) => {
+        if (!tab?.id) finish({ error: "tab_create_failed" });
+        else tabId = tab.id;
+      },
+      (err) => finish({ error: err?.message || "tab_create_failed" }),
+    );
   });
 }
 
@@ -77,8 +92,15 @@ const PHOTO_CAP = 12;
 const PHOTO_MAX_W = 360;
 const PHOTO_QUALITY = 0.6;
 
-function isHttpUrl(value) {
-  return typeof value === "string" && /^https?:\/\//i.test(value);
+/** Only Google's image CDNs (what the grid draws from, and what host_permissions allow), https only. */
+function isGoogleImageUrl(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && /^[a-z0-9-]+\.(?:gstatic\.com|googleusercontent\.com|ggpht\.com)$/.test(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 async function blobToJpegDataUrl(blob) {
@@ -99,7 +121,7 @@ async function blobToJpegDataUrl(blob) {
 }
 
 async function fetchAsJpegDataUrl(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, { redirect: "error", credentials: "omit" });
   if (!res.ok) return null;
   const blob = await res.blob();
   if (!blob || blob.size === 0) return null;
@@ -126,7 +148,7 @@ async function attachMissingPhotos(offers) {
       }
       continue;
     }
-    if (kept >= PHOTO_CAP || !isHttpUrl(offer.image_url)) {
+    if (kept >= PHOTO_CAP || !isGoogleImageUrl(offer.image_url)) {
       out.push(offer);
       continue;
     }
@@ -145,18 +167,30 @@ async function attachMissingPhotos(offers) {
   return out;
 }
 
-chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== "search") {
-    sendResponse({ error: "unknown_message" });
-    return;
-  }
-  const query = typeof message.query === "string" ? message.query.trim() : "";
+/** Validate the request, run it, and answer through `sendResponse`. Returns true (async reply). */
+function handleSearch(message, sendResponse) {
+  const query = typeof message.query === "string" ? message.query.trim().slice(0, QUERY_MAX) : "";
   if (!query) {
     sendResponse({ error: "empty_query" });
-    return;
+    return true;
   }
   runSearch(query)
     .then(sendResponse)
     .catch((err) => sendResponse({ error: err instanceof Error ? err.message : String(err) }));
   return true;
+}
+
+// Page bridge (bridge.js on the Covered app): Chrome, Brave and Firefox.
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || message.type !== "search" || !isCoveredSender(sender)) return undefined;
+  return handleSearch(message, sendResponse);
+});
+
+// Direct page messaging via externally_connectable: Chrome and Brave only.
+api.runtime.onMessageExternal?.addListener((message, _sender, sendResponse) => {
+  if (!message || message.type !== "search") {
+    sendResponse({ error: "unknown_message" });
+    return undefined;
+  }
+  return handleSearch(message, sendResponse);
 });

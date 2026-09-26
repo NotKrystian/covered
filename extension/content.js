@@ -55,8 +55,10 @@
   }
 
   function post(payload) {
+    const api = globalThis.browser ?? globalThis.chrome;
     try {
-      chrome.runtime.sendMessage(payload);
+      // Both engines return a promise; nobody replies to "grid", so swallow the empty-reply rejection.
+      Promise.resolve(api.runtime.sendMessage(payload)).catch(() => undefined);
     } catch {
       // Background is gone; the page will time out.
     }

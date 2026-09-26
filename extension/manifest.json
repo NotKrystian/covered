@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Covered reader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Reads the Google Shopping grid from your own signed-in browser session.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "covered-reader@kawuc.uk",
+      "strict_min_version": "121.0"
+    }
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxpSyn6E9nhKhmxZ0LuG+5e+G2+0r/JEL1/ONC7uFYRQsr2apUz6uDtZfUr8NFRVuNMNACWsCBNo+w2byHaLVaH2jL64AzGOccfsH4sDWB834Ig9MGGp3AI46+8uPOXwdRnamYE94i8xqXPLKoFjOuzBT6KYiB0Aa7YfbC85E6tLtIVXDClFg+U6Ad4Ves7dHOpP0v2mt6lZQOoAe0vmIakn43DTH1T0i5VAhiTLJ2P98emP94sy+XEjnc7pwQEPR0b5lbrBfigyphYiXiEOAcZin5dyO4nGocS+4XXJjIPsknlzWWlOH6h/sqCoguuuxjZ2BzRHC0YUyQLcbzTA71QIDAQAB",
   "externally_connectable": {
     "matches": [
@@ -12,7 +18,8 @@
     ]
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {
@@ -22,6 +29,15 @@
       ],
       "js": ["extract.js", "content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://covered.kawuc.uk/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+      ],
+      "js": ["bridge.js"],
+      "run_at": "document_end"
     }
   ],
   "host_permissions": [
@@ -31,7 +47,10 @@
     "https://encrypted-tbn0.gstatic.com/*",
     "https://encrypted-tbn1.gstatic.com/*",
     "https://encrypted-tbn2.gstatic.com/*",
-    "https://encrypted-tbn3.gstatic.com/*"
+    "https://encrypted-tbn3.gstatic.com/*",
+    "https://covered.kawuc.uk/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
   ],
   "permissions": ["tabs"]
 }
