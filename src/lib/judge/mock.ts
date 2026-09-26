@@ -14,7 +14,15 @@ const UK_RETAILERS = [
   "sports direct", "very", "boots", "tesco", "sainsbury", "asda", "b&q", "screwfix",
   "amazon.co.uk", "ebay.co.uk", "decathlon", "mountain warehouse", "go outdoors",
   "uniqlo", "h&m", "zara", "primark", "new look", "river island", "schuh", "footasylum",
+  "smart cellular",
 ];
+
+/** Merchant-side signals that this is a trader, not a private person. */
+const TRADER_WORDS = [
+  "reseller", "refurbish", "refurbished", "refurb", "second-hand", "secondhand",
+  "pre-owned", "preowned",
+];
+const COMPANY_SUFFIX = /\b(ltd|limited|plc|llp)\b/i;
 
 const BUSINESS_RIGHTS = ["14-day cancellation (CCR 2013)", "30-day fault refund (CRA 2015)"];
 
@@ -81,28 +89,39 @@ function fixtureDecision(item: ShortlistItem, items: ShortlistItem[], settings: 
   }
 }
 
-function heuristicDecision(item: ShortlistItem): Decision {
+function looksUkTrader(item: ShortlistItem): boolean {
   const merchant = item.merchant.toLowerCase();
   const domain = (item.venue_hint ?? "").toLowerCase();
-  const ukSignal =
-    domain.endsWith(".co.uk") ||
-    domain.endsWith(".uk") ||
-    UK_RETAILERS.some((name) => merchant.includes(name));
+  if (domain.endsWith(".co.uk") || domain.endsWith(".uk")) return true;
+  if (UK_RETAILERS.some((name) => merchant.includes(name))) return true;
+  if (COMPANY_SUFFIX.test(merchant)) return true;
+  // Reseller / refurb / second-hand on the merchant name is still a trader.
+  if (TRADER_WORDS.some((word) => merchant.includes(word))) return true;
+  return false;
+}
+
+function thirdPartyMarket(item: ShortlistItem): boolean {
+  const blob = `${item.merchant} ${item.venue_hint ?? ""}`.toLowerCase();
+  return /amazon\.co\.uk\s*-/.test(blob) || blob.includes("-seller");
+}
+
+function heuristicDecision(item: ShortlistItem): Decision {
   const sponsored = item.section === "sponsored";
   const returnsText = (item.returns ?? "").toLowerCase();
   const returnsOk = returnsText.includes("free") || returnsText.includes("return");
 
-  if (ukSignal) {
+  if (looksUkTrader(item)) {
+    const reseller = TRADER_WORDS.some((word) => item.merchant.toLowerCase().includes(word));
     return {
       same_item: true,
       mislisting: false,
       photo_reason: null,
       sponsored,
       seller_type: "uk_business",
-      venue_trust: "shop_checkout",
+      venue_trust: thirdPartyMarket(item) ? "marketplace_protected" : "shop_checkout",
       rights: BUSINESS_RIGHTS,
       recommendation: "buy",
-      reason: `${item.merchant} looks like a UK retailer checkout${returnsOk ? ` (${item.returns})` : ""}; cooling-off and CRA apply.${sponsored ? " This row is an ad; that is not why." : ""}`,
+      reason: `${item.merchant} is a UK ${reseller ? "trader (reseller, not a private seller)" : "retailer checkout"}${returnsOk ? ` (${item.returns})` : ""}; cooling-off and CRA apply.${sponsored ? " This row is an ad; that is not why." : ""}`,
     };
   }
   return {
