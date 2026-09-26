@@ -66,17 +66,21 @@ export const OfferSchema = z.object({
 });
 export type Offer = z.infer<typeof OfferSchema>;
 
-/** Where a SearchResult came from: the live grid or local fixtures. */
-export const SearchSourceSchema = z.enum(["live", "fixture"]);
+/** Where a SearchResult came from: the live grid, local fixtures, or a saved live read in `public/snapshots`. */
+export const SearchSourceSchema = z.enum(["live", "fixture", "snapshot"]);
 export type SearchSource = z.infer<typeof SearchSourceSchema>;
 
-/** A deduped read of one query's first paint (or its fixture stand-in). */
+/** A deduped read of one query's first paint (or its fixture / snapshot stand-in). */
 export const SearchResultSchema = z.object({
   query: z.string(),
   /** ISO 8601 timestamp of the read. */
   fetched_at: z.string(),
   source: SearchSourceSchema,
   offers: z.array(OfferSchema),
+  /** Snapshot only: how the file was captured, e.g. "captured via Cursor browser". */
+  note: z.string().optional(),
+  /** Snapshot only: the live reader error that made the reader fall back to this snapshot. */
+  fallback_from: z.lazy(() => ReaderErrorSchema).optional(),
 });
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 

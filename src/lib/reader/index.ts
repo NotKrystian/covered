@@ -14,12 +14,13 @@ import { evaluateInPage, newPage, readerMode } from "./browser";
 import { acceptConsentOnce, classifyPage } from "./challenge";
 import { dedupeBrowse, dedupeSponsored } from "./dedupe";
 import { extractGrid, type GridExtraction, type SelectorHits } from "./extract";
+import { MAX_PER_SECTION } from "./limits";
+import { findSnapshot, slugify } from "./snapshots";
 
 export type { ReaderResponse, ReaderError, SearchResult, Offer } from "@/lib/types";
 export { closeBrowser, readerMode, cdpUrl, type ReaderMode } from "./browser";
-
-/** Hard cap per section after dedupe. The first paint is already more than the bot should show. */
-export const MAX_PER_SECTION = 40;
+export { MAX_PER_SECTION } from "./limits";
+export { slugify, findSnapshot, listSnapshotSlugs } from "./snapshots";
 
 /** How long we wait for either card selector before classifying the page. */
 const CARDS_TIMEOUT_MS = 15_000;
@@ -114,11 +115,57 @@ async function settle(page: Page): Promise<void> {
   }
 }
 
+/** `COVERED_READER_DISABLED=1` skips the browser entirely (e.g. a container with no Chromium). */
+export function readerDisabled(): boolean {
+  return process.env.COVERED_READER_DISABLED === "1";
+}
+
 /**
- * Read the first paint of the Shopping grid for `query`.
- * Never throws for expected outcomes; returns a typed `ReaderResponse`.
+ * Read the Shopping grid for `query`: live first, snapshot second.
+ *
+ * Any failed live read (challenge, timeout, no_offers, unknown — including a
+ * missing Chromium) falls back to `public/snapshots/<slug>.json`, exact slug or
+ * the closest one sharing at least two words. The snapshot result carries
+ * `source: "snapshot"` and `fallback_from` with the live error. Only when no
+ * snapshot qualifies does the original error come back.
  */
 export async function readGrid(query: string): Promise<ReaderResponse> {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return fail("unknown", "query is empty");
+
+  let liveError: ReaderError;
+  if (readerDisabled()) {
+    console.log(`[reader] "${trimmed}" path=disabled (COVERED_READER_DISABLED=1), going straight to snapshots`);
+    liveError = { kind: "unknown", message: "live reader disabled by COVERED_READER_DISABLED=1" };
+  } else {
+    const live = await readGridLive(trimmed);
+    if (live.ok) {
+      console.log(`[reader] "${trimmed}" path=live offers=${live.result.offers.length}`);
+      return live;
+    }
+    liveError = live.error;
+    console.log(`[reader] "${trimmed}" path=live failed (${liveError.kind}): ${liveError.message}`);
+  }
+
+  const match = await findSnapshot(trimmed);
+  if (!match) {
+    console.log(`[reader] "${trimmed}" path=snapshot none matched (slug=${slugify(trimmed)})`);
+    return { ok: false, error: liveError };
+  }
+  console.log(
+    `[reader] "${trimmed}" path=snapshot ${match.exact ? "exact" : `closest (${match.shared} shared words)`} slug=${match.slug} offers=${match.result.offers.length}`,
+  );
+  return {
+    ok: true,
+    result: { ...match.result, query: trimmed, source: "snapshot", fallback_from: liveError },
+  };
+}
+
+/**
+ * Read the first paint of the Shopping grid for `query` from a real browser.
+ * Never throws for expected outcomes; returns a typed `ReaderResponse`.
+ */
+export async function readGridLive(query: string): Promise<ReaderResponse> {
   const trimmed = query.trim();
   if (trimmed.length === 0) return fail("unknown", "query is empty");
 

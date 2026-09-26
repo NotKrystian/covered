@@ -359,7 +359,7 @@ export function extractGrid(): GridExtraction {
     const returns = textOf(row, ".l9Ycjb");
     bump(browseHits, "returns:.l9Ycjb", returns !== null);
 
-    let ratingRaw = textOf(row, ".yi40Hd");
+    const ratingRaw = textOf(row, ".yi40Hd");
     bump(browseHits, "rating:.yi40Hd", ratingRaw !== null);
     let rating = firstNumber(ratingRaw);
     if (!rating) rating = ratedNumber(ariaOf(row, '[aria-label*="Rated"]'));
