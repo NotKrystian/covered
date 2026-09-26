@@ -16,38 +16,49 @@ final class PoundRuleTests: XCTestCase {
         "overseas-34": decision(sameItem: true, mislisting: false, seller: .overseasBusiness, venue: .marketplaceUnprotected),
     ]
 
-    func testShop36WinsAtTenPounds() {
+    func testFleeceDiscountIsTwentyTwoPercent() {
+        XCTAssertEqual(discountRatioBps(protected: 3600, unprotected: 2800), 2222)
+        XCTAssertTrue(shopBeatsPremium(protected: 3600, unprotected: 2800, bps: 2500))
+        XCTAssertFalse(shopBeatsPremium(protected: 3600, unprotected: 2800, bps: 1500))
+    }
+
+    func testShop36WinsAtTwentyFivePercent() {
         let verdict = applyPremium(
             items: fixtures,
             decisions: decisions,
-            settings: UserSettings(protectionPremiumPence: 1000)
+            settings: UserSettings(protectionPremiumBps: 2500)
         )
         XCTAssertEqual(verdict.chosenId, "shop-36")
         XCTAssertTrue(verdict.summary.contains("JD Sports"))
     }
 
-    func testPrivate28WinsAtFivePounds() {
+    func testPrivate28WinsAtFifteenPercent() {
         let verdict = applyPremium(
             items: fixtures,
             decisions: decisions,
-            settings: UserSettings(protectionPremiumPence: 500)
+            settings: UserSettings(protectionPremiumBps: 1500)
         )
         XCTAssertEqual(verdict.chosenId, "private-28")
         XCTAssertTrue(verdict.summary.contains("break is your problem"))
+    }
+
+    func testShopWinsWhenCheaperOrAlone() {
+        XCTAssertTrue(shopBeatsPremium(protected: 2800, unprotected: 3600, bps: 0))
+        XCTAssertTrue(shopBeatsPremium(protected: 3600, unprotected: nil, bps: 0))
     }
 
     func testMislistingNeverWins() {
         let verdict = applyPremium(
             items: fixtures,
             decisions: decisions,
-            settings: UserSettings(protectionPremiumPence: 1000)
+            settings: UserSettings(protectionPremiumBps: 2500)
         )
         XCTAssertNotEqual(verdict.chosenId, "mislisting-22")
 
         let onlyMislisting = applyPremium(
             items: [fixtures[0]],
             decisions: decisions,
-            settings: UserSettings(protectionPremiumPence: 1000)
+            settings: UserSettings(protectionPremiumBps: 2500)
         )
         XCTAssertNil(onlyMislisting.chosenId)
         XCTAssertTrue(onlyMislisting.summary.contains("Nothing to buy"))
@@ -63,10 +74,19 @@ final class PoundRuleTests: XCTestCase {
         let verdict = applyPremium(
             items: fixtures,
             decisions: none,
-            settings: UserSettings(protectionPremiumPence: 1000)
+            settings: UserSettings(protectionPremiumBps: 2500)
         )
         XCTAssertNil(verdict.chosenId)
         XCTAssertTrue(verdict.summary.contains("Nothing to buy"))
+    }
+
+    func testSettingsEncodeBpsAndLegacyPence() throws {
+        let settings = UserSettings(protectionPremiumBps: 2500, protectionPremiumPence: 0)
+        let data = try JSONEncoder.covered.encode(settings)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["protection_premium_bps"] as? Int, 2500)
+        XCTAssertEqual(json["protection_premium_pence"] as? Int, 0)
+        XCTAssertEqual(json["switch_minimum_pence"] as? Int, 800)
     }
 }
 

@@ -2,29 +2,49 @@ import XCTest
 @testable import Covered
 
 final class ReturnWindowTests: XCTestCase {
-    func testThreeDayOldOrderShowsElevenDaysLeft() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let ends = now.addingTimeInterval(11 * 86_400)
-        let window = ReturnWindow.from(endsAt: iso(ends), blocked: nil, now: now)
-        XCTAssertEqual(window.daysRemaining, 11)
+    /// Exclusive `ends_at` = 16 Jan 2024 00:00 London → last valid day is 15 Jan.
+    /// Order day 1 Jan → 14 days left.
+    func testOrderDayShowsFourteenDaysLeft() {
+        let ends = londonMidnight(year: 2024, month: 1, day: 16)
+        let now = londonNoon(year: 2024, month: 1, day: 1)
+        let window = ReturnWindow.from(ends: ends, blocked: nil, now: now)
+        XCTAssertEqual(window.daysRemaining, 14)
         XCTAssertTrue(window.isOpen)
-        XCTAssertEqual(window.headline, "11 days left to change your mind")
+        XCTAssertEqual(window.headline, "14 days left")
     }
 
-    func testTwentyDayOldOrderShowsWindowClosed() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let ends = now.addingTimeInterval(-6 * 86_400)
-        let window = ReturnWindow.from(endsAt: iso(ends), blocked: nil, now: now)
+    func testNextDayShowsThirteenDaysLeft() {
+        let ends = londonMidnight(year: 2024, month: 1, day: 16)
+        let now = londonNoon(year: 2024, month: 1, day: 2)
+        let window = ReturnWindow.from(ends: ends, blocked: nil, now: now)
+        XCTAssertEqual(window.daysRemaining, 13)
+        XCTAssertTrue(window.isOpen)
+        XCTAssertEqual(window.headline, "13 days left")
+    }
+
+    func testLastDayShowsLastDay() {
+        let ends = londonMidnight(year: 2024, month: 1, day: 16)
+        let now = londonNoon(year: 2024, month: 1, day: 15)
+        let window = ReturnWindow.from(ends: ends, blocked: nil, now: now)
+        XCTAssertEqual(window.daysRemaining, 1)
+        XCTAssertTrue(window.isOpen)
+        XCTAssertEqual(window.headline, "last day")
+    }
+
+    func testAfterEndsAtShowsWindowClosed() {
+        let ends = londonMidnight(year: 2024, month: 1, day: 16)
+        let now = londonMidnight(year: 2024, month: 1, day: 16).addingTimeInterval(60)
+        let window = ReturnWindow.from(ends: ends, blocked: nil, now: now)
         XCTAssertEqual(window.daysRemaining, 0)
         XCTAssertFalse(window.isOpen)
-        XCTAssertEqual(window.headline, "Return window closed")
+        XCTAssertEqual(window.headline, "window closed")
     }
 
     func testBlockedPrivateSellerUsesServerReason() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let ends = now.addingTimeInterval(10 * 86_400)
+        let ends = londonMidnight(year: 2024, month: 1, day: 16)
+        let now = londonNoon(year: 2024, month: 1, day: 1)
         let window = ReturnWindow.from(
-            endsAt: iso(ends),
+            ends: ends,
             blocked: "private seller, so there is no 14-day right to cancel",
             now: now
         )
@@ -75,7 +95,21 @@ final class ReturnWindowTests: XCTestCase {
         XCTAssertTrue(json["rating_count"] is NSNull)
     }
 
-    private func iso(_ date: Date) -> String {
-        ISO8601DateFormatter().string(from: date)
+    func testFleeceDemoQuery() {
+        XCTAssertTrue(isFleeceDemoQuery("black fleece jacket medium"))
+        XCTAssertTrue(isFleeceDemoQuery("  Fleece  "))
+        XCTAssertFalse(isFleeceDemoQuery("sony headphones"))
+    }
+
+    private func londonMidnight(year: Int, month: Int, day: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = ReturnWindow.london
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 0, minute: 0))!
+    }
+
+    private func londonNoon(year: Int, month: Int, day: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = ReturnWindow.london
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12, minute: 0))!
     }
 }

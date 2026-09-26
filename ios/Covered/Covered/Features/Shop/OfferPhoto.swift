@@ -43,8 +43,7 @@ struct OfferPhoto: View {
     }
 
     private var remoteURL: URL? {
-        if let imageUrl = item.imageUrl, let url = URL(string: imageUrl) { return url }
-        if let first = item.imageUrls.first, let url = URL(string: first) { return url }
-        return nil
+        resolveCoveredAssetURL(item.imageUrl)
+            ?? resolveCoveredAssetURL(item.imageUrls.first)
     }
 }

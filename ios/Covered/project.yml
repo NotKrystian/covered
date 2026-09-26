@@ -24,6 +24,7 @@ targets:
       - path: Covered/Core
       - path: Covered/Features
       - path: Covered/Assets.xcassets
+      - path: Covered/Resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: uk.kawuc.covered
       PRODUCT_NAME: Covered
@@ -47,6 +48,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
+        UIAppFonts:
+          - Fonts/Geist-Variable.ttf
         NSFaceIDUsageDescription: Confirm purchases from your Covered wallet.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false

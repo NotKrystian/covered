@@ -7,6 +7,7 @@ struct ListingCard: View {
     var twoUp = false
     let namespace: Namespace.ID
     let onLimit: () -> Void
+    @State private var showLightbox = false
 
     private var rejected: Bool {
         guard let decision else { return false }
@@ -15,6 +16,9 @@ struct ListingCard: View {
 
     private var rejectChip: String? {
         guard let decision, rejected else { return nil }
+        if decision.mislisting, let photo = decision.photoReason, !photo.isEmpty {
+            return photo
+        }
         if decision.mislisting { return "not the item" }
         if !decision.sameItem { return "not the item" }
         return nil
@@ -29,11 +33,22 @@ struct ListingCard: View {
             }
         }
         .matchedGeometryEffect(id: item.id, in: namespace)
+        .fullScreenCover(isPresented: $showLightbox) {
+            MislistingLightbox(
+                item: item,
+                reason: decision?.photoReason ?? decision?.reason ?? "not the item"
+            )
+        }
     }
 
     private var listBody: some View {
         HStack(alignment: .top, spacing: 14) {
             OfferPhoto(item: item, rejected: rejected)
+                .onTapGesture {
+                    if rejected { showLightbox = true }
+                }
+                .accessibilityIdentifier(rejected ? "shop.mislisting" : "")
+                .accessibilityAddTraits(.isButton)
             VStack(alignment: .leading, spacing: 4) {
                 if chosen {
                     CoveredPickLabel()
@@ -66,6 +81,9 @@ struct ListingCard: View {
     private var twoUpBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             OfferPhoto(item: item, rejected: rejected, banner: true, bannerWidth: 154)
+                .onTapGesture {
+                    if rejected { showLightbox = true }
+                }
                 .padding(7.5)
             VStack(alignment: .leading, spacing: 4) {
                 if chosen { CoveredPickLabel() }
@@ -160,5 +178,34 @@ struct ListingCard: View {
             return "14-day cancellation · 30-day fault refund"
         }
         return decision.rights.prefix(2).joined(separator: " · ")
+    }
+}
+
+struct MislistingLightbox: View {
+    let item: ShortlistItem
+    let reason: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.92).ignoresSafeArea()
+            VStack(spacing: 18) {
+                OfferPhoto(item: item, size: 280, corner: 20, rejected: true)
+                Text(reason)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+                    .accessibilityIdentifier("shop.mislistingReason")
+                Button("Close") { dismiss() }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 22)
+                    .frame(height: 40)
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
+                    .accessibilityIdentifier("shop.mislistingClose")
+            }
+        }
+        .accessibilityIdentifier("shop.mislistingLightbox")
     }
 }

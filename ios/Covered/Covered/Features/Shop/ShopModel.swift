@@ -22,7 +22,7 @@ final class ShopModel {
     var judgedQuery = ""
     var sourceLabel = ""
     var sort: SortKey = .default
-    var localPremiumPence = UserSettings.defaults.protectionPremiumPence
+    var localPremiumBps = UserSettings.defaults.protectionPremiumBps
     var approveCheck = false
     var approvedBalancePence: Int?
     var approvedOrderId: String?
@@ -61,12 +61,41 @@ final class ShopModel {
         walletShortMessage = nil
     }
 
-    func applyLocalPremium(_ pence: Int) {
-        localPremiumPence = pence
+    func applyLocalPremium(_ bps: Int) {
+        localPremiumBps = bps
         guard !items.isEmpty, !decisions.isEmpty else { return }
         var next = AppState.shared.settings
-        next.protectionPremiumPence = pence
+        next.protectionPremiumBps = bps
         verdict = applyPremium(items: items, decisions: decisions, settings: next)
+    }
+
+    func searchFixtures() async {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fleece = q.isEmpty ? "black fleece jacket medium" : q
+        guard isFleeceDemoQuery(fleece), !isBusy else { return }
+        query = fleece
+        errorText = nil
+        resetReceipt()
+        items = []
+        decisions = [:]
+        verdict = nil
+        localPremiumBps = AppState.shared.settings.protectionPremiumBps
+        phase = .judging(4)
+        statusText = "Judging 4 listings…"
+        do {
+            let decided = try await AppState.shared.api.decide(
+                query: fleece,
+                settings: AppState.shared.settings,
+                source: .fixture
+            )
+            applyDecided(decided, query: fleece, source: .fixture, offers: decided.offers ?? [], label: "fixtures · 4 listings")
+        } catch let error as APIError {
+            errorText = plainSearchError(error)
+        } catch {
+            errorText = error.localizedDescription
+        }
+        phase = .idle
+        statusText = ""
     }
 
     func search() async {
@@ -77,7 +106,7 @@ final class ShopModel {
         items = []
         decisions = [:]
         verdict = nil
-        localPremiumPence = AppState.shared.settings.protectionPremiumPence
+        localPremiumBps = AppState.shared.settings.protectionPremiumBps
 
         var offers: [Offer]?
         var source: SearchSource?
@@ -156,25 +185,7 @@ final class ShopModel {
                 offers: offers,
                 fetchedAt: ISO8601DateFormatter().string(from: Date())
             )
-            items = decided.allRows
-            decisions = decided.decisions
-            if decided.decisions.isEmpty {
-                decisions = decided.verdict.perOffer
-            }
-            briefBrand = decided.briefBrand ?? ""
-            judgedQuery = q
-            sourceLabel = label
-            applyLocalPremium(localPremiumPence)
-            if verdict == nil {
-                verdict = decided.verdict
-            }
-            AppState.shared.verdict = decided
-            AppState.shared.searchResult = SearchResult(
-                query: q,
-                fetchedAt: ISO8601DateFormatter().string(from: Date()),
-                source: source ?? .live,
-                offers: offers
-            )
+            applyDecided(decided, query: q, source: source ?? .live, offers: offers, label: label)
         } catch let error as APIError {
             errorText = plainSearchError(error)
         } catch {
@@ -182,6 +193,34 @@ final class ShopModel {
         }
         phase = .idle
         statusText = ""
+    }
+
+    private func applyDecided(
+        _ decided: DecideResponse,
+        query: String,
+        source: SearchSource,
+        offers: [Offer],
+        label: String
+    ) {
+        items = decided.allRows
+        decisions = decided.decisions
+        if decided.decisions.isEmpty {
+            decisions = decided.verdict.perOffer
+        }
+        briefBrand = decided.briefBrand ?? ""
+        judgedQuery = query
+        sourceLabel = label
+        applyLocalPremium(localPremiumBps)
+        if verdict == nil {
+            verdict = decided.verdict
+        }
+        AppState.shared.verdict = decided
+        AppState.shared.searchResult = SearchResult(
+            query: query,
+            fetchedAt: ISO8601DateFormatter().string(from: Date()),
+            source: source,
+            offers: offers
+        )
     }
 
     private func pollReader(query: String) async throws -> [Offer] {
@@ -225,7 +264,8 @@ final class ShopModel {
             chosen: item.chosenPayload(),
             decision: decision,
             section: item.section,
-            protectionPremiumPence: localPremiumPence,
+            protectionPremiumPence: 0,
+            protectionPremiumBps: localPremiumBps,
             chosenId: item.id
         )
         do {

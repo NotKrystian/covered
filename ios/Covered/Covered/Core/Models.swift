@@ -344,6 +344,7 @@ struct Receipt: Codable, Sendable {
     var decision: Decision
     var section: ReceiptSection
     var protectionPremiumPence: Int
+    var protectionPremiumBps: Int?
     var chosenId: String?
 }
 
@@ -510,31 +511,56 @@ enum ApprovalMode: String, Codable, Sendable, Hashable {
 }
 
 struct UserSettings: Codable, Sendable, Hashable {
+    /// Percent of the UK-shop price, in basis points. 2500 = 25%.
+    var protectionPremiumBps: Int
+    /// Legacy flat pounds. Still encoded so an older server can read a value.
     var protectionPremiumPence: Int
     var switchMinimumPence: Int
     var approval: ApprovalMode
 
+    static let defaultBps = 2500
+
     static let defaults = UserSettings(
-        protectionPremiumPence: 1000,
+        protectionPremiumBps: defaultBps,
+        protectionPremiumPence: 0,
         switchMinimumPence: 800,
         approval: .ask
     )
 
     init(
-        protectionPremiumPence: Int = 1000,
+        protectionPremiumBps: Int = UserSettings.defaultBps,
+        protectionPremiumPence: Int = 0,
         switchMinimumPence: Int = 800,
         approval: ApprovalMode = .ask
     ) {
+        self.protectionPremiumBps = protectionPremiumBps
         self.protectionPremiumPence = protectionPremiumPence
         self.switchMinimumPence = switchMinimumPence
         self.approval = approval
     }
 
+    enum CodingKeys: String, CodingKey {
+        case protectionPremiumBps
+        case protectionPremiumPence
+        case switchMinimumPence
+        case approval
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        protectionPremiumPence = try container.decodeIfPresent(Int.self, forKey: .protectionPremiumPence) ?? 1000
+        protectionPremiumBps = try container.decodeIfPresent(Int.self, forKey: .protectionPremiumBps)
+            ?? UserSettings.defaultBps
+        protectionPremiumPence = try container.decodeIfPresent(Int.self, forKey: .protectionPremiumPence) ?? 0
         switchMinimumPence = try container.decodeIfPresent(Int.self, forKey: .switchMinimumPence) ?? 800
         approval = try container.decodeIfPresent(ApprovalMode.self, forKey: .approval) ?? .ask
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(protectionPremiumBps, forKey: .protectionPremiumBps)
+        try container.encode(protectionPremiumPence, forKey: .protectionPremiumPence)
+        try container.encode(switchMinimumPence, forKey: .switchMinimumPence)
+        try container.encode(approval, forKey: .approval)
     }
 }
 

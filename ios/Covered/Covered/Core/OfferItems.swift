@@ -91,6 +91,18 @@ extension ShortlistItem {
     }
 }
 
+func isFleeceDemoQuery(_ query: String) -> Bool {
+    query.lowercased().contains("fleece")
+}
+
+func resolveCoveredAssetURL(_ raw: String?) -> URL? {
+    guard let raw, !raw.isEmpty else { return nil }
+    if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+        return URL(string: raw)
+    }
+    return URL(string: raw, relativeTo: APIClient.resolvedBaseURL())?.absoluteURL
+}
+
 enum DataURLImage {
     static func decode(_ dataURL: String?) -> Data? {
         guard let dataURL, !dataURL.isEmpty else { return nil }

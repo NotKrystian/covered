@@ -4,7 +4,7 @@ struct SettingsView: View {
     private let state = AppState.shared
 
     @State private var displayName = ""
-    @State private var premiumPence = UserSettings.defaults.protectionPremiumPence
+    @State private var premiumBps = UserSettings.defaults.protectionPremiumBps
     @State private var switchPence = UserSettings.defaults.switchMinimumPence
     @State private var baseURL = UserDefaults.standard.string(forKey: APIClient.baseURLDefaultsKey)
         ?? APIClient.defaultBaseURL.absoluteString
@@ -32,15 +32,15 @@ struct SettingsView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Color.secondary)
                         PremiumControl(
-                            premiumPence: $premiumPence,
-                            gapPence: nil,
+                            value: $premiumBps,
+                            unit: .percentBps,
                             shopWins: true,
-                            verdictLead: "Pay up to \(formatGBP(premiumPence))",
-                            verdictBody: "More for UK buyer rights."
+                            verdictLead: "Pay up to \(formatPercentBps(premiumBps))",
+                            verdictBody: "Share of the UK shop price you will pay extra for buyer rights."
                         )
                         PremiumControl(
-                            premiumPence: $switchPence,
-                            gapPence: nil,
+                            value: $switchPence,
+                            unit: .pence,
                             shopWins: true,
                             verdictLead: "Switch floor \(formatGBP(switchPence))",
                             verdictBody: "Only switch inside 14 days if I still clear this after postage."
@@ -148,7 +148,7 @@ struct SettingsView: View {
         }
         displayName = state.memory?.displayName ?? ""
         let settings = state.memory?.settings ?? state.settings
-        premiumPence = settings.protectionPremiumPence
+        premiumBps = settings.protectionPremiumBps
         switchPence = settings.switchMinimumPence
         if let stored = UserDefaults.standard.string(forKey: APIClient.baseURLDefaultsKey), !stored.isEmpty {
             baseURL = stored
@@ -162,7 +162,8 @@ struct SettingsView: View {
         defer { saving = false }
         persistBaseURL(baseURL)
         let next = UserSettings(
-            protectionPremiumPence: premiumPence,
+            protectionPremiumBps: premiumBps,
+            protectionPremiumPence: 0,
             switchMinimumPence: switchPence,
             approval: state.settings.approval
         )
@@ -185,7 +186,7 @@ struct SettingsView: View {
         do {
             try await state.resetMemory()
             displayName = ""
-            premiumPence = UserSettings.defaults.protectionPremiumPence
+            premiumBps = UserSettings.defaults.protectionPremiumBps
             switchPence = UserSettings.defaults.switchMinimumPence
             saveError = nil
             saveNote = nil

@@ -91,6 +91,8 @@ struct OrderDetailView: View {
             Text(window.headline)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.secondary)
+                .accessibilityIdentifier("order.daysLeft")
+                .accessibilityValue(window.headline)
 
             Text("Tracking isn't connected yet")
                 .font(.system(size: 14, weight: .medium))

@@ -17,18 +17,37 @@ func survivorsForPremium(
     }
 }
 
+/// `(protected − unprotected) / protected` as integer basis points (10000 = 100%).
+func discountRatioBps(protected: Int, unprotected: Int) -> Int {
+    guard protected > 0 else { return 0 }
+    if unprotected >= protected { return 0 }
+    return (protected - unprotected) * 10_000 / protected
+}
+
+/// Shop wins when the discount is inside the buyer's percent cap, or when there is
+/// no unprotected listing, or when the shop is already cheaper.
+func shopBeatsPremium(protected: Int, unprotected: Int?, bps: Int) -> Bool {
+    guard let unprotected else { return true }
+    if unprotected >= protected { return true }
+    return (protected - unprotected) * 10_000 <= bps * protected
+}
+
+func formatPercentBps(_ bps: Int) -> String {
+    "\(max(0, bps / 100))%"
+}
+
 /// Apply the protection premium to whatever survived the judge.
 ///
 /// Drops mislistings and anything that is not the item. Among the rest, finds the
-/// cheapest protected and the cheapest unprotected. If the protected one is within
-/// `protectionPremiumPence` of the unprotected one (or nothing unprotected exists),
-/// it is chosen. Otherwise the cheap one wins and the summary says what you give up.
+/// cheapest protected and the cheapest unprotected. The shop wins when
+/// `discount_ratio * 10000 <= protection_premium_bps` (2500 = 25%), or when the
+/// shop is cheaper, or when nothing unprotected survived.
 func applyPremium(
     items: [ShortlistItem],
     decisions: [String: Decision],
     settings: UserSettings
 ) -> Verdict {
-    let premium = settings.protectionPremiumPence
+    let premiumBps = settings.protectionPremiumBps
     var survivors: [ShortlistItem] = []
     var dropped = 0
     for item in items {
@@ -58,18 +77,18 @@ func applyPremium(
 
     if let protectedBest, let protectedPrice = protectedBest.pricePence {
         let unprotectedPrice = unprotectedBest?.pricePence
-        if unprotectedBest == nil || protectedPrice - (unprotectedPrice ?? 0) <= premium {
-            let gap = unprotectedBest.flatMap { best in
-                best.pricePence.map { protectedPrice - $0 }
+        if shopBeatsPremium(protected: protectedPrice, unprotected: unprotectedPrice, bps: premiumBps) {
+            let discount = unprotectedBest.flatMap { best in
+                best.pricePence.map { discountRatioBps(protected: protectedPrice, unprotected: $0) }
             } ?? 0
             let summary: String
             if unprotectedBest == nil {
                 summary = "Buying \(protectedBest.merchant) at \(formatGBP(protectedPrice)), the only listing that is the item and keeps your rights.\(droppedNote)"
-            } else if gap <= 0 {
+            } else if discount <= 0 {
                 summary = "Buying \(protectedBest.merchant) at \(formatGBP(protectedPrice)): the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.\(droppedNote)"
             } else {
                 let other = unprotectedBest?.merchant ?? ""
-                summary = "Buying \(protectedBest.merchant) at \(formatGBP(protectedPrice)). That is \(formatGBP(gap)) more than \(other), inside your \(formatGBP(premium)) for rights: 14-day cancellation and a 30-day fault refund.\(droppedNote)"
+                summary = "Buying \(protectedBest.merchant) at \(formatGBP(protectedPrice)). That is \(formatPercentBps(discount)) more than \(other), inside your \(formatPercentBps(premiumBps)) for rights: 14-day cancellation and a 30-day fault refund.\(droppedNote)"
             }
             return Verdict(chosenId: protectedBest.id, perOffer: decisions, summary: summary)
         }
@@ -78,7 +97,8 @@ func applyPremium(
     if let unprotectedBest, let unprotectedPrice = unprotectedBest.pricePence {
         let summary: String
         if let protectedBest, let protectedPrice = protectedBest.pricePence {
-            summary = "Buying \(unprotectedBest.merchant) at \(formatGBP(unprotectedPrice)): cheaper by \(formatGBP(protectedPrice - unprotectedPrice)) than \(protectedBest.merchant), which beats your \(formatGBP(premium)), but a break is your problem. No cooling-off, no Consumer Rights Act remedy.\(droppedNote)"
+            let discount = discountRatioBps(protected: protectedPrice, unprotected: unprotectedPrice)
+            summary = "Buying \(unprotectedBest.merchant) at \(formatGBP(unprotectedPrice)): \(formatPercentBps(discount)) cheaper than \(protectedBest.merchant), which beats your \(formatPercentBps(premiumBps)), but a break is your problem. No cooling-off, no Consumer Rights Act remedy.\(droppedNote)"
         } else {
             summary = "No listing with UK rights survived. \(unprotectedBest.merchant) at \(formatGBP(unprotectedPrice)) is the item, but a break is your problem.\(droppedNote)"
         }
@@ -92,7 +112,7 @@ func applyPremium(
     )
 }
 
-private func cheapest(_ items: [ShortlistItem]) -> ShortlistItem? {
+func cheapest(_ items: [ShortlistItem]) -> ShortlistItem? {
     var best: ShortlistItem?
     for item in items {
         guard let price = item.pricePence else { continue }

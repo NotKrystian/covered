@@ -11,6 +11,7 @@
 		07363A432E0C108281770074 /* LimitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CE01F87F3B0EDBC21C159D /* LimitsView.swift */; };
 		0F3BFF3E793018727E0FAE52 /* ReturnWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF3EC6F5EF05AF498C16DA83 /* ReturnWindow.swift */; };
 		0F51805B19BC8E16BCDBBC01 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255020AF5BE9CF9B87BB6671 /* Models.swift */; };
+		1CE1831AA1AF1776D04C776E /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 439AE3D679E74D6CA4E91D44 /* OFL.txt */; };
 		1E04B872DE785A8E4920EAD0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 746C75DE6A951B0732135D90 /* Assets.xcassets */; };
 		22926F860836AF28010DF5E6 /* ApproveConfirm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF64842F5181BE02408ECC4 /* ApproveConfirm.swift */; };
 		232A654D1A8AD833BFC3D7D1 /* CoveredApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8D1B497FBD0F0D2C4F89FB /* CoveredApp.swift */; };
@@ -33,7 +34,9 @@
 		75EE95266B22F578EF99797C /* LimitStatusChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE96C252BA2CF438DA1FEFB /* LimitStatusChip.swift */; };
 		783D350840BC6B03149406CB /* OrderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F79E484266E931DEDFE23291 /* OrderDetailView.swift */; };
 		80A1FF09D97DFFB3014618A5 /* APIClient+Reader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73BA6FD9BC4A7A2ACC450844 /* APIClient+Reader.swift */; };
+		8A5D1C5A001D4ACD3AFFC093 /* GeistFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DBD2EC92EBEA3347E3712D7 /* GeistFont.swift */; };
 		90AA2ADEF5E8D61D0DB1009A /* CoveredTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66823610175E668B48C8F9C /* CoveredTabs.swift */; };
+		94A78836513F5561C2861FBC /* Geist-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3E4A2A55BE184271313A030A /* Geist-Variable.ttf */; };
 		9AEC965D5A8A0596CE64B2E5 /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14824AB4383B8FC9B0CE123 /* ShopView.swift */; };
 		9B920B3DD87F9FD7C562B02B /* OfferItems.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF7F611C9617B3CA7E18D725 /* OfferItems.swift */; };
 		A7B5CD094FFC8DE5E230C051 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F3711C6B4E4229E2959ECCE /* SettingsView.swift */; };
@@ -74,9 +77,12 @@
 		227B21D3F1585186FE24AE53 /* SortTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortTests.swift; sourceTree = "<group>"; };
 		255020AF5BE9CF9B87BB6671 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		2B6B5BCB4BDFAC88802D2EF1 /* CoveredUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoveredUITests.swift; sourceTree = "<group>"; };
+		2DBD2EC92EBEA3347E3712D7 /* GeistFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeistFont.swift; sourceTree = "<group>"; };
 		35FC9C83FF3CA52BBB83D584 /* LimitRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitRowView.swift; sourceTree = "<group>"; };
 		3D8D1B497FBD0F0D2C4F89FB /* CoveredApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoveredApp.swift; sourceTree = "<group>"; };
+		3E4A2A55BE184271313A030A /* Geist-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Variable.ttf"; sourceTree = "<group>"; };
 		3FDC63A97223C96F84D22B15 /* Covered.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Covered.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		439AE3D679E74D6CA4E91D44 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
 		456A3E788F461A77722E9CD6 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		48D0A37B0850CBC0D96CEE98 /* Motion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Motion.swift; sourceTree = "<group>"; };
 		4B0250307EBCFD2145276B21 /* OnboardingFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlow.swift; sourceTree = "<group>"; };
@@ -123,6 +129,15 @@
 				9B806D1753B1B64C9F46A5DC /* CoveredUITests */,
 				65C0F01F7D6A0240F87B5D22 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		1655EE1D772F79DFD41930C8 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				3E4A2A55BE184271313A030A /* Geist-Variable.ttf */,
+				439AE3D679E74D6CA4E91D44 /* OFL.txt */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		28EF3525AEB80698C1A9A4BC /* App */ = {
@@ -188,8 +203,17 @@
 				28EF3525AEB80698C1A9A4BC /* App */,
 				C4E29303695B44A07E3BB95A /* Core */,
 				6AFEA2BB807A0B62CAE81756 /* Features */,
+				8B60133F18DCA6971DA82359 /* Resources */,
 			);
 			path = Covered;
+			sourceTree = "<group>";
+		};
+		8B60133F18DCA6971DA82359 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				1655EE1D772F79DFD41930C8 /* Fonts */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		9B806D1753B1B64C9F46A5DC /* CoveredUITests */ = {
@@ -227,6 +251,7 @@
 				00FA50AC2B25FDD90BE95DD6 /* AppChrome.swift */,
 				CA1D2B837B5D2771711418C2 /* AppState.swift */,
 				F66823610175E668B48C8F9C /* CoveredTabs.swift */,
+				2DBD2EC92EBEA3347E3712D7 /* GeistFont.swift */,
 				AD8A97BBB5B0E523865F02E4 /* Haptics.swift */,
 				69187A9B90663041E70EC7A2 /* KeychainToken.swift */,
 				255020AF5BE9CF9B87BB6671 /* Models.swift */,
@@ -362,6 +387,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1E04B872DE785A8E4920EAD0 /* Assets.xcassets in Resources */,
+				94A78836513F5561C2861FBC /* Geist-Variable.ttf in Resources */,
+				1CE1831AA1AF1776D04C776E /* OFL.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -388,6 +415,7 @@
 				22926F860836AF28010DF5E6 /* ApproveConfirm.swift in Sources */,
 				232A654D1A8AD833BFC3D7D1 /* CoveredApp.swift in Sources */,
 				90AA2ADEF5E8D61D0DB1009A /* CoveredTabs.swift in Sources */,
+				8A5D1C5A001D4ACD3AFFC093 /* GeistFont.swift in Sources */,
 				4552442CCEFFD9CD163F9ED4 /* Haptics.swift in Sources */,
 				416E9C588C57E58673927C29 /* KeychainToken.swift in Sources */,
 				54F954ECFB7577B84F05626C /* LaunchFlags.swift in Sources */,

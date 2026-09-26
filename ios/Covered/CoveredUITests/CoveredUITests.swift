@@ -2,7 +2,7 @@ import XCTest
 
 final class CoveredUITests: XCTestCase {
     private var app: XCUIApplication!
-    private let shots = URL(fileURLWithPath: "/tmp/covered-ios-restyle-shots", isDirectory: true)
+    private let shots = URL(fileURLWithPath: "/tmp/covered-ios-demo-shots", isDirectory: true)
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -25,14 +25,13 @@ final class CoveredUITests: XCTestCase {
         attach("onboarding")
         tapIdentified("onboarding.continue")
 
-        // Pay up to £10 — already the default
+        // Pay up to 25% — already the default
         tapIdentified("onboarding.continue")
         // Switch if I clear £8 — already the default
         tapIdentified("onboarding.continue")
         // Plain English
         tapIdentified("onboarding.continue")
 
-        // Pair — skip (Continue also advances if Skip is off-screen)
         if app.buttons["onboarding.skipPair"].waitForExistence(timeout: 4) {
             tapIdentified("onboarding.skipPair")
         } else {
@@ -58,7 +57,11 @@ final class CoveredUITests: XCTestCase {
         if !existing.localizedCaseInsensitiveContains("fleece") {
             search.typeText("black fleece jacket medium")
         }
-        tapIdentified("shop.searchButton")
+        dismissKeyboard()
+
+        let demo = app.buttons["shop.demo"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 6), "Demo chip should appear for the fleece query")
+        tapIdentified("shop.demo")
         attach("shop-searching")
 
         let approve = app.descendants(matching: .any)["shop.approve"].firstMatch
@@ -78,9 +81,26 @@ final class CoveredUITests: XCTestCase {
         }
         XCTAssertTrue(
             approve.exists,
-            "Chosen Approve button should appear after the live judge returns"
+            "Chosen Approve button should appear after the fixture judge returns"
         )
-        attach("shop-results")
+        attach("demo-shortlist")
+
+        let mislisting = app.descendants(matching: .any)["shop.mislisting"].firstMatch
+        if mislisting.waitForExistence(timeout: 4) {
+            mislisting.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            _ = app.descendants(matching: .any)["shop.mislistingLightbox"].waitForExistence(timeout: 4)
+            attach("demo-mislisting")
+            if app.buttons["shop.mislistingClose"].waitForExistence(timeout: 3) {
+                tapIdentified("shop.mislistingClose")
+            }
+        } else {
+            attach("demo-mislisting")
+        }
+
+        setPremiumPercent(15)
+        attach("premium-15")
+        setPremiumPercent(25)
+        attach("premium-25")
 
         tapTab("tabs.orders")
         attach("orders-before")
@@ -92,6 +112,10 @@ final class CoveredUITests: XCTestCase {
 
         tapTab("tabs.shop")
         XCTAssertTrue(approve.waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            approve.label.contains("36") || approve.label.contains("£36"),
+            "At 25% the pick should be JD Sports £36.00, got \(approve.label)"
+        )
         approve.tap()
         XCTAssertTrue(app.buttons["approve.confirm"].waitForExistence(timeout: 8))
         let price = app.descendants(matching: .any)["approve.price"].firstMatch.value as? String ?? ""
@@ -113,7 +137,7 @@ final class CoveredUITests: XCTestCase {
             viewOrder.exists,
             "Approve should debit the live wallet and show the receipt"
         )
-        attach("approve-confirm")
+        attach("approve-success")
         let walletAfterApprove = app.descendants(matching: .any)["approve.balance"].firstMatch.value as? String ?? ""
 
         tapIdentified("approve.viewOrder")
@@ -124,6 +148,14 @@ final class CoveredUITests: XCTestCase {
 
         let orderId = app.descendants(matching: .any)["order.id"].firstMatch
         XCTAssertTrue(orderId.waitForExistence(timeout: 8))
+        let daysLeft = app.descendants(matching: .any)["order.daysLeft"].firstMatch
+        XCTAssertTrue(daysLeft.waitForExistence(timeout: 6))
+        let daysValue = daysLeft.value as? String ?? daysLeft.label
+        XCTAssertTrue(
+            daysValue.contains("14 days left"),
+            "Order day should read 14 days left, got \(daysValue)"
+        )
+        attach("order-14-days")
         attach("order")
         let orderIdValue = orderId.value as? String ?? orderId.label
 
@@ -141,8 +173,7 @@ final class CoveredUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         }
         if app.keyboards.element.exists {
-            app.buttons["onboarding.wordmark"].tap()
-            if app.keyboards.element.exists { app.swipeDown() }
+            app.swipeDown()
         }
         attach("returns-chat")
         if !draft.exists && !reply.exists {
@@ -169,6 +200,7 @@ final class CoveredUITests: XCTestCase {
         wallet_after_approve=\(walletAfterApprove)
         wallet_after=\(walletAfter)
         order_id=\(orderIdValue)
+        days_left=\(daysValue)
         """
         let reportURL = shots.appendingPathComponent("approve-report.txt")
         try report.write(to: reportURL, atomically: true, encoding: .utf8)
@@ -176,6 +208,14 @@ final class CoveredUITests: XCTestCase {
         attachment.name = "approve-report"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func setPremiumPercent(_ percent: Int) {
+        let premium = app.descendants(matching: .any)["shop.premium"].firstMatch
+        XCTAssertTrue(premium.waitForExistence(timeout: 8), "Missing shop.premium")
+        let fraction = CGFloat(percent) / 100.0
+        premium.coordinate(withNormalizedOffset: CGVector(dx: fraction, dy: 0.5)).tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
     }
 
     private func tapTab(_ identifier: String) {
@@ -193,13 +233,7 @@ final class CoveredUITests: XCTestCase {
     }
 
     private func dismissKeyboard() {
-        if app.keyboards.buttons["next"].exists {
-            // Don't tap next — that submits the name field and skips a step.
-        }
-        let wordmark = app.staticTexts["onboarding.wordmark"]
-        if wordmark.exists {
-            wordmark.tap()
-        } else if app.keyboards.element.exists {
+        if app.keyboards.element.exists {
             app.swipeDown()
         }
     }

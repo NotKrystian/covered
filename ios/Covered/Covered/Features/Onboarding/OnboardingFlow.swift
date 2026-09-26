@@ -148,14 +148,14 @@ struct OnboardingFlow: View {
 
     private var premiumStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Pay up to £\(settings.protectionPremiumPence / 100) more to keep UK buyer rights.")
+            Text("Pay up to \(formatPercentBps(settings.protectionPremiumBps)) more to keep UK buyer rights.")
                 .headline(29)
             PremiumControl(
-                premiumPence: $settings.protectionPremiumPence,
-                gapPence: nil,
+                value: $settings.protectionPremiumBps,
+                unit: .percentBps,
                 shopWins: true,
-                verdictLead: "Pay up to \(formatGBP(settings.protectionPremiumPence))",
-                verdictBody: "Covered spends this extra to buy from a shop you can enforce against."
+                verdictLead: "Pay up to \(formatPercentBps(settings.protectionPremiumBps))",
+                verdictBody: "Covered spends this extra share of the UK shop price to buy from a shop you can enforce against."
             )
         }
     }
@@ -165,8 +165,8 @@ struct OnboardingFlow: View {
             Text("Only switch inside 14 days if I still clear £\(settings.switchMinimumPence / 100) after postage.")
                 .headline(29)
             PremiumControl(
-                premiumPence: $settings.switchMinimumPence,
-                gapPence: nil,
+                value: $settings.switchMinimumPence,
+                unit: .pence,
                 shopWins: true,
                 verdictLead: "Switch floor \(formatGBP(settings.switchMinimumPence))",
                 verdictBody: "A cheaper find has to beat this after you pay to send the first one back."
@@ -183,11 +183,11 @@ struct OnboardingFlow: View {
                 miniCard(title: "UK shop", price: "£36", chip: "14-day cancellation", good: true)
             }
             RightsChip()
-            Text("£8 ≤ £10 · shop wins")
+            Text("22% ≤ \(formatPercentBps(settings.protectionPremiumBps)) · shop wins")
                 .font(.system(size: 17.5, weight: .semibold))
                 .tracking(-0.3)
                 .foregroundStyle(Color.inkSoft)
-            Text("Your numbers: pay up to \(formatGBP(settings.protectionPremiumPence)) for rights, and only move after delivery if a cheaper listing still clears \(formatGBP(settings.switchMinimumPence)) once postage is paid.")
+            Text("Your numbers: pay up to \(formatPercentBps(settings.protectionPremiumBps)) of the UK shop price for rights, and only move after delivery if a cheaper listing still clears \(formatGBP(settings.switchMinimumPence)) once postage is paid.")
                 .font(.system(size: 14.5))
                 .foregroundStyle(Color.secondary)
         }

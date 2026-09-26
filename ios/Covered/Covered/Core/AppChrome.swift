@@ -296,24 +296,39 @@ struct FilmCard<Content: View>: View {
 
 // MARK: - Premium control
 
+enum PremiumUnit {
+    case percentBps
+    case pence
+}
+
 struct PremiumControl: View {
-    @Binding var premiumPence: Int
-    var gapPence: Int?
+    @Binding var value: Int
+    var unit: PremiumUnit = .percentBps
+    var discountBps: Int?
+    var gapHighPence: Int?
+    var gapLowPence: Int?
     var shopWins: Bool
     var verdictLead: String
     var verdictBody: String
-    var range: ClosedRange<Int> = 0...3_000
+    var identifier: String = ""
     var onEditingChanged: (Bool) -> Void = { _ in }
+
+    private var range: ClosedRange<Int> {
+        switch unit {
+        case .percentBps: return 0...10_000
+        case .pence: return 0...3_000
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let gapPence, let line = gapLine(gapPence) {
+            if unit == .percentBps, let discountBps, let line = gapLine(discountBps) {
                 meterRow(label: "Gap", value: line)
                 meterRow(
                     label: "Rights premium",
-                    value: "\(formatGBP(min(gapPence, premiumPence)))  of  \(formatGBP(premiumPence))"
+                    value: "\(formatPercentBps(min(discountBps, value)))  of  \(formatPercentBps(value))"
                 )
-                track(gap: gapPence)
+                track(measured: discountBps, capValue: value)
             }
 
             handle
@@ -330,6 +345,21 @@ struct PremiumControl: View {
             }
             .coveredSwap()
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityValue("\(value)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                apply(value + 100)
+                onEditingChanged(false)
+            case .decrement:
+                apply(value - 100)
+                onEditingChanged(false)
+            @unknown default:
+                break
+            }
+        }
     }
 
     private func meterRow(label: String, value: String) -> some View {
@@ -344,16 +374,16 @@ struct PremiumControl: View {
         }
     }
 
-    private func track(gap: Int) -> some View {
+    private func track(measured: Int, capValue: Int) -> some View {
         GeometryReader { geo in
-            let cap = max(gap, premiumPence, 1)
-            let green = CGFloat(min(gap, premiumPence)) / CGFloat(cap)
+            let cap = max(measured, capValue, 1)
+            let green = CGFloat(min(measured, capValue)) / CGFloat(cap)
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.track)
                 Capsule()
                     .fill(Color.accent)
                     .frame(width: max(0, geo.size.width * green))
-                if gap > premiumPence {
+                if measured > capValue {
                     Capsule()
                         .fill(Color.meterOver)
                         .frame(width: max(0, geo.size.width * (1 - green)))
@@ -362,7 +392,7 @@ struct PremiumControl: View {
                 Rectangle()
                     .fill(Color.ink)
                     .frame(width: 2.5, height: 27.5)
-                    .offset(x: geo.size.width * CGFloat(premiumPence) / CGFloat(cap) - 1.25)
+                    .offset(x: geo.size.width * CGFloat(capValue) / CGFloat(cap) - 1.25)
             }
         }
         .frame(height: 13)
@@ -371,40 +401,64 @@ struct PremiumControl: View {
     private var handle: some View {
         GeometryReader { geo in
             let span = CGFloat(range.upperBound - range.lowerBound)
-            let t = span == 0 ? 0 : CGFloat(premiumPence - range.lowerBound) / span
-            let width: CGFloat = 139
+            let t = span == 0 ? 0 : CGFloat(value - range.lowerBound) / span
+            let width: CGFloat = 148
             let x = (geo.size.width - width) * t
-            Text("Pay up to \(formatGBP(premiumPence).replacingOccurrences(of: ".00", with: ""))")
-                .font(.system(size: 14.5, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(width: width, height: 40)
-                .background(Color.ink, in: Capsule())
-                .offset(x: x)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let raw = (value.location.x / max(geo.size.width, 1)) * span
-                            let pounds = Int((raw / 100).rounded())
-                            let next = min(range.upperBound, max(range.lowerBound, pounds * 100))
-                            if next != premiumPence {
-                                premiumPence = next
-                                Haptics.light()
-                            }
-                            onEditingChanged(true)
-                        }
-                        .onEnded { _ in
-                            onEditingChanged(false)
-                        }
-                )
-                .animation(Motion.drag, value: premiumPence)
+            ZStack(alignment: .leading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                Text(handleTitle)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: width, height: 40)
+                    .background(Color.ink, in: Capsule())
+                    .offset(x: x)
+                    .allowsHitTesting(false)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        setFrom(x: drag.location.x, width: geo.size.width)
+                        onEditingChanged(true)
+                    }
+                    .onEnded { _ in
+                        onEditingChanged(false)
+                    }
+            )
+            .animation(Motion.drag, value: value)
         }
         .frame(height: 40)
-        .accessibilityIdentifier("shop.premium")
     }
 
-    private func gapLine(_ gap: Int) -> String? {
-        guard gap > 0 else { return nil }
-        return formatGBP(gap)
+    private var handleTitle: String {
+        switch unit {
+        case .percentBps:
+            return "Pay up to \(formatPercentBps(value))"
+        case .pence:
+            return "Clear \(formatGBP(value).replacingOccurrences(of: ".00", with: ""))"
+        }
+    }
+
+    private func gapLine(_ discount: Int) -> String? {
+        guard discount > 0 else { return nil }
+        if let high = gapHighPence, let low = gapLowPence {
+            return "\(formatGBP(high)) − \(formatGBP(low)) = \(formatPercentBps(discount))"
+        }
+        return formatPercentBps(discount)
+    }
+
+    private func setFrom(x: CGFloat, width: CGFloat) {
+        let span = CGFloat(range.upperBound - range.lowerBound)
+        let raw = (x / max(width, 1)) * span + CGFloat(range.lowerBound)
+        apply(Int((raw / 100).rounded()) * 100)
+    }
+
+    private func apply(_ next: Int) {
+        let clamped = min(range.upperBound, max(range.lowerBound, next))
+        if clamped != value {
+            value = clamped
+            Haptics.light()
+        }
     }
 }
 

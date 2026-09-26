@@ -40,6 +40,10 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/Geist-Variable.ttf</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Confirm purchases from your Covered wallet.</string>
 	<key>UILaunchScreen</key>

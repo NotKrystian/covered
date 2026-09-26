@@ -27,6 +27,24 @@ struct ShopView: View {
                             onSend: runSearch
                         )
 
+                        if isFleeceDemoQuery(shop.query) {
+                            Button {
+                                searchFocused = false
+                                Task { await shop.searchFixtures() }
+                            } label: {
+                                Text("Demo")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Color.tertiary)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 26)
+                                    .background(Color.chipNeutral, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(shop.isBusy)
+                            .accessibilityIdentifier("shop.demo")
+                            .accessibilityLabel("Demo")
+                        }
+
                         if shop.isBusy {
                             loadingState
                         } else if let error = shop.errorText, shop.items.isEmpty {
@@ -77,7 +95,7 @@ struct ShopView: View {
             limitSheet(item)
         }
         .task {
-            shop.localPremiumPence = AppState.shared.settings.protectionPremiumPence
+            shop.localPremiumBps = AppState.shared.settings.protectionPremiumBps
             if AppState.shared.wallet == nil {
                 await AppState.shared.refresh()
             }
@@ -119,14 +137,18 @@ struct ShopView: View {
             .matchedGeometryEffect(id: "chosen-card", in: morph)
 
             PremiumControl(
-                premiumPence: Binding(
-                    get: { shop.localPremiumPence },
+                value: Binding(
+                    get: { shop.localPremiumBps },
                     set: { shop.applyLocalPremium($0) }
                 ),
-                gapPence: premiumGap,
+                unit: .percentBps,
+                discountBps: premiumDiscountBps,
+                gapHighPence: premiumPair?.protected.pricePence,
+                gapLowPence: premiumPair?.unprotected.pricePence,
                 shopWins: shopWins,
                 verdictLead: verdictLead,
                 verdictBody: shop.verdict?.summary ?? "",
+                identifier: "shop.premium",
                 onEditingChanged: { editing in
                     if !editing { Task { await savePremium() } }
                 }
@@ -295,47 +317,44 @@ struct ShopView: View {
 
     private var premiumPair: (protected: ShortlistItem, unprotected: ShortlistItem)? {
         let survivors = survivorsForPremium(items: shop.items, decisions: shop.decisions)
-        let protectedBest = survivors.first { item in
+        let protectedBest = cheapest(survivors.filter { item in
             guard let d = shop.decisions[item.id] else { return false }
             return isProtected(d)
-        }
-        let unprotectedBest = survivors.first { item in
+        })
+        let unprotectedBest = cheapest(survivors.filter { item in
             guard let d = shop.decisions[item.id] else { return true }
             return !isProtected(d)
-        }
+        })
         if let protectedBest, let unprotectedBest { return (protectedBest, unprotectedBest) }
         return nil
     }
 
-    private var premiumGap: Int? {
+    private var premiumDiscountBps: Int? {
         guard let pair = premiumPair,
               let high = pair.protected.pricePence,
               let low = pair.unprotected.pricePence
         else { return nil }
-        return max(0, high - low)
+        return discountRatioBps(protected: high, unprotected: low)
     }
 
     private var shopWins: Bool {
-        guard let gap = premiumGap else { return true }
-        return gap <= shop.localPremiumPence
+        guard let pair = premiumPair,
+              let high = pair.protected.pricePence,
+              let low = pair.unprotected.pricePence
+        else { return true }
+        return shopBeatsPremium(protected: high, unprotected: low, bps: shop.localPremiumBps)
     }
 
     private var verdictLead: String {
-        guard let gap = premiumGap else {
+        guard let discount = premiumDiscountBps else {
             return shop.verdict?.summary.split(separator: ".").first.map(String.init) ?? ""
         }
-        let sign = shopWins ? "shop wins" : "private wins"
-        return "\(formatGBP(gap)) ≤ \(formatGBP(shop.localPremiumPence)) · \(sign)"
-            .replacingOccurrences(
-                of: "≤",
-                with: shopWins ? "≤" : ">"
-            )
-            .replacingOccurrences(
-                of: "\(formatGBP(gap)) ≤",
-                with: shopWins
-                    ? "\(formatGBP(gap)) ≤"
-                    : "\(formatGBP(gap)) >"
-            )
+        let cap = formatPercentBps(shop.localPremiumBps)
+        let gap = formatPercentBps(discount)
+        if shopWins {
+            return "\(gap) ≤ \(cap) · shop wins"
+        }
+        return "\(gap) > \(cap) · private wins"
     }
 
     private func openLimit(_ item: ShortlistItem) {
@@ -358,7 +377,7 @@ struct ShopView: View {
         guard !savingPremium else { return }
         savingPremium = true
         var next = AppState.shared.settings
-        next.protectionPremiumPence = shop.localPremiumPence
+        next.protectionPremiumBps = shop.localPremiumBps
         do {
             try await AppState.shared.saveSettings(settings: next)
         } catch {

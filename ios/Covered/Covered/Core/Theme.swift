@@ -72,25 +72,4 @@ enum Theme {
     static let composerHeight: CGFloat = 51
 }
 
-extension Font {
-    /// Tabular lining numerals for money.
-    static func money(_ size: CGFloat = 17, weight: Weight = .semibold) -> Font {
-        .system(size: size, weight: weight).monospacedDigit()
-    }
-
-    static func ui(_ size: CGFloat, weight: Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .default)
-    }
-}
-
-extension View {
-    func filmText(_ size: CGFloat, weight: Font.Weight, tracking: CGFloat = 0) -> some View {
-        font(.system(size: size, weight: weight, design: .default))
-            .tracking(tracking)
-    }
-
-    func filmMoney(_ size: CGFloat, weight: Font.Weight, tracking: CGFloat = 0) -> some View {
-        font(.system(size: size, weight: weight, design: .default).monospacedDigit())
-            .tracking(tracking)
-    }
-}
+// Font.ui / Font.money / filmText live in GeistFont.swift (Geist, SF Pro fallback).
