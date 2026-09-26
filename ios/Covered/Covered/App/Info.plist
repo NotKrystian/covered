@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -40,12 +42,12 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Confirm purchases from your Covered wallet.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/Geist-Variable.ttf</string>
 	</array>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Confirm purchases from your Covered wallet.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

@@ -31,6 +31,7 @@ targets:
       INFOPLIST_FILE: Covered/App/Info.plist
       GENERATE_INFOPLIST_FILE: YES
       INFOPLIST_KEY_CFBundleDisplayName: Covered
+      INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
       INFOPLIST_KEY_UILaunchScreen_Generation: YES
       INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
       INFOPLIST_KEY_UIRequiresFullScreen: YES
@@ -44,6 +45,7 @@ targets:
       path: Covered/App/Info.plist
       properties:
         CFBundleDisplayName: Covered
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
