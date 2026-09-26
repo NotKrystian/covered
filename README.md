@@ -2,7 +2,7 @@
 
 A shopping bot you text. It buys now, or it waits for your price. It will pay more when the cheaper listing is a private seller or an untrustworthy venue, because those listings do not come with UK buyer rights.
 
-A model on Amazon Bedrock (Claude Haiku 4.5, EU inference profile) decides the things a sort cannot: same item or not (from the photos, not the title), mislisting, business or private seller, trustworthy venue, which right applies. Code only compares pounds to the numbers you set. A small preference memory in DynamoDB remembers how you buy and leans the next judgement; the pound rule never reads it. Collaborator guide: `AGENTS.md`.
+A model on Amazon Bedrock (Claude Haiku 4.5, EU inference profile) decides the things a sort cannot: same item or not (from the photos, not the title), mislisting, business or private seller, trustworthy venue, which right applies. Code only compares pounds to the numbers you set. A small preference memory in DynamoDB remembers how you buy and leans the next judgement; the pound rule never reads it. Collaborator guide and live-host orchestration: `AGENTS.md`. App Runner is retired; `covered.kawuc.uk` is the EC2 Next container.
 
 ## Run
 
