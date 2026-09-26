@@ -74,7 +74,7 @@ else
   BUILD_REMOTE=$(cat <<EOF
 mkdir -p /opt/covered/src && find /opt/covered/src -mindepth 1 -delete
 aws s3 cp --only-show-errors "s3://${DEPLOY_BUCKET}/${SRC_KEY}" /tmp/covered-src.tgz
-tar -xzf /tmp/covered-src.tgz -C /opt/covered/src && rm -f /tmp/covered-src.tgz
+tar --warning=no-unknown-keyword -xzf /tmp/covered-src.tgz -C /opt/covered/src && rm -f /tmp/covered-src.tgz
 cd /opt/covered/src
 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin "${ECR_URI%%/*}" >/dev/null
 echo "== docker build ${TAG} (log: /opt/covered/build.log)"

@@ -1,16 +1,21 @@
 # syntax=docker/dockerfile:1
-# Covered — Next.js 16 standalone server for AWS App Runner (linux/amd64).
+# Covered — Next.js 16 standalone server + Playwright Chromium.
 #
-#   docker buildx build --platform linux/amd64 -t covered .
-#   docker run --rm -p 3000:3000 -e AWS_REGION=eu-west-2 -e COVERED_READER_DISABLED=1 \
-#     -v ~/.aws:/home/covered/.aws:ro covered          # ~/.aws mount is for local testing only
+# Platform is picked at build time, not here: deploy/aws/redeploy.sh builds
+# linux/arm64 for the Graviton box (natively on the instance, or locally with
+# `docker buildx build --platform linux/arm64`).
 #
-# No Playwright browsers are installed: Google blocks datacenter IPs, so the
-# service runs with COVERED_READER_DISABLED=1 and the reader falls back to the
-# snapshots in public/snapshots. The `playwright` npm package is still present
-# (it is a dependency of the reader) but never launches a browser here.
+#   docker buildx build --platform linux/arm64 -t covered .
+#   docker run --rm -p 3000:3000 --shm-size=1g -e AWS_REGION=eu-west-2 covered
+#
+# The runtime stage is Microsoft's Playwright image so Chromium and all of its
+# shared-library deps exist for src/lib/reader. The tag MUST match the
+# `playwright` version in package.json (1.63.0) or the driver will not find its
+# browsers. For a browser-less image (e.g. App Runner with
+# COVERED_READER_DISABLED=1) override the base: --build-arg RUNTIME_IMAGE=node:22-slim
 
-ARG NODE_IMAGE=node:22-slim
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG RUNTIME_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble
 
 # ---- build ------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS build
@@ -28,13 +33,16 @@ COPY . .
 RUN pnpm build
 
 # ---- runtime ----------------------------------------------------------------
-FROM ${NODE_IMAGE} AS runtime
+FROM ${RUNTIME_IMAGE} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     NEXT_TELEMETRY_DISABLED=1
 
+# Non-root. uid 1001 is free in both the Playwright image (pwuser=1000) and node:22-slim (node=1000).
+# /ms-playwright is world-readable in the Playwright image, so this user can launch Chromium.
 RUN groupadd --system --gid 1001 covered \
  && useradd --system --uid 1001 --gid covered --create-home --home-dir /home/covered covered
 
@@ -43,6 +51,7 @@ COPY --from=build --chown=covered:covered /app/.next/standalone ./
 COPY --from=build --chown=covered:covered /app/.next/static ./.next/static
 COPY --from=build --chown=covered:covered /app/public ./public
 
+# Playwright's persistent headless profile lives under os.tmpdir(); /tmp is writable.
 USER covered
 EXPOSE 3000
 CMD ["node", "server.js"]
