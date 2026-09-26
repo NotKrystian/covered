@@ -1,10 +1,11 @@
 /**
  * /api/memory — owned by Judge+Memory. Preference memory for the anonymous `covered_uid`.
  *
- * GET    → the caller's `Memory` (empty shell for a new buyer) plus which store served it.
+ * GET    → the caller's `Memory` (decision events stripped) plus which store served it.
  * POST   `{ kind: "approve" | "override", query, chosen_id?, premium_pence, note?, display_name? }`
  *        → records the event, asks Bedrock (or the template) to rewrite `summary`, returns the memory.
- * DELETE → "Forget me": removes the item and drops the cookie.
+ *        Approve is also written by POST /api/approve after a successful wallet debit.
+ * DELETE → "Reset memory": removes the item and drops the cookie.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import {
   deleteMemory,
   getMemory,
   memoryStore,
+  publicMemory,
   recordEvent,
   saveMemory,
   type Memory,
@@ -45,7 +47,7 @@ type MemoryResponse = {
 
 export async function GET(): Promise<NextResponse<MemoryResponse>> {
   const { userId } = await getUserId();
-  const memory = await getMemory(userId);
+  const memory = publicMemory(await getMemory(userId));
   return NextResponse.json({ ok: true, memory, store: memoryStore().store });
 }
 
@@ -75,7 +77,7 @@ export async function POST(request: Request): Promise<NextResponse<MemoryRespons
   );
 
   const rewritten = await rewriteSummary(withEvent);
-  const memory = await saveMemory(userId, { ...withEvent, summary: rewritten.summary });
+  const memory = publicMemory(await saveMemory(userId, { ...withEvent, summary: rewritten.summary }));
   console.log(`[covered/memory] ${body.kind} recorded for ${userId.slice(0, 8)}…, summary via ${rewritten.mode}`);
   return NextResponse.json({
     ok: true,

@@ -2,9 +2,9 @@
  * POST /api/decide — owned by Judge+Memory.
  *
  * Body: `{ query, settings?, display_name?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
- * Builds the shortlist, loads this buyer's memory, asks the Bedrock judge (or the mock),
- * applies the pound rule in code, records a `decision` event, and returns `DecideResponse`
- * with a visible trace. Memory shapes the model's lean only; the pound rule never reads it.
+ * Builds the shortlist, loads this buyer's memory (read-only), asks the Bedrock judge
+ * (or the mock), applies the pound rule in code, and returns `DecideResponse` with a
+ * visible trace. Decide never writes memory. Only approve/override events are purchases.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -21,7 +21,15 @@ import {
 } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
 import { getUserId } from "@/lib/memory/identity";
-import { DISPLAY_NAME_MAX, getMemory, memoryPromptBlock, memoryStore, recordEvent } from "@/lib/memory";
+import {
+  DISPLAY_NAME_MAX,
+  getMemory,
+  hasPurchaseHistory,
+  memoryPromptBlock,
+  memoryStore,
+  publicMemory,
+} from "@/lib/memory";
+import { capOfferPhotos } from "@/lib/reader/photos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,27 +94,33 @@ export async function POST(request: Request) {
     items = FIXTURE_LISTINGS.map(listingToItem);
     log("read_fixtures", `${items.length} listings for "${body.query}"`);
   } else {
-    const offers = body.offers ?? [];
+    const offers = capOfferPhotos(body.offers ?? []);
     const built = buildShortlistFromOffers(offers);
     items = built.items;
     const sponsored = items.filter((i) => i.section === "sponsored").length;
+    const withPhotos = items.filter((i) => Boolean(i.image_data_url) || i.image_urls.length > 0).length;
     log(
       "read_grid",
-      `${gridLabel(body.grid)}: ${offers.length} offers → ${items.length} shortlisted (${built.deduped} duplicates dropped, ${sponsored} ads marked, no photos)`,
+      `${gridLabel(body.grid)}: ${offers.length} offers → ${items.length} shortlisted (${built.deduped} duplicates dropped, ${sponsored} ads marked, ${withPhotos} with photos)`,
     );
   }
 
   const { userId, isNew } = await getUserId();
-  const memory = await getMemory(userId);
+  const stored = await getMemory(userId);
+  const memory = publicMemory(stored);
   const memoryBlock = memoryPromptBlock(memory);
   const store = memoryStore();
-  if (memoryBlock) {
+  const learned = hasPurchaseHistory(memory);
+  if (learned) {
     log(
       "learned",
-      `${memory.events.length} past event${memory.events.length === 1 ? "" : "s"}${memory.summary ? `, summary: "${memory.summary.slice(0, 120)}${memory.summary.length > 120 ? "…" : ""}"` : ", no summary yet"} [${store.store}]`,
+      `${memory.events.filter((e) => e.kind === "approve").length} approved purchase${memory.events.filter((e) => e.kind === "approve").length === 1 ? "" : "s"}${memory.summary ? `, summary: "${memory.summary.slice(0, 120)}${memory.summary.length > 120 ? "…" : ""}"` : ", no summary yet"} [${store.store}]`,
     );
   } else {
-    log("memory", `${isNew ? "new buyer" : "nothing learned yet"} [${store.store}${store.store === "local" ? `: ${store.reason.slice(0, 80)}` : ""}]`);
+    log(
+      "memory",
+      `${isNew ? "new buyer" : "no purchase history"} [${store.store}${store.store === "local" ? `: ${store.reason.slice(0, 80)}` : ""}]`,
+    );
   }
 
   const judged = await judge(body.query, settings, items, { memory: memoryBlock });
@@ -127,25 +141,6 @@ export async function POST(request: Request) {
     `${formatPence(settings.protection_premium_pence)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"}`,
   );
 
-  try {
-    await recordEvent(
-      userId,
-      {
-        kind: "decision",
-        query: body.query,
-        chosen_id: verdict.chosen_id ?? undefined,
-        premium_pence: settings.protection_premium_pence,
-        note: chosen
-          ? `bot picked ${chosen.id} (${chosen.merchant} ${chosen.price_label}), ${mislistings} mislisting dropped`
-          : "bot found nothing to buy",
-      },
-      { settings, display_name: body.display_name },
-    );
-    log("memory", `recorded decision [${memoryStore().store}]`);
-  } catch (err) {
-    log("memory", `record failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
   const response: DecideResponse = {
     verdict,
     decisions: judged.decisions,
@@ -154,7 +149,7 @@ export async function POST(request: Request) {
     model: judged.model,
     trace,
     premium_paid_pence: premiumPaid(items, judged.decisions, verdict),
-    learned: memoryBlock !== null,
+    learned,
   };
   return NextResponse.json(response);
 }

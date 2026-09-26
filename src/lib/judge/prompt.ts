@@ -21,16 +21,16 @@ RIGHTS CARD (UK):
 - Marketplace with a written money-back / buyer-protection policy (e.g. eBay Money Back Guarantee): that is venue policy, not statute. Say which one you are relying on as extra.
 - Sponsored rows are ads. A "Sale" badge, a struck-through price, or the top slot is never a reason to buy.
 
-MISLISTING: photos are the check, titles are the bait. If the photos show a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without photos you cannot call a mislisting: mislisting=false, photo_reason=null, and judge identity from the text only. If the title clearly describes a different product from the request (wrong garment, wrong gender/fit when the request names one, an accessory, a bundle of something else), same_item=false. A different brand or a missing colour word is not a mismatch on its own.
+MISLISTING: photos are the check, titles are the bait. If a photo was actually attached and it shows a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without an attached photo you cannot call a mislisting: mislisting=false, photo_reason=null, and judge identity from the text only. If the title clearly describes a different product from the request (wrong garment, wrong gender/fit when the request names one, an accessory, a bundle of something else), same_item=false. A different brand or a missing colour word is not a mismatch on its own.
 
 VENUE TRUST values: shop_checkout (a retailer's own checkout), marketplace_protected (written buyer protection), marketplace_unprotected, stranger (private sale, cash on collection), unclear.
 SELLER TYPE values: uk_business, private, overseas_business, unclear.
 GRID ROWS (no photos): a merchant domain ending .co.uk / .uk, a well-known UK retailer name (Amazon.co.uk, Decathlon UK, Sports Direct, Tu Clothing, Argos, JD Sports, Next, M&S…), a named UK shop or reseller (Smart Cellular and the like), or a returns line like "30-day returns" with a UK-facing price is a uk_business at shop_checkout. "Amazon.co.uk - <name>-Seller" is a third-party seller under Amazon's A-to-z Guarantee: seller_type by the seller's evidence (uk_business if that third party is a named UK shop/reseller; unclear if none), venue_trust marketplace_protected — statutory rights still apply to the trader. A .com workwear or trade site with no returns line and no UK signal is unclear, not overseas_business, unless the text says it ships from abroad.
 RECOMMENDATION: "buy" when it is the item and the rights are real (a UK trader or reseller has real rights); "skip" when it is a mislisting, not the item, a private person, or an unenforceable overseas stall; "ask" only when you genuinely cannot tell. Never skip a UK reseller for "no statutory rights". Price and the user's premium never decide this — code does that afterwards.
 
-BUYER MEMORY: the user turn may include "what we know about this buyer" — a summary and recent events from their own past approvals and overrides. Use it to lean your recommendation and your sentence the way this person actually buys (someone who keeps taking the UK shop should see you favour rights; someone who keeps overriding to private bargains should see you say plainly when a bargain is worth the risk). It never changes same_item, mislisting or photo_reason, and it never invents rights the venue does not give.
+BUYER MEMORY: the user turn may include "what we know about this buyer". Treat only approve events as purchases. Never write that they bought this, approved this, or bought this before unless an approve event exists for that listing. If the block says there is no purchase history, there is none — do not invent one. Overrides are not purchases. Memory may lean your recommendation and your sentence the way this person actually buys. It never changes same_item, mislisting or photo_reason, and it never invents rights the venue does not give.
 
-OUTPUT: a single JSON object. Start your answer with "{" and end with "}". No prose, no markdown fences. Keep it compact: "reason" is one sentence of at most 160 characters, "rights" has at most 3 short entries, "photo_reason" is null whenever no photo was attached.
+OUTPUT: a single JSON object. Start your answer with "{" and end with "}". No prose, no markdown fences. Keep it compact: "reason" is one sentence of at most 160 characters, "rights" has at most 3 short entries, "photo_reason" is null whenever no photo was actually attached to that listing. Do not call a mislisting unless a photo block was sent for that id.
 {
   "summary": "one sentence for the user about the shortlist as a whole",
   "decisions": [
@@ -50,7 +50,7 @@ OUTPUT: a single JSON object. Start your answer with "{" and end with "}". No pr
 }
 Return exactly one decision per listing id, in the same order.`;
 
-function describeItem(item: ShortlistItem, index: number): string {
+function describeItem(item: ShortlistItem, index: number, attached: number): string {
   const lines = [
     `Listing ${index + 1} — id: ${item.id}`,
     `  title: ${item.title}`,
@@ -65,9 +65,9 @@ function describeItem(item: ShortlistItem, index: number): string {
   if (item.venue_hint) lines.push(`  venue hint: ${item.venue_hint}`);
   if (item.seller_type_hint) lines.push(`  seller hint: ${item.seller_type_hint} (a hint, you decide)`);
   lines.push(
-    item.image_urls.length > 0
-      ? `  photos: ${item.image_urls.length} attached below, in order`
-      : `  photos: none (do not call a mislisting)`,
+    attached > 0
+      ? `  photos: ${attached} attached below, in order`
+      : `  photos: none (do not call a mislisting; photo_reason=null)`,
   );
   return lines.join("\n");
 }
@@ -91,21 +91,33 @@ export async function buildUserContent(
     },
   ];
   if (memory) blocks.push({ text: memory });
-  const withPhotos = items.filter((i) => i.image_urls.length > 0).length;
+
+  const loadedById = new Map<string, Awaited<ReturnType<ImageLoader>>[]>();
+  for (const item of items) {
+    const pics: Awaited<ReturnType<ImageLoader>>[] = [];
+    const candidates: string[] = [];
+    if (item.image_data_url) candidates.push(item.image_data_url);
+    for (const url of item.image_urls) candidates.push(url);
+    for (const url of candidates) {
+      const loaded = await loadImage(url);
+      if (loaded) pics.push(loaded);
+    }
+    loadedById.set(item.id, pics);
+  }
+  const withPhotos = items.filter((i) => (loadedById.get(i.id)?.length ?? 0) > 0).length;
   blocks.push({
     text:
       withPhotos === 0
-        ? `Shortlist of ${items.length}. These are rows read from the Google Shopping grid: NO photos are attached for any of them. Set mislisting=false and photo_reason=null for every listing and judge identity from the title alone.`
-        : `Shortlist of ${items.length} (${withPhotos} with photos attached):`,
+        ? `Shortlist of ${items.length}. NO photos are attached for any of them. Set mislisting=false and photo_reason=null for every listing and judge identity from the title alone. Do not claim a mislisting.`
+        : `Shortlist of ${items.length} (${withPhotos} with photos actually attached). Only call a mislisting on an id that has a photo block below.`,
   });
   for (const [index, item] of items.entries()) {
-    blocks.push({ text: describeItem(item, index) });
-    for (const url of item.image_urls) {
-      const loaded = await loadImage(url);
-      if (loaded) {
-        blocks.push({ text: `Photo for id ${item.id}:` });
-        blocks.push({ image: { format: loaded.format, source: { bytes: loaded.bytes } } });
-      }
+    const pics = loadedById.get(item.id) ?? [];
+    blocks.push({ text: describeItem(item, index, pics.length) });
+    for (const loaded of pics) {
+      if (!loaded) continue;
+      blocks.push({ text: `Photo for id ${item.id}:` });
+      blocks.push({ image: { format: loaded.format, source: { bytes: loaded.bytes } } });
     }
   }
   blocks.push({ text: "Return the JSON object now." });

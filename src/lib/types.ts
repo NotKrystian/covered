@@ -17,7 +17,9 @@ export type OfferSection = z.infer<typeof OfferSectionSchema>;
  * Mirrors the Record in the plan. `price` is the string as shown ("£249.00");
  * `price_pence` is the parsed integer when the string parsed cleanly.
  * Browse records omit `offer_id`, `merchant_domain`, `specs`, `product_url`.
- * `image_urls` is only populated for fixtures; grid thumbnails are not trusted photos.
+ * `image_urls` is fixtures (and any extra remote thumbs). Live/extension rows also
+ * carry `image_url` (the displayed src, including encrypted-tbn) and optionally
+ * `image_data_url` (a compressed jpeg captured in the reader's page).
  */
 export const OfferSchema = z.object({
   section: OfferSectionSchema,
@@ -61,8 +63,12 @@ export const OfferSchema = z.object({
   more_merchants: z.string().nullable().optional(),
   /** Browse only: aria-label summary repeating title, badge, price, merchant, delivery, rating. */
   summary: z.string().nullable().optional(),
-  /** Fixtures only. Real product photos the judge can trust. */
+  /** Fixtures, or extra remote thumbs. */
   image_urls: z.array(z.string()).optional(),
+  /** Displayed card image src (encrypted-tbn or shop CDN). */
+  image_url: z.string().nullable().optional(),
+  /** One jpeg data URL per offer, captured in the reader when the canvas is clean. */
+  image_data_url: z.string().max(500_000).nullable().optional(),
 });
 export type Offer = z.infer<typeof OfferSchema>;
 

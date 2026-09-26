@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+import Link from "next/link";
 import type { UserSettings } from "@/lib/types";
 
 type Props = {
@@ -10,6 +12,7 @@ type Props = {
   onDisplayName: (name: string) => void;
   onRun: () => void;
   running: boolean;
+  wallet?: ReactNode;
 };
 
 function poundsToPence(value: string): number | null {
@@ -80,11 +83,14 @@ function PoundInput({
   );
 }
 
-export function SettingsStrip({ settings, onChange, displayName, onDisplayName, onRun, running }: Props) {
+export function SettingsStrip({ settings, onChange, displayName, onDisplayName, onRun, running, wallet }: Props) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-panel px-5 py-2.5 text-sm">
       <div className="flex items-baseline gap-3">
         <span className="font-semibold tracking-tight text-foreground">Covered</span>
+        <Link href="/orders" className="text-muted hover:text-foreground">
+          Orders
+        </Link>
         <span className="text-muted">
           buys the cheapest listing that is actually the item and still has your rights
         </span>
@@ -132,6 +138,12 @@ export function SettingsStrip({ settings, onChange, displayName, onDisplayName, 
         >
           {running ? "Running…" : "Re-run"}
         </button>
+        {wallet && (
+          <>
+            <span className="text-line">·</span>
+            {wallet}
+          </>
+        )}
       </div>
     </header>
   );

@@ -151,6 +151,65 @@ export function extractGrid(): GridExtraction {
       .map((el) => clean(el.textContent))
       .filter((text) => text.length > 0);
 
+  /** Displayed product img: prefer encrypted-tbn / gstatic, skip 1px and svg placeholders. */
+  const cardImage = (root: Element): { img: HTMLImageElement; src: string } | null => {
+    const imgs = Array.from(root.querySelectorAll("img"));
+    let fallback: { img: HTMLImageElement; src: string } | null = null;
+    for (const el of imgs) {
+      const img = el as HTMLImageElement;
+      const src = clean(img.currentSrc || img.src || img.getAttribute("src") || "");
+      if (!src) continue;
+      if (/^data:image\/(gif|svg)/i.test(src)) continue;
+      if (/pixel|spacer|blank|1x1/i.test(src)) continue;
+      const w = img.naturalWidth || img.width || 0;
+      if (img.complete && w > 0 && w < 16) continue;
+      if (!fallback) fallback = { img, src };
+      if (/encrypted-tbn|gstatic|ggpht/i.test(src)) return { img, src };
+    }
+    return fallback;
+  };
+
+  /** Scale to max width 360 and export jpeg. Null if tainted or not loaded. */
+  const captureJpegDataUrl = (img: HTMLImageElement): string | null => {
+    try {
+      if (!img.complete || !img.naturalWidth || img.naturalWidth < 8) return null;
+      const maxW = 360;
+      const scale = Math.min(1, maxW / img.naturalWidth);
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+      return dataUrl && dataUrl.startsWith("data:image/jpeg") ? dataUrl : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const attachCardPhoto = (root: Element, offer: Offer): void => {
+    const found = cardImage(root);
+    if (!found) return;
+    offer.image_url = found.src;
+    const dataUrl = captureJpegDataUrl(found.img);
+    if (dataUrl) offer.image_data_url = dataUrl;
+  };
+
+  const capDataUrls = (offers: Offer[], max: number): void => {
+    let kept = 0;
+    for (const offer of offers) {
+      if (!offer.image_data_url) continue;
+      if (kept >= max) {
+        offer.image_data_url = null;
+      } else {
+        kept += 1;
+      }
+    }
+  };
+
   // ---- sponsored row ----------------------------------------------------
   const sponsoredHits = seed([
     "data-offer-id",
@@ -289,6 +348,7 @@ export function extractGrid(): GridExtraction {
     if (offerId) offer.offer_id = offerId;
     if (offerDocid) offer.offer_docid = offerDocid;
     if (productUrl) offer.product_url = productUrl;
+    attachCardPhoto(unit, offer);
     sponsored.push(offer);
   }
 
@@ -377,7 +437,7 @@ export function extractGrid(): GridExtraction {
 
     if (!title && !price) continue;
 
-    browse.push({
+    const browseOffer: Offer = {
       section: "browse",
       title: title ?? "",
       price: price ?? "",
@@ -390,11 +450,15 @@ export function extractGrid(): GridExtraction {
       rating_count: ratingCount,
       more_merchants: moreMerchants,
       summary,
-    });
+    };
+    attachCardPhoto(row, browseOffer);
+    browse.push(browseOffer);
   }
 
   const more = document.querySelector<HTMLAnchorElement>("a.o5sVme");
   const moreHref = more?.getAttribute("href") ?? null;
+
+  capDataUrls([...sponsored, ...browse], 12);
 
   return {
     sponsored,

@@ -75,16 +75,25 @@ function rowState(item: ShortlistItem, decision: Decision | undefined, chosenId:
   return "neutral";
 }
 
+function listingPhoto(item: ShortlistItem): string | null {
+  return item.image_data_url || item.image_url || item.image_urls[0] || null;
+}
+
 function Thumb({ item, dim }: { item: ShortlistItem; dim: boolean }) {
-  const src = item.image_urls[0];
+  const src = listingPhoto(item);
+  const local = src?.startsWith("/") ?? false;
   return (
     <div
       className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-line bg-panel-raised ${dim ? "opacity-40" : ""}`}
     >
-      {src ? (
+      {src && local ? (
         <Image src={src} alt="" width={80} height={80} unoptimized className="h-full w-full object-cover" />
+      ) : src ? (
+        // Live thumbs are data URLs or encrypted-tbn; next/image is not needed.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-wide text-muted">
+        <div className="flex h-full w-full items-center justify-center bg-[#1a1b20] text-[10px] uppercase tracking-wide text-muted">
           no photo
         </div>
       )}

@@ -14,6 +14,7 @@ import { SUMMARY_MAX, type Memory, type MemoryEvent } from "./index";
 
 const SUMMARY_SYSTEM = `You write a buyer profile for Covered, a UK shopping bot that buys the cheapest listing that is actually the item and still has the buyer's rights.
 From the event log, describe how this person buys in at most 3 short sentences and at most ${SUMMARY_MAX} characters: how much they seem willing to pay for UK buyer rights, whether they accept private or overseas bargains, what they tend to ask for, and how often they override the bot.
+Only kind=approve events are purchases. Never write that they bought or approved something unless an approve event supports it. Overrides are not purchases. Ignore any decision events.
 Only state what the events support. Never mention prices the events do not contain. Return JSON only, no prose, no fences: {"summary": "..."}`;
 
 const SummaryResponseSchema = z.object({ summary: z.string().min(1) });
@@ -26,18 +27,17 @@ function describeEvents(events: MemoryEvent[]): string {
 
 /** Deterministic summary for mock mode and as the fallback when the model answer is unusable. */
 export function templateSummary(memory: Memory): string {
-  const events = memory.events;
-  if (events.length === 0) return "";
+  const events = memory.events.filter((e) => e.kind === "approve" || e.kind === "override");
   const approvals = events.filter((e) => e.kind === "approve");
+  if (approvals.length === 0) return "";
   const overrides = events.filter((e) => e.kind === "override");
-  const decisions = events.filter((e) => e.kind === "decision");
   const queries = [...new Set(events.map((e) => e.query.trim()).filter(Boolean))].slice(-3);
   const premiums = events.map((e) => e.premium_pence);
   const premium = premiums.length > 0 ? Math.round(premiums.reduce((a, b) => a + b, 0) / premiums.length) : 0;
   const privatePicks = [...approvals, ...overrides].filter((e) => /private|stranger|marketplace/i.test(`${e.chosen_id ?? ""} ${e.note}`)).length;
   const shopPicks = [...approvals, ...overrides].filter((e) => /shop|retailer|business/i.test(`${e.chosen_id ?? ""} ${e.note}`)).length;
 
-  const first = `${memory.display_name ? `${memory.display_name} has` : "This buyer has"} run ${decisions.length} search${decisions.length === 1 ? "" : "es"}, approved ${approvals.length} and overridden ${overrides.length}, mostly asking for ${queries.length > 0 ? queries.map((q) => `"${q}"`).join(", ") : "nothing yet"}.`;
+  const first = `${memory.display_name ? `${memory.display_name} has` : "This buyer has"} approved ${approvals.length} purchase${approvals.length === 1 ? "" : "s"} and overridden ${overrides.length}, mostly asking for ${queries.length > 0 ? queries.map((q) => `"${q}"`).join(", ") : "nothing yet"}.`;
   const lean =
     shopPicks > privatePicks
       ? "They keep taking the UK shop and paying for rights"
@@ -53,11 +53,14 @@ export type SummaryResult = { summary: string; mode: JudgeMode; notes: string[] 
 /** Rewrite `memory.summary` from `memory.events`. Never throws. */
 export async function rewriteSummary(memory: Memory): Promise<SummaryResult> {
   const notes: string[] = [];
-  if (memory.events.length === 0) return { summary: "", mode: "mock", notes: ["no events"] };
+  const events = memory.events.filter((e) => e.kind === "approve" || e.kind === "override");
+  if (events.filter((e) => e.kind === "approve").length === 0) {
+    return { summary: "", mode: "mock", notes: ["no purchase events"] };
+  }
   const { mode, why } = await judgeMode();
   if (mode === "mock") {
     notes.push(`mock: ${why}`);
-    return { summary: templateSummary(memory), mode: "mock", notes };
+    return { summary: templateSummary({ ...memory, events }), mode: "mock", notes };
   }
 
   const messages: Message[] = [
@@ -65,7 +68,7 @@ export async function rewriteSummary(memory: Memory): Promise<SummaryResult> {
       role: "user",
       content: [
         {
-          text: `${memory.display_name ? `Buyer name: ${memory.display_name}\n` : ""}Current settings: premium ${formatPence(memory.settings.protection_premium_pence)}, switch minimum ${formatPence(memory.settings.switch_minimum_pence)}, approval ${memory.settings.approval}.\nEvents (oldest first):\n${describeEvents(memory.events)}\n\nReturn the JSON object now.`,
+          text: `${memory.display_name ? `Buyer name: ${memory.display_name}\n` : ""}Current settings: premium ${formatPence(memory.settings.protection_premium_pence)}, switch minimum ${formatPence(memory.settings.switch_minimum_pence)}, approval ${memory.settings.approval}.\nEvents (oldest first; only approve is a purchase):\n${describeEvents(events)}\n\nReturn the JSON object now.`,
         },
       ],
     },

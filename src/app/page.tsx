@@ -13,6 +13,7 @@ import { ChatPanel, type ChatMessage, type SourceKind } from "@/components/ChatP
 import { Shortlist, type ShortlistSource } from "@/components/Shortlist";
 import { TracePanel } from "@/components/TracePanel";
 import { MemoryCard } from "@/components/MemoryCard";
+import { WalletStrip } from "@/components/WalletStrip";
 
 type ReceiptBody = Omit<Receipt, "id" | "created_at">;
 
@@ -177,11 +178,13 @@ export default function Home() {
   const [displayName, setDisplayName] = useState("");
   const [memoryState, setMemoryState] = useState<MemoryState | null>(null);
   const [memoryBusy, setMemoryBusy] = useState(false);
+  const [balancePence, setBalancePence] = useState(0);
 
   const push = useCallback((m: ChatMessage) => setMessages((prev) => [...prev, m]), []);
 
   const applyMemory = useCallback((next: MemoryState) => {
     setMemoryState(next);
+    setBalancePence(next.memory.balance_pence ?? 0);
     if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
   }, []);
 
@@ -201,17 +204,31 @@ export default function Home() {
     };
   }, [applyMemory]);
 
-  const forget = useCallback(async () => {
+  const resetMemory = useCallback(async () => {
     setMemoryBusy(true);
+    setMemoryState({
+      memory: {
+        user_id: "reset",
+        summary: "",
+        settings: DEFAULT_USER_SETTINGS,
+        events: [],
+        orders: [],
+        balance_pence: 0,
+        deposits: [],
+        updated_at: new Date().toISOString(),
+      },
+      store: memoryState?.store ?? "local",
+    });
+    setBalancePence(0);
+    setDisplayName("");
     try {
       await fetch("/api/memory", { method: "DELETE" });
-      setDisplayName("");
       await refreshMemory();
-      push(msg("bot", "Forgotten. Next run starts from nothing.", "neutral"));
+      push(msg("bot", "Memory reset. Next run starts from nothing.", "neutral"));
     } finally {
       setMemoryBusy(false);
     }
-  }, [refreshMemory, push]);
+  }, [refreshMemory, push, memoryState?.store]);
 
   const run = useCallback(
     async (nextSource: SourceKind) => {
@@ -271,12 +288,13 @@ export default function Home() {
     const decision = chosen ? result.decisions[chosen.id] : undefined;
     if (!chosen || !decision) return;
     setApproving(true);
-    const body: ReceiptBody = {
+    const body: ReceiptBody & { chosen_id: string } = {
       query,
       chosen: chosen.raw.kind === "offer" ? chosen.raw.offer : chosen.raw.listing,
       decision,
       section: chosen.section,
       protection_premium_pence: settings.protection_premium_pence,
+      chosen_id: chosen.id,
     };
     try {
       const res = await fetch("/api/approve", {
@@ -288,30 +306,24 @@ export default function Home() {
         setReceiptLine("Approved locally. Receipt endpoint not wired yet.");
         return;
       }
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; id?: string; key?: string; error?: string } | null;
+      const json = (await res.json().catch(() => null)) as
+        | { ok?: boolean; id?: string; key?: string; error?: string; balance_pence?: number }
+        | null;
+      if (res.status === 402) {
+        setReceiptLine(json?.error ?? "Wallet is short.");
+        return;
+      }
       if (!res.ok || !json?.ok || !json.id) {
         setReceiptLine(`Approve failed (${res.status}${json?.error ? `: ${json.error}` : ""}).`);
         return;
       }
+      if (typeof json.balance_pence === "number") setBalancePence(json.balance_pence);
       const paid = result.premium_paid_pence ?? 0;
       setReceiptLine(
-        `Bought ${chosen.merchant} ${chosen.price_label} · ${formatPence(paid)} paid for rights · receipt ${json.id}`,
+        `Bought ${chosen.merchant} ${chosen.price_label} · ${formatPence(paid)} paid for rights · wallet ${formatPence(json.balance_pence ?? 0)} · receipt ${json.id}`,
       );
-      // Teach the memory: this is the pick the user actually took.
       setMemoryBusy(true);
-      const remembered = await fetchMemory({
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          kind: "approve",
-          query,
-          chosen_id: chosen.id,
-          premium_pence: settings.protection_premium_pence,
-          note: `approved ${chosen.id} (${chosen.merchant} ${chosen.price_label}), ${formatPence(paid)} paid for rights, ${decision.seller_type} at ${decision.venue_trust}`,
-          display_name: displayName.trim() || undefined,
-        }),
-      });
-      if (remembered) setMemoryState(remembered);
+      await refreshMemory();
       setMemoryBusy(false);
     } catch (err) {
       setReceiptLine(`Approve failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -319,7 +331,7 @@ export default function Home() {
       setApproving(false);
       setMemoryBusy(false);
     }
-  }, [result, query, settings.protection_premium_pence, displayName]);
+  }, [result, query, settings.protection_premium_pence, refreshMemory]);
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-background text-foreground">
@@ -330,6 +342,7 @@ export default function Home() {
         onDisplayName={setDisplayName}
         onRun={() => run(source)}
         running={running}
+        wallet={<WalletStrip compact balancePence={balancePence} onBalance={setBalancePence} />}
       />
       <div className="grid min-h-0 grid-cols-[20rem_minmax(0,1fr)_auto]">
         <ChatPanel
@@ -364,7 +377,7 @@ export default function Home() {
               memory={memoryState?.memory ?? null}
               store={memoryState?.store ?? null}
               loading={memoryBusy}
-              onForget={forget}
+              onReset={resetMemory}
             />
           }
         />

@@ -29,7 +29,7 @@ export async function getUserId(): Promise<{ userId: string; isNew: boolean }> {
   return { userId, isNew: true };
 }
 
-/** Drop the cookie so the next request starts a fresh identity ("Forget me"). */
+/** Drop the cookie so the next request starts a fresh identity ("Reset memory"). */
 export async function clearUserId(): Promise<void> {
   const store = await cookies();
   store.delete(UID_COOKIE);

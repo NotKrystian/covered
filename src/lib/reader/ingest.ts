@@ -6,6 +6,7 @@ import { parsePricePence } from "@/lib/money";
 import type { Offer, SearchResult } from "@/lib/types";
 import { dedupeBrowse, dedupeSponsored } from "./dedupe";
 import { MAX_PER_SECTION } from "./limits";
+import { capOfferPhotos } from "./photos";
 
 export const BROWSER_READ_NOTE = "read in your browser";
 
@@ -23,7 +24,7 @@ export function ingestClientOffers(query: string, offers: Offer[]): SearchResult
     query: query.trim(),
     fetched_at: new Date().toISOString(),
     source: "live",
-    offers: [...sponsored, ...browse],
+    offers: capOfferPhotos([...sponsored, ...browse]),
     note: BROWSER_READ_NOTE,
   };
 }

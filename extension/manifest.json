@@ -26,7 +26,12 @@
   ],
   "host_permissions": [
     "https://www.google.com/*",
-    "https://www.google.co.uk/*"
+    "https://www.google.co.uk/*",
+    "https://*.gstatic.com/*",
+    "https://encrypted-tbn0.gstatic.com/*",
+    "https://encrypted-tbn1.gstatic.com/*",
+    "https://encrypted-tbn2.gstatic.com/*",
+    "https://encrypted-tbn3.gstatic.com/*"
   ],
   "permissions": ["tabs"]
 }

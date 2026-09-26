@@ -16,6 +16,7 @@ import { dedupeBrowse, dedupeSponsored } from "./dedupe";
 import { extractGrid, type GridExtraction, type SelectorHits } from "./extract";
 import { MAX_PER_SECTION } from "./limits";
 import { findSnapshot, slugify } from "./snapshots";
+import { hydrateOfferPhotos } from "./photos";
 
 export type { ReaderResponse, ReaderError, SearchResult, Offer } from "@/lib/types";
 export { closeBrowser, readerMode, cdpUrl, type ReaderMode } from "./browser";
@@ -223,7 +224,7 @@ export async function readGridLive(query: string): Promise<ReaderResponse> {
       query: trimmed,
       fetched_at: new Date().toISOString(),
       source: "live",
-      offers: [...sponsored, ...browse],
+      offers: await hydrateOfferPhotos([...sponsored, ...browse]),
     };
     return { ok: true, result };
   } catch (err) {

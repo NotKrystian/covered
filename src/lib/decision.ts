@@ -33,8 +33,12 @@ export type ShortlistItem = {
   /** Fixture hints. The judge still decides. */
   venue_hint?: string;
   seller_type_hint?: string;
-  /** Only fixtures carry photos the judge can trust. */
+  /** Fixture paths and any extra remote thumbs. */
   image_urls: string[];
+  /** Displayed card image src from the live/extension grid. */
+  image_url?: string | null;
+  /** Compressed jpeg captured in the reader, when the canvas was clean. */
+  image_data_url?: string | null;
   /** The original record, kept for the receipt. */
   raw: { kind: "offer"; offer: Offer } | { kind: "listing"; listing: Listing };
 };
@@ -79,6 +83,8 @@ export function listingToItem(listing: Listing): ShortlistItem {
     venue_hint: listing.venue,
     seller_type_hint: listing.seller_type_hint,
     image_urls: listing.image_urls,
+    image_url: listing.image_urls[0] ?? null,
+    image_data_url: null,
     raw: { kind: "listing", listing },
   };
 }
@@ -103,6 +109,8 @@ export function offerToItem(offer: Offer, index: number): ShortlistItem {
     badge: offer.badge,
     venue_hint: offer.merchant_domain,
     image_urls: offer.image_urls ?? [],
+    image_url: offer.image_url ?? null,
+    image_data_url: offer.image_data_url ?? null,
     raw: { kind: "offer", offer },
   };
 }

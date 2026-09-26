@@ -24,27 +24,28 @@ Source of truth for the next Cursor agent or **alan-d-smith**. Do not invent pro
 - **Catalog:** Live grid prefers the user's Brave via the MV3 extension in `extension/` (background tab, their Google session). Installer page `/ext`. Do **not** CDP-attach or launch the user's Brave/Chrome. Server Playwright gets Google's `/sorry/` from the datacenter; exact-slug snapshots in `public/snapshots/` are fallback only. Fixtures are only the black-fleece demo; never answer a different query with those four listings.
 - **Cloudflare:** token lives in `~/.config/covered/cloudflare.env` (mode 600). Never commit it. Never print it. DNS:Edit on zone `kawuc.uk`. Zone SSL stays **Full (strict)**.
 - **Git:** commit only your own paths with explicit `git add <path>`; never `git add -A` or `git add .`; never sweep another agent's staged or unstaged files. Run `pnpm build && npx tsc --noEmit` before every push. Rebase only on a clean tree. No secrets in the repo. No force-push.
-- **Demo:** exact 3-minute run is in **[`DEMO.md`](DEMO.md)**. Code freeze was 16:30, live demo 17:30, viewport ≥1400px, click **Forget me** first.
+- **Demo:** exact 3-minute run is in **[`DEMO.md`](DEMO.md)**. Code freeze was 16:30, live demo 17:30, viewport ≥1400px, click **Reset memory** first.
 - **Collaborator:** `alan-d-smith` has write on https://github.com/NotKrystian/covered (private).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  U[User in chat] -->|query + settings| P[page.tsx]
-  P -->|POST /api/search| R[Reader<br/>Brave MV3 extension<br/>or snapshot / fixtures]
-  R -->|Offer[]| P
-  P -->|POST /api/decide| D[decide route]
-  D --> S[Shortlist<br/>dedupe, sort, cap 12]
-  D -->|getMemory| M[(DynamoDB<br/>covered-memory)]
-  S --> J[Judge<br/>Bedrock Converse + fixture photos<br/>JSON validated with zod]
-  M -->|summary + last 5 events| J
-  J -->|Decision per id| PR[Pound rule<br/>applyPremium in code]
-  PR -->|Verdict + trace| P
-  D -->|recordEvent decision| M
-  P -->|Approve → POST /api/approve| S3[(S3 receipts/{id}.json)]
-  P -->|POST /api/memory approve| MR[memory route]
-  MR -->|rewrite summary via Bedrock| M
+ U[User in chat] -->|query + settings| P[page.tsx]
+ P -->|POST /api/search| R[Reader<br/>Brave MV3 extension<br/>or snapshot / fixtures]
+ R -->|Offer[] with photos| P
+ P -->|POST /api/decide| D[decide route]
+ D --> S[Shortlist<br/>dedupe, sort, cap 12]
+ D -->|getMemory read only| M[(DynamoDB<br/>covered-memory)]
+ S --> J[Judge<br/>Bedrock Converse + photos<br/>JSON validated with zod]
+ M -->|approve events only| J
+ J -->|Decision per id| PR[Pound rule<br/>applyPremium in code]
+ PR -->|Verdict + trace| P
+ P -->|Approve → POST /api/approve| W[Wallet debit]
+ W -->|receipt| S3[(S3 receipts/{id}.json)]
+ W -->|order + approve event| M
+ P -->|POST /api/memory override| MR[memory route]
+ MR -->|rewrite summary via Bedrock| M
 ```
 
 ## Folder ownership
@@ -61,8 +62,10 @@ Commit only your own paths. If you need a change elsewhere, ask the owner in the
 | `src/lib/fixtures/`, `public/fixtures/` | Fixtures | Four seeded listings with photos for the black-fleece demo only, incl. the wrong-jacket mislisting. |
 | `src/lib/decision.ts` | Decision | Shortlist shape, pound rule (`applyPremium`), `DecideResponse`. |
 | `src/app/page.tsx`, `src/components/`, `src/app/globals.css` | UI | Three-panel UI: chat, shortlist, trace + Memory card. Keep the layout and colours. |
-| `src/app/api/decide/`, `src/app/api/memory/` | API (Judge+Memory) | Shortlist → verdict (memory-aware). GET/POST/DELETE memory. |
-| `src/app/api/approve/` | API (Infra) | Receipt in, S3 key out. No card, no checkout. |
+| `src/app/api/decide/`, `src/app/api/memory/` | API (Judge+Memory) | Shortlist → verdict (memory-aware, read-only). GET/POST/DELETE memory. POST is approve/override only. |
+| `src/app/api/approve/` | API (Infra) | Wallet check, receipt, order, approve event. 402 if the wallet is short. |
+| `src/app/api/orders/`, `src/app/api/wallet/` | API (Memory) | Approved orders list. Demo wallet deposit. |
+| `src/app/orders/` | UI | Orders page for this `covered_uid`. |
 | `src/lib/s3.ts` | Infra | Receipt write/read to S3. |
 | `deploy/aws/` | Infra | EC2 live host: `up.sh`, `redeploy.sh`, `tls.sh`, `status.sh`, `down.sh`, `env.sh`. |
 | `infra/aws/` | Infra | Receipts bucket, IAM leftovers (incl. retired App Runner), DNS notes. Do not edit `infra/aws/DNS.md` unless you own DNS. |
@@ -117,7 +120,7 @@ Cloudflare credentials are **not** env vars in the app. They live only in `~/.co
 | Live host | EC2 `i-0be6351eb53244b66` (`t4g.medium`, public IP `3.8.77.227`). Next on `:80`; nginx TLS on `:443`. Redeploy: `deploy/aws/redeploy.sh`. |
 | DNS | `covered.kawuc.uk` — proxied A to that IP. Zone SSL Full (strict). No other `kawuc.uk` records. |
 | S3 bucket | `covered-hack-616532055961` — receipts at `receipts/{id}.json`, snapshots at `searches/{slug}/{iso}.json` |
-| DynamoDB table | `covered-memory` — on-demand, PK `user_id` (string). Item: `{ user_id, display_name?, summary ≤ 600 chars, settings, events[≤ 25], updated_at }` |
+| DynamoDB table | `covered-memory` — on-demand, PK `user_id` (string). Item: `{ user_id, display_name?, summary ≤ 600 chars, settings, events[≤ 25], orders[≤ 50], balance_pence, deposits[≤ 20], updated_at }` |
 | Bedrock model | `eu.anthropic.claude-haiku-4-5-20251001-v1:0` — EU cross-region inference profile, vision input, **$1.00 per 1M input / $5.00 per 1M output tokens**. Budget fallback via `BEDROCK_MODEL_ID`: `amazon.nova-lite-v1:0`. No xAI / Grok. |
 
 App Runner (`covered` / `covered-apprunner`) was retired. Do not create another service.
@@ -140,11 +143,11 @@ The exact 3-minute run — start commands, warm-up curls, the four clicks, what 
 
 The beats, for reference:
 
-0. **The real shelf.** Hit Live grid. Prefers the user's Brave via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads carry an `Ad` chip; browse rows show their returns line. Twelve rows (at most 4 ads) go to the judge with no photos, so it is told it cannot call a mislisting.
+0. **The real shelf.** Hit Live grid. Prefers the user's Brave via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads carry an `Ad` chip; browse rows show their returns line. Twelve rows (at most 4 ads) go to the judge. Card photos are captured when the reader can; without an attached photo the judge cannot call a mislisting.
 1. **The photo beat.** Type the fleece, hit Fixtures. The £22 "Nike Tech Fleece" has the right title and a photo of a nylon bomber. The judge drops it from the picture before any price rule runs; the row is struck through with the photo reason.
 2. **The rights beat, £10.** Private seller £28 vs JD Sports £36. Gap £8 is inside the £10 premium, so it buys the shop and says exactly what the £8 buys: 14-day cancellation and a 30-day fault refund. The overseas "shop" at £34 gets no premium: a business badge is not protection.
 3. **The flip, £10 → £5.** Change "Pay up to" to 5 and Re-run. Same judgements, but now the £8 gap beats the premium: it buys the private listing and warns that a break is your problem. Same model output, different pound rule, deterministic.
-4. **Memory.** Approve the JD Sports pick. The Memory card fills with a Bedrock-written summary and the last events; the next run shows a `learned` trace line and the judge's sentences lean towards "your proven choice". "Forget me" wipes it.
+4. **Memory.** Deposit into the bot wallet, then Approve the JD Sports pick. The Memory card fills with a Bedrock-written summary and the last events; the next run shows a `learned` trace line and the judge's sentences lean towards "your proven choice". **Reset memory** wipes it. `/orders` lists approved receipts.
 
 Say it in one line: it does not buy the cheapest listing. It buys the cheapest listing that is actually the item and still has your rights, and it remembers how you buy.
 
@@ -152,7 +155,7 @@ Say it in one line: it does not buy the cheapest listing. It buys the cheapest l
 
 - Do not bypass or automate around a Google challenge page. A challenge means "use the extension session, or fall back to an exact-slug snapshot". Never answer a different query with the four fixture listings.
 - Do not CDP-attach or launch the user's Brave/Chrome.
-- No card payments, no real checkout. Approve writes a receipt to S3 and nothing else.
+- No card payments, no real checkout. The bot wallet is a demo ledger on the memory item. Approve debits it, writes a receipt to S3, appends an order, and records an approve event. Decide never writes memory.
 - Do not touch other Kawuc buckets, DNS records other than `covered.kawuc.uk`, tunnels, or IAM outside `infra/` / `deploy/aws` (and only the `covered-*` resources).
 - Do not start a second App Runner service.
 - Do not soften the mislisting rule or move the pound comparison into the prompt.

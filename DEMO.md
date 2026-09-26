@@ -23,7 +23,7 @@ curl -s localhost:3000/api/search -H 'content-type: application/json' \
   -d '{"query":"black fleece jacket medium"}' | jq '{ok, source: .result.source, n: (.result.offers|length)}'
 ```
 
-In the app, click **Forget me** (bottom right) so the Memory card reads "Nothing learned yet". Leave **Pay up to** at £10 and the query at `black fleece jacket medium`.
+In the app, click **Reset memory** (bottom right) so the Memory card reads "Nothing learned yet". Leave **Pay up to** at £10 and the query at `black fleece jacket medium`.
 
 ## The run
 
@@ -79,7 +79,7 @@ Click **Re-run** once more.
 
 Point at: `learned →` in the trace (bold), the JD Sports reason mentioning the past approval.
 
-Click **Forget me**.
+Click **Reset memory**.
 
 > "And it forgets on request."
 

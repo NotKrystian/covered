@@ -8,7 +8,7 @@ type Props = {
   /** "dynamodb" or "local" (in-process fallback), or null before the first load. */
   store: string | null;
   loading: boolean;
-  onForget: () => void;
+  onReset: () => void;
 };
 
 function day(iso: string): string {
@@ -22,9 +22,9 @@ function eventLine(e: MemoryEvent): string {
   return `${e.kind}${who} · ${formatPence(e.premium_pence)} premium`;
 }
 
-export function MemoryCard({ memory, store, loading, onForget }: Props) {
-  const events = memory ? memory.events.slice(-3).reverse() : [];
-  const empty = !memory || (memory.events.length === 0 && !memory.summary);
+export function MemoryCard({ memory, store, loading, onReset }: Props) {
+  const events = memory ? memory.events.filter((e) => e.kind !== "decision").slice(-3).reverse() : [];
+  const empty = !memory || (events.length === 0 && !memory.summary && memory.balance_pence === 0 && memory.orders.length === 0);
   return (
     <section className="border-t border-line px-3 py-3 text-xs">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -41,11 +41,11 @@ export function MemoryCard({ memory, store, loading, onForget }: Props) {
         </span>
         <button
           type="button"
-          onClick={onForget}
-          disabled={loading || empty}
+          onClick={onReset}
+          disabled={loading}
           className="rounded border border-line px-1.5 py-0.5 text-[11px] text-muted hover:border-danger hover:text-danger disabled:opacity-40"
         >
-          Forget me
+          Reset memory
         </button>
       </div>
       {empty ? (

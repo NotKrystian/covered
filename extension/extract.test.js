@@ -71,3 +71,43 @@ test("extractGrid maps a sponsored PLA unit and unwraps /aclk", () => {
   assert.equal(offer.merchant_domain, "currys.co.uk");
   assert.equal(offer.product_url, "https://www.currys.co.uk/tv");
 });
+
+test("extractGrid reads the displayed img src as image_url", () => {
+  const img = {
+    currentSrc: "https://encrypted-tbn0.gstatic.com/images?q=tbn:test",
+    src: "https://encrypted-tbn0.gstatic.com/images?q=tbn:test",
+    complete: false,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    width: 0,
+    getAttribute: (n) => (n === "src" ? "https://encrypted-tbn0.gstatic.com/images?q=tbn:test" : null),
+  };
+  const unit = {
+    getAttribute: (name) => {
+      if (name === "data-offer-id") return "offer-img";
+      if (name === "data-dtld") return "currys.co.uk";
+      return null;
+    },
+    querySelector: (selector) => {
+      if (selector === '[role="heading"] div') return { textContent: "TV" };
+      if (selector === ".VbBaOe") return { textContent: "£10.00" };
+      if (selector === ".UsGWMe") return { textContent: "Currys" };
+      return null;
+    },
+    querySelectorAll: (selector) => (selector === "img" ? [img] : []),
+    textContent: "TV £10.00 Currys",
+  };
+  const document = {
+    querySelectorAll: (selector) => {
+      if (selector === "div.ArOTm.top-pla-group-inner div.mnr-c.pla-unit") return [unit];
+      return [];
+    },
+    querySelector: () => null,
+    createElement: () => {
+      throw new Error("canvas should not run when the img is not loaded");
+    },
+  };
+  const result = runExtract(document);
+  assert.equal(result.sponsored[0].image_url, "https://encrypted-tbn0.gstatic.com/images?q=tbn:test");
+  assert.equal(result.sponsored[0].image_data_url, undefined);
+});

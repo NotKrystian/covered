@@ -55,8 +55,23 @@ const FORMAT_BY_EXT: Record<string, ImageFormat> = {
 
 export type LoadedImage = { format: ImageFormat; bytes: Uint8Array };
 
-/** `/fixtures/x.jpg` → bytes from `public/`. Remote URLs are not fetched; grid thumbnails are not trusted photos. */
+function decodeDataUrl(url: string): LoadedImage | null {
+  const m = url.match(/^data:image\/(jpeg|jpg|png|webp|gif);base64,([\s\S]+)$/i);
+  if (!m || !m[1] || !m[2]) return null;
+  const ext = m[1].toLowerCase();
+  const format: ImageFormat = ext === "jpg" ? "jpeg" : (ext as ImageFormat);
+  try {
+    const bytes = new Uint8Array(Buffer.from(m[2], "base64"));
+    if (bytes.length === 0) return null;
+    return { format, bytes };
+  } catch {
+    return null;
+  }
+}
+
+/** Fixture paths from `public/`, or jpeg/png data URLs captured by the reader. Remote URLs are not fetched. */
 export async function loadImage(url: string): Promise<LoadedImage | null> {
+  if (url.startsWith("data:image/")) return decodeDataUrl(url);
   if (!url.startsWith("/")) return null;
   const safe = path.normalize(url).replace(/^(\.\.[/\\])+/, "");
   const file = path.join(process.cwd(), "public", safe);
