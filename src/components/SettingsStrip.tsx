@@ -5,6 +5,9 @@ import type { UserSettings } from "@/lib/types";
 type Props = {
   settings: UserSettings;
   onChange: (next: UserSettings) => void;
+  /** Optional display name, stored in preference memory. */
+  displayName: string;
+  onDisplayName: (name: string) => void;
   onRun: () => void;
   running: boolean;
 };
@@ -48,7 +51,7 @@ function PoundInput({
   );
 }
 
-export function SettingsStrip({ settings, onChange, onRun, running }: Props) {
+export function SettingsStrip({ settings, onChange, displayName, onDisplayName, onRun, running }: Props) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-panel px-5 py-2.5 text-sm">
       <div className="flex items-baseline gap-3">
@@ -58,6 +61,20 @@ export function SettingsStrip({ settings, onChange, onRun, running }: Props) {
         </span>
       </div>
       <div className="flex items-center gap-3">
+        <span className="flex items-center gap-1.5 text-muted">
+          I am
+          <input
+            aria-label="Your name (optional, kept in memory)"
+            value={displayName}
+            onChange={(e) => onDisplayName(e.target.value.slice(0, 40))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onRun();
+            }}
+            placeholder="name"
+            className="w-20 rounded border border-line bg-panel-raised px-1.5 py-0.5 text-foreground outline-none placeholder:text-muted focus:border-accent"
+          />
+        </span>
+        <span className="text-line">·</span>
         <span className="flex items-center gap-1.5 text-muted">
           Pay up to
           <PoundInput

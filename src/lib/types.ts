@@ -1,7 +1,7 @@
 /**
  * Shared types for Covered.
  *
- * Every boundary in the app (reader -> app, app -> Grok, app -> S3) speaks
+ * Every boundary in the app (reader -> app, app -> judge, app -> S3) speaks
  * these shapes. Each type has a zod schema (`XSchema`) and an inferred TS
  * type (`X`) so callers can validate untrusted JSON at the edge and get a
  * typed value back. Import from "@/lib/types".
@@ -61,7 +61,7 @@ export const OfferSchema = z.object({
   more_merchants: z.string().nullable().optional(),
   /** Browse only: aria-label summary repeating title, badge, price, merchant, delivery, rating. */
   summary: z.string().nullable().optional(),
-  /** Fixtures only. Real product photos Grok can judge. */
+  /** Fixtures only. Real product photos the judge can trust. */
   image_urls: z.array(z.string()).optional(),
 });
 export type Offer = z.infer<typeof OfferSchema>;
@@ -107,7 +107,7 @@ export const ListingSchema = z.object({
   title: z.string(),
   price_pence: z.number().int(),
   merchant: z.string(),
-  /** Hint for the demo only; Grok still decides `seller_type`. */
+  /** Hint for the demo only; the judge still decides `seller_type`. */
   seller_type_hint: z.string().optional(),
   /** Where it is sold, e.g. "Facebook Marketplace", "eBay", "Shop". */
   venue: z.string(),
@@ -120,7 +120,7 @@ export const ListingSchema = z.object({
 });
 export type Listing = z.infer<typeof ListingSchema>;
 
-/** Who is selling, as judged by Grok. */
+/** Who is selling, as judged by the model. */
 export const SellerTypeSchema = z.enum([
   "uk_business",
   "private",
@@ -139,13 +139,13 @@ export const VenueTrustSchema = z.enum([
 ]);
 export type VenueTrust = z.infer<typeof VenueTrustSchema>;
 
-/** Grok's call on one offer or listing. */
+/** The judge's call on one offer or listing. */
 export const RecommendationSchema = z.enum(["buy", "skip", "ask"]);
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 
 /**
- * Grok's structured decision for one offer/listing. JSON only.
- * Grok judges identity, mislisting, seller, venue and rights.
+ * The judge's structured decision for one offer/listing. JSON only.
+ * The model judges identity, mislisting, seller, venue and rights.
  * The pound comparison (protection premium, switch minimum) stays in code.
  */
 export const DecisionSchema = z.object({
@@ -167,7 +167,7 @@ export const DecisionSchema = z.object({
 });
 export type Decision = z.infer<typeof DecisionSchema>;
 
-/** Grok's verdict over a whole shortlist. Keys of `per_offer` are offer/listing ids. */
+/** The judge's verdict over a whole shortlist. Keys of `per_offer` are offer/listing ids. */
 export const VerdictSchema = z.object({
   /** Id of the chosen offer/listing, or null when nothing should be bought. */
   chosen_id: z.string().nullable(),

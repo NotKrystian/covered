@@ -50,11 +50,13 @@ export type DecideResponse = {
   decisions: Record<string, Decision>;
   shortlist: ShortlistItem[];
   mode: JudgeMode;
-  /** Short model name when `mode === "bedrock"`, e.g. "claude-sonnet-4-6"; "mock" otherwise. */
+  /** Bedrock model id when `mode === "bedrock"`, e.g. "eu.anthropic.claude-haiku-4-5-20251001-v1:0"; "mock" otherwise. */
   model: string;
   trace: TraceEvent[];
   /** Pence paid above the cheapest unprotected survivor for rights, or null when no such comparison exists. */
   premium_paid_pence: number | null;
+  /** True when preference memory was injected into the judge prompt. */
+  learned: boolean;
 };
 
 export const SHORTLIST_MAX = 12;

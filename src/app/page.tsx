@@ -1,17 +1,36 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_USER_SETTINGS, ReaderResponseSchema } from "@/lib/types";
 import type { Offer, Receipt, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse } from "@/lib/decision";
+import type { Memory } from "@/lib/memory";
 import { FIXTURE_QUERY } from "@/lib/fixtures";
 import { formatPence } from "@/lib/money";
 import { SettingsStrip } from "@/components/SettingsStrip";
 import { ChatPanel, type ChatMessage, type SourceKind } from "@/components/ChatPanel";
 import { Shortlist } from "@/components/Shortlist";
 import { TracePanel } from "@/components/TracePanel";
+import { MemoryCard } from "@/components/MemoryCard";
 
 type ReceiptBody = Omit<Receipt, "id" | "created_at">;
+
+type MemoryState = { memory: Memory; store: string };
+
+/** Body of `GET`/`POST /api/memory`. */
+type MemoryApiResponse = { ok: true; memory: Memory; store: string } | { ok: false; error: string };
+
+async function fetchMemory(init?: RequestInit): Promise<MemoryState | null> {
+  try {
+    const res = await fetch("/api/memory", init);
+    if (!res.ok) return null;
+    const json = (await res.json()) as MemoryApiResponse;
+    if (!json.ok) return null;
+    return { memory: json.memory, store: json.store };
+  } catch {
+    return null;
+  }
+}
 
 let messageSeq = 0;
 function msg(role: ChatMessage["role"], text: string, tone?: ChatMessage["tone"]): ChatMessage {
@@ -42,8 +61,16 @@ async function readLiveGrid(
     return { ok: false, reason: `network: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
-async function decide(query: string, settings: UserSettings, offers?: Offer[]): Promise<DecideResponse> {
-  const body = offers ? { query, settings, offers } : { query, settings, source: "fixture" as const };
+async function decide(
+  query: string,
+  settings: UserSettings,
+  displayName: string,
+  offers?: Offer[],
+): Promise<DecideResponse> {
+  const name = displayName.trim() || undefined;
+  const body = offers
+    ? { query, settings, display_name: name, offers }
+    : { query, settings, display_name: name, source: "fixture" as const };
   const res = await fetch("/api/decide", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -63,8 +90,43 @@ export default function Home() {
   const [approving, setApproving] = useState(false);
   const [receiptLine, setReceiptLine] = useState<string | null>(null);
   const [traceOpen, setTraceOpen] = useState(true);
+  const [displayName, setDisplayName] = useState("");
+  const [memoryState, setMemoryState] = useState<MemoryState | null>(null);
+  const [memoryBusy, setMemoryBusy] = useState(false);
 
   const push = useCallback((m: ChatMessage) => setMessages((prev) => [...prev, m]), []);
+
+  const refreshMemory = useCallback(async () => {
+    const next = await fetchMemory();
+    if (next) {
+      setMemoryState(next);
+      if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMemory().then((next) => {
+      if (cancelled || !next) return;
+      setMemoryState(next);
+      if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const forget = useCallback(async () => {
+    setMemoryBusy(true);
+    try {
+      await fetch("/api/memory", { method: "DELETE" });
+      setDisplayName("");
+      await refreshMemory();
+      push(msg("bot", "Forgotten. Next run starts from nothing.", "neutral"));
+    } finally {
+      setMemoryBusy(false);
+    }
+  }, [refreshMemory, push]);
 
   const run = useCallback(
     async (nextSource: SourceKind) => {
@@ -85,19 +147,20 @@ export default function Home() {
             setSource("fixture");
           }
         }
-        const data = await decide(q, settings, offers);
+        const data = await decide(q, settings, displayName, offers);
         setResult(data);
         const chosen = data.shortlist.find((i) => i.id === data.verdict.chosen_id);
         const chosenDecision = chosen ? data.decisions[chosen.id] : undefined;
         const tone: ChatMessage["tone"] = chosenDecision && isProtected(chosenDecision) ? "good" : "warn";
         push(msg("bot", data.verdict.summary, tone));
+        void refreshMemory();
       } catch (err) {
         push(msg("bot", `Something broke: ${err instanceof Error ? err.message : String(err)}`, "warn"));
       } finally {
         setRunning(false);
       }
     },
-    [query, running, settings, push],
+    [query, running, settings, displayName, push, refreshMemory],
   );
 
   const approve = useCallback(async () => {
@@ -132,16 +195,40 @@ export default function Home() {
       setReceiptLine(
         `Bought ${chosen.merchant} ${chosen.price_label} · ${formatPence(paid)} paid for rights · receipt ${json.id}`,
       );
+      // Teach the memory: this is the pick the user actually took.
+      setMemoryBusy(true);
+      const remembered = await fetchMemory({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "approve",
+          query,
+          chosen_id: chosen.id,
+          premium_pence: settings.protection_premium_pence,
+          note: `approved ${chosen.id} (${chosen.merchant} ${chosen.price_label}), ${formatPence(paid)} paid for rights, ${decision.seller_type} at ${decision.venue_trust}`,
+          display_name: displayName.trim() || undefined,
+        }),
+      });
+      if (remembered) setMemoryState(remembered);
+      setMemoryBusy(false);
     } catch (err) {
       setReceiptLine(`Approve failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setApproving(false);
+      setMemoryBusy(false);
     }
-  }, [result, query, settings.protection_premium_pence]);
+  }, [result, query, settings.protection_premium_pence, displayName]);
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-background text-foreground">
-      <SettingsStrip settings={settings} onChange={setSettings} onRun={() => run(source)} running={running} />
+      <SettingsStrip
+        settings={settings}
+        onChange={setSettings}
+        displayName={displayName}
+        onDisplayName={setDisplayName}
+        onRun={() => run(source)}
+        running={running}
+      />
       <div className="grid min-h-0 grid-cols-[20rem_minmax(0,1fr)_auto]">
         <ChatPanel
           messages={messages}
@@ -169,6 +256,14 @@ export default function Home() {
           model={result?.model ?? null}
           open={traceOpen}
           onToggle={() => setTraceOpen((o) => !o)}
+          footer={
+            <MemoryCard
+              memory={memoryState?.memory ?? null}
+              store={memoryState?.store ?? null}
+              loading={memoryBusy}
+              onForget={forget}
+            />
+          }
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 /**
  * Money helpers. All arithmetic in the app is on integer pence.
- * The pound comparison is code, never Grok.
+ * The pound comparison is code, never the model.
  */
 
 /**

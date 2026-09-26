@@ -1,9 +1,10 @@
 /**
- * POST /api/decide — owned by the Decision+UI agent.
+ * POST /api/decide — owned by Judge+Memory.
  *
- * Body: `{ query, settings?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
- * Builds the shortlist, asks the Bedrock judge (or the mock), applies the pound rule in code,
- * and returns `DecideResponse` with a visible trace.
+ * Body: `{ query, settings?, display_name?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
+ * Builds the shortlist, loads this buyer's memory, asks the Bedrock judge (or the mock),
+ * applies the pound rule in code, records a `decision` event, and returns `DecideResponse`
+ * with a visible trace. Memory shapes the model's lean only; the pound rule never reads it.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -19,10 +20,16 @@ import {
   type TraceEvent,
 } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import { getUserId } from "@/lib/memory/identity";
+import { DISPLAY_NAME_MAX, getMemory, memoryPromptBlock, memoryStore, recordEvent } from "@/lib/memory";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   query: z.string().min(1),
   settings: UserSettingsSchema.partial().optional(),
+  display_name: z.string().max(DISPLAY_NAME_MAX).optional(),
   source: z.literal("fixture").optional(),
   offers: z.array(OfferSchema).optional(),
 });
@@ -58,7 +65,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const judged = await judge(body.query, settings, items);
+  const { userId, isNew } = await getUserId();
+  const memory = await getMemory(userId);
+  const memoryBlock = memoryPromptBlock(memory);
+  const store = memoryStore();
+  if (memoryBlock) {
+    log(
+      "learned",
+      `${memory.events.length} past event${memory.events.length === 1 ? "" : "s"}${memory.summary ? `, summary: "${memory.summary.slice(0, 120)}${memory.summary.length > 120 ? "…" : ""}"` : ", no summary yet"} [${store.store}]`,
+    );
+  } else {
+    log("memory", `${isNew ? "new buyer" : "nothing learned yet"} [${store.store}${store.store === "local" ? `: ${store.reason.slice(0, 80)}` : ""}]`);
+  }
+
+  const judged = await judge(body.query, settings, items, { memory: memoryBlock });
   for (const note of judged.notes) log("judge", note);
   const values = Object.values(judged.decisions);
   const mislistings = values.filter((d) => d.mislisting).length;
@@ -66,7 +86,7 @@ export async function POST(request: Request) {
   const kept = values.length - mislistings - notItem;
   log(
     "judge",
-    `${kept} kept, ${mislistings} mislisting${mislistings === 1 ? "" : "s"}${notItem ? `, ${notItem} not the item` : ""} [${judged.mode}]`,
+    `${kept} kept, ${mislistings} mislisting${mislistings === 1 ? "" : "s"}${notItem ? `, ${notItem} not the item` : ""} [${judged.mode}: ${judged.model}]`,
   );
 
   const verdict = applyPremium(items, judged.decisions, settings);
@@ -76,6 +96,25 @@ export async function POST(request: Request) {
     `${formatPence(settings.protection_premium_pence)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"}`,
   );
 
+  try {
+    await recordEvent(
+      userId,
+      {
+        kind: "decision",
+        query: body.query,
+        chosen_id: verdict.chosen_id ?? undefined,
+        premium_pence: settings.protection_premium_pence,
+        note: chosen
+          ? `bot picked ${chosen.id} (${chosen.merchant} ${chosen.price_label}), ${mislistings} mislisting dropped`
+          : "bot found nothing to buy",
+      },
+      { settings, display_name: body.display_name },
+    );
+    log("memory", `recorded decision [${memoryStore().store}]`);
+  } catch (err) {
+    log("memory", `record failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   const response: DecideResponse = {
     verdict,
     decisions: judged.decisions,
@@ -84,6 +123,7 @@ export async function POST(request: Request) {
     model: judged.model,
     trace,
     premium_paid_pence: premiumPaid(items, judged.decisions, verdict),
+    learned: memoryBlock !== null,
   };
   return NextResponse.json(response);
 }

@@ -24,6 +24,8 @@ VENUE TRUST values: shop_checkout (a retailer's own checkout), marketplace_prote
 SELLER TYPE values: uk_business, private, overseas_business, unclear.
 RECOMMENDATION: "buy" when it is the item and the rights are real; "skip" when it is a mislisting, not the item, or the rights are missing/weak; "ask" only when you genuinely cannot tell.
 
+BUYER MEMORY: the user turn may include "what we know about this buyer" — a summary and recent events from their own past approvals and overrides. Use it to lean your recommendation and your sentence the way this person actually buys (someone who keeps taking the UK shop should see you favour rights; someone who keeps overriding to private bargains should see you say plainly when a bargain is worth the risk). It never changes same_item, mislisting or photo_reason, and it never invents rights the venue does not give.
+
 OUTPUT: a single JSON object, no prose, no markdown fences:
 {
   "summary": "one sentence for the user about the shortlist as a whole",
@@ -77,12 +79,15 @@ export async function buildUserContent(
   settings: UserSettings,
   items: ShortlistItem[],
   loadImage: ImageLoader,
+  memory: string | null = null,
 ): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = [
     {
-      text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatPence(settings.protection_premium_pence)}, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.\n\nShortlist of ${items.length}:`,
+      text: `User request: "${query}"\nUser settings (for context only, do not apply them): protection premium ${formatPence(settings.protection_premium_pence)}, switch minimum ${formatPence(settings.switch_minimum_pence)}, approval ${settings.approval}.`,
     },
   ];
+  if (memory) blocks.push({ text: memory });
+  blocks.push({ text: `Shortlist of ${items.length}:` });
   for (const [index, item] of items.entries()) {
     blocks.push({ text: describeItem(item, index) });
     for (const url of item.image_urls) {

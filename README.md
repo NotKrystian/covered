@@ -2,7 +2,7 @@
 
 A shopping bot you text. It buys now, or it waits for your price. It will pay more when the cheaper listing is a private seller or an untrustworthy venue, because those listings do not come with UK buyer rights.
 
-A model on Amazon Bedrock (Claude Sonnet 4.6, EU inference profile) decides the things a sort cannot: same item or not (from the photos, not the title), mislisting, business or private seller, trustworthy venue, which right applies. Code only compares pounds to the numbers you set.
+A model on Amazon Bedrock (Claude Haiku 4.5, EU inference profile) decides the things a sort cannot: same item or not (from the photos, not the title), mislisting, business or private seller, trustworthy venue, which right applies. Code only compares pounds to the numbers you set. A small preference memory in DynamoDB remembers how you buy and leans the next judgement; the pound rule never reads it. Collaborator guide: `AGENTS.md`.
 
 ## Run
 
@@ -21,8 +21,10 @@ Copy `.env.example` to `.env.local`. Never commit real values.
 
 | Var | Purpose |
 | --- | --- |
-| `BEDROCK_MODEL_ID` | Bedrock model for the judge. Default `eu.anthropic.claude-sonnet-4-6`. |
+| `BEDROCK_MODEL_ID` | Bedrock model for the judge. Default `eu.anthropic.claude-haiku-4-5-20251001-v1:0`. |
+| `BEDROCK_REGION` | Optional. Bedrock + DynamoDB region; falls back to `AWS_REGION`, then `eu-west-2`. |
 | `COVERED_MOCK` | `1` forces the deterministic mock judge. Also used automatically if Bedrock access fails. |
+| `COVERED_MEMORY_TABLE` | DynamoDB table for preference memory. Default `covered-memory`. |
 | `AWS_REGION` | `eu-west-2` (London). Bedrock and S3 both use it. |
 | `AWS_PROFILE` | `default`. The SDK reads `~/.aws`; keys never enter the repo. |
 | `S3_BUCKET` | `covered-hack-616532055961`. New bucket only; never an existing Kawuc bucket. |
@@ -36,10 +38,11 @@ Copy `.env.example` to `.env.local`. Never commit real values.
 
 | Path | Owner | What goes here |
 | --- | --- | --- |
-| `src/app/page.tsx`, `src/components/` | Decision+UI | Chat, shortlist, sponsored marked as ads, the judge's sentence, Approve. |
-| `src/lib/judge/` | Decision+UI | Bedrock Converse call, prompt, `Decision` parsing, mock. Pound rule in `src/lib/decision.ts`. |
-| `src/lib/fixtures/` | Decision+UI | Four seeded `Listing`s with real photos, incl. the wrong-jacket mislisting. |
-| `src/app/api/decide/` | Decision+UI | Shortlist in, `Verdict` out. |
+| `src/app/page.tsx`, `src/components/`, `globals.css` | Judge+Memory | Chat, shortlist, sponsored marked as ads, the judge's sentence, Approve, Memory card. |
+| `src/lib/judge/` | Judge+Memory | Bedrock Converse call, prompt, `Decision` parsing, mock, per-process mode probe. Pound rule in `src/lib/decision.ts`. |
+| `src/lib/memory/` | Judge+Memory | DynamoDB `covered-memory`: summary, settings, last 25 events; `covered_uid` cookie; summary rewrite. `create-table.sh` makes the table. |
+| `src/lib/fixtures/` | Judge+Memory | Four seeded `Listing`s with real photos, incl. the wrong-jacket mislisting. |
+| `src/app/api/decide/`, `src/app/api/memory/` | Judge+Memory | Shortlist in, `Verdict` out (memory-aware). `GET/POST/DELETE /api/memory`. |
 | `src/lib/reader/` | Reader | Playwright read of the `udm=28` first paint, both lists, deduped, typed challenge error. Headless by default; `COVERED_READER_CDP=http://127.0.0.1:9222` attaches to your own Chrome (start it with `scripts/chrome-debug.sh`, stop with `scripts/chrome-debug.sh stop`). CLI: `npx tsx scripts/read-grid.ts "query"`. |
 | `src/app/api/search/` | Reader | Query in, `ReaderResponse` out. |
 | `src/lib/s3.ts` | Infra | `receipts/{id}.json` PutObject to the new bucket. |
@@ -59,7 +62,7 @@ Owned by Infra. One laptop runs everything; the public URL is a Cloudflare Tunne
 
 | Key | Value |
 | --- | --- |
-| `BEDROCK_MODEL_ID` | Optional. Defaults to `eu.anthropic.claude-sonnet-4-6`. The EC2 role needs `bedrock:InvokeModel` on it. |
+| `BEDROCK_MODEL_ID` | Optional. Defaults to `eu.anthropic.claude-haiku-4-5-20251001-v1:0`. The EC2 role needs `bedrock:InvokeModel` on it and `dynamodb:GetItem/PutItem/DeleteItem` on `covered-memory`. |
 | `COVERED_MOCK` | Optional. `1` runs the mock judge with no Bedrock calls. |
 | `AWS_REGION` | `eu-west-2`. |
 | `S3_BUCKET` | `covered-hack-616532055961`. |
