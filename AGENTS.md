@@ -16,57 +16,68 @@ Mislistings and not-the-item listings are dropped before any price is compared. 
 
 ## Orchestration
 
-Source of truth for the next Cursor agent or **alan-d-smith**. Do not invent product features. Another agent may be concurrently adding `src/app/ext` (installer) — do not revert or overwrite their files.
+Source of truth for the next Cursor agent or **alan-d-smith**. Do not invent product features. The orders aftercare chat is mid-flight in `src/app/api/orders/assist/`, `src/lib/aftercare.ts`, `src/lib/aftercare-schema.ts`, and `src/components/AftercareChat.tsx` — document it, but do not revert or overwrite those files.
 
 - **Live host:** https://covered.kawuc.uk (proxied A → EC2 `i-0be6351eb53244b66`, public IP `3.8.77.227`, `eu-west-2`). HTTP `:80` is the Next container. HTTPS is nginx `:443` with Let's Encrypt. Security group: 443 only from Cloudflare. Redeploy with `deploy/aws/redeploy.sh`. **Do not start a second App Runner** — that path was retired.
-- **AWS:** account `616532055961`, region `eu-west-2`, profile `default`. Bucket `covered-hack-616532055961` (`receipts/`, `searches/`). DynamoDB `covered-memory`. Do not write other Kawuc buckets or DNS records except `covered.kawuc.uk`.
-- **Judge:** Research the product first (`src/lib/judge/research.ts`, DuckDuckGo HTML / Wikipedia + one Bedrock JSON brief), then judge the shortlist. Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` via `BEDROCK_MODEL_ID`. Mock if `COVERED_MOCK=1`. The pound rule stays in code (`applyPremium`). Mislistings never reach the price comparison. No xAI / Grok. The centre panel default is the judged shortlist (≤12); **All listings** shows every offer.
-- **Catalog:** Live grid prefers the user's Brave via the MV3 extension in `extension/` (background tab, their Google session). Installer page `/ext`. Do **not** CDP-attach or launch the user's Brave/Chrome. Server Playwright gets Google's `/sorry/` from the datacenter; exact-slug snapshots in `public/snapshots/` are fallback only. Fixtures are only the black-fleece demo; never answer a different query with those four listings.
+- **AWS:** account `616532055961`, region `eu-west-2`, profile `default`. Bucket `covered-hack-616532055961` (`receipts/`, `searches/`). DynamoDB `covered-memory` holds settings, wallet `balance_pence`, orders, watch-and-buy limits, and approve-only preference memory. Bedrock Haiku `eu.anthropic.claude-haiku-4-5-20251001-v1:0` via `BEDROCK_MODEL_ID`. Mock if `COVERED_MOCK=1`. Do not write other Kawuc buckets or DNS records except `covered.kawuc.uk`.
+- **Routes:** `/` is first-visit onboarding, then the buyer dashboard. `/dev` is the debug three-panel (chat, listings, trace + Memory). `/orders` lists approved receipts and hosts the aftercare chat. `/ext` serves the reader zip and install steps. The dashboard footer has a quiet `dev` link only — do not promote `/dev` in the main chrome.
+- **Orders aftercare:** `/orders` has `AftercareChat`. `POST /api/orders/assist` drafts a returns or fault letter for an approved order (Bedrock, same client as the judge; mock if `COVERED_MOCK=1`). It names the UK right and a copy-to-seller draft. It never emails the merchant, never claims a message was sent, never writes an approve event, and never debits the wallet. Successful drafts append `aftercare[]` on that order (`recordAftercare`).
+- **Live grid:** Brave/Chrome/Firefox MV3 reader in `extension/` (reload from `/ext`; current version is in `extension/manifest.json`, now `1.3.0`). The background service worker has a `covered-limits` alarm: demo cadence is 24 checks a day (every 60 minutes); production would be once a day (`periodInMinutes: 1440`). Do **not** CDP-attach or launch the user's Brave/Chrome. Server Playwright gets Google's `/sorry/` from the datacenter; exact-slug snapshots in `public/snapshots/` are fallback only. Fixtures are only the black-fleece demo; never answer a different query with those four listings.
+- **Judge:** Research the product first (`src/lib/judge/research.ts`, DuckDuckGo HTML / Wikipedia + one Bedrock JSON brief), then judge **every distinct offer including ads**, in batches of `JUDGE_BATCH_SIZE` (6). Photos are extension-captured jpeg data URLs. Titles (and thumbs) link to `product_url` when the reader unwrapped a shop href. Client sort (`src/lib/sort-listings.ts`): price, brand, shipping, protections; the verdict's chosen row stays pinned first. The pound rule stays in code (`applyPremium`). Mislistings never reach the price comparison. No xAI / Grok.
+- **Memory:** Writes only on a successful Approve (wallet debit + receipt) or an explicit override (`POST /api/memory`). `POST /api/decide` is read-only. **Reset memory** lives on `/dev` (Memory card), not on the dashboard.
+- **Wallet and limits:** `POST /api/wallet` deposits into the demo ledger. Approve (`POST /api/approve`) debits it and returns **402** if the wallet is short. `POST /api/limits` stores a watch-and-buy cap (max 10). The extension re-reads each watching query and `POST`s offers to `/api/limits/run`. A limit spends only if the listing is the same item, not a mislisting, the premium would allow that pick, the price is `<=` the cap, and the wallet covers it.
 - **Cloudflare:** token lives in `~/.config/covered/cloudflare.env` (mode 600). Never commit it. Never print it. DNS:Edit on zone `kawuc.uk`. Zone SSL stays **Full (strict)**.
 - **Git:** commit only your own paths with explicit `git add <path>`; never `git add -A` or `git add .`; never sweep another agent's staged or unstaged files. Run `pnpm build && npx tsc --noEmit` before every push. Rebase only on a clean tree. No secrets in the repo. No force-push.
-- **Demo:** exact 3-minute run is in **[`DEMO.md`](DEMO.md)**. Code freeze was 16:30, live demo 17:30, viewport ≥1400px, click **Reset memory** first.
+- **Demo:** exact 3-minute run is in **[`DEMO.md`](DEMO.md)**. Viewport ≥1400px. Click **Forget me** / **Reset memory** on `/dev` before a memory demo.
 - **Collaborator:** `alan-d-smith` has write on https://github.com/NotKrystian/covered (private).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
- U[User in chat] -->|query + settings| P[page.tsx]
- P -->|POST /api/search| R[Reader<br/>Brave MV3 extension<br/>or snapshot / fixtures]
- R -->|Offer[] with photos| P
- P -->|POST /api/decide| D[decide route]
- D --> Q[Research<br/>DDG/wiki + Bedrock brief]
- Q --> S[Shortlist<br/>score vs brief, cap 12]
- D -->|getMemory read only| M[(DynamoDB<br/>covered-memory)]
- S --> J[Judge<br/>Bedrock Converse + photos<br/>JSON validated with zod]
+ U[User] --> H["/ onboarding then Dashboard"]
+ H -->|extension or snapshot| R[Reader]
+ R -->|Offer[] + data-URL photos| H
+ H -->|POST /api/decide| D[decide]
+ D --> Q[Research DDG/wiki + brief]
+ Q --> J[Judge all offers in batches of 6]
+ D -->|getMemory read only| M[(DynamoDB covered-memory)]
  M -->|approve events only| J
- J -->|Decision per id| PR[Pound rule<br/>applyPremium in code]
- PR -->|Verdict + trace| P
- P -->|Approve → POST /api/approve| W[Wallet debit]
- W -->|receipt| S3[(S3 receipts/{id}.json)]
+ J --> PR[applyPremium in code]
+ PR -->|verdict + listings| H
+ H -->|Approve POST /api/approve| W[Wallet debit]
+ W -->|receipt| S3[(S3 receipts)]
  W -->|order + approve event| M
- P -->|POST /api/memory override| MR[memory route]
- MR -->|rewrite summary via Bedrock| M
+ H -->|POST /api/limits| L[Watch-and-buy]
+ L -->|extension alarm /api/limits/run| W
+ O["/orders + AftercareChat"] -->|POST /api/orders/assist| AC[Draft letter, no email]
+ AC -->|aftercare[] on order| M
+ DEV["/dev three-panel"] -->|same APIs| D
 ```
 
 ## Folder ownership
 
-Commit only your own paths. If you need a change elsewhere, ask the owner in the room. Do not revert or overwrite another agent's in-progress files (including `src/app/ext`).
+Commit only your own paths. If you need a change elsewhere, ask the owner in the room. Do not revert or overwrite another agent's in-progress files.
 
 | Path | Owner | What lives here |
 | --- | --- | --- |
 | `src/lib/reader/`, `src/app/api/search/`, `public/snapshots/` | Reader | Ingest of client offers from the extension; server Playwright (datacenter `/sorry/`); exact-slug snapshot fallback; typed challenge error. |
-| `extension/` | Extension | MV3 Brave/Chrome reader: background tab on the user's Google session. Does not CDP-attach or launch a browser. |
-| `src/app/ext/` | Extension | Installer page at `/ext`. Another agent may be adding this — leave their files alone. |
-| `src/lib/judge/` | Judge | Bedrock client + per-process mode probe (`bedrock.ts`), product research (`research.ts`), prompt with the rights card, JSON parse/retry, mock. |
+| `extension/` | Extension | MV3 Brave/Chrome/Firefox reader: background tab on the user's Google session; hourly limits alarm. Does not CDP-attach or launch a browser. |
+| `src/app/ext/` | Extension | Installer at `/ext` and `covered-reader.zip`. |
+| `src/lib/judge/` | Judge | Bedrock client + per-process mode probe (`bedrock.ts`), product research (`research.ts`), prompt with the rights card, batched JSON parse/retry, mock. |
 | `src/lib/memory/` | Memory | DynamoDB memory (`index.ts`), `covered_uid` cookie (`identity.ts`), summary rewrite (`summary.ts`), `create-table.sh`. |
+| `src/lib/limits.ts`, `src/app/api/limits/` | Limits | Watch-and-buy store + `/run` (same judge + pound rule as decide, then cap + wallet). |
 | `src/lib/fixtures/`, `public/fixtures/` | Fixtures | Four seeded listings with photos for the black-fleece demo only, incl. the wrong-jacket mislisting. |
-| `src/lib/decision.ts` | Decision | Shortlist shape, pound rule (`applyPremium`), `DecideResponse`. |
-| `src/app/page.tsx`, `src/components/`, `src/app/globals.css` | UI | Three-panel UI: chat, shortlist / All listings, trace + Memory card. Keep the layout and colours. |
-| `src/app/api/decide/`, `src/app/api/memory/` | API (Judge+Memory) | Shortlist → verdict (memory-aware, read-only). GET/POST/DELETE memory. POST is approve/override only. |
+| `src/lib/decision.ts` | Decision | Listing shape, pound rule (`applyPremium`), batch size, `DecideResponse`. |
+| `src/lib/sort-listings.ts` | UI | Client sort: price, brand, shipping, protections; pin chosen first. |
+| `src/lib/fulfill.ts` | Infra | Shared debit + receipt + order + approve-event path used by Approve and limit fills. |
+| `src/app/page.tsx`, `src/components/Dashboard.tsx`, `src/components/Onboarding.tsx` | UI | Consumer `/`: onboarding, then dashboard (search, sort, limits, pay). |
+| `src/app/dev/`, `src/components/DevWorkbench.tsx`, `src/components/ChatPanel.tsx`, `src/components/Shortlist.tsx`, `src/components/TracePanel.tsx`, `src/app/globals.css` | UI | Debug `/dev` three-panel. Keep the layout and colours. |
+| `src/app/api/decide/`, `src/app/api/memory/` | API (Judge+Memory) | Research → judge every offer → verdict (memory-aware, read-only). GET/POST/DELETE memory. POST is approve/override only. |
 | `src/app/api/approve/` | API (Infra) | Wallet check, receipt, order, approve event. 402 if the wallet is short. |
 | `src/app/api/orders/`, `src/app/api/wallet/` | API (Memory) | Approved orders list. Demo wallet deposit. |
-| `src/app/orders/` | UI | Orders page for this `covered_uid`. |
+| `src/app/api/orders/assist/`, `src/lib/aftercare.ts`, `src/lib/aftercare-schema.ts`, `src/components/AftercareChat.tsx` | Aftercare | Returns/fault draft on `/orders`. Mid-flight — leave these files alone unless you own them. |
+| `src/app/orders/` | UI | Orders page + aftercare chat for this `covered_uid`. |
 | `src/lib/s3.ts` | Infra | Receipt write/read to S3. |
 | `deploy/aws/` | Infra | EC2 live host: `up.sh`, `redeploy.sh`, `tls.sh`, `status.sh`, `down.sh`, `env.sh`. |
 | `infra/aws/` | Infra | Receipts bucket, IAM leftovers (incl. retired App Runner), DNS notes. Do not edit `infra/aws/DNS.md` unless you own DNS. |
@@ -93,7 +104,7 @@ curl -s localhost:3000/api/decide -H 'content-type: application/json' \
 curl -s -c c.txt -b c.txt localhost:3000/api/memory | jq .memory.summary
 ```
 
-Live grid in the browser needs the unpacked extension (`extension/README.md`) and `NEXT_PUBLIC_COVERED_EXTENSION_ID` (or `localStorage.covered_extension_id` on the live host).
+Live grid in the browser needs the unpacked extension (install/reload from `/ext`, see `extension/README.md`) and `NEXT_PUBLIC_COVERED_EXTENSION_ID` (or `localStorage.covered_extension_id` on the live host).
 
 ## Environment (names only; values live in `.env.local` or `~/.aws`)
 
@@ -121,7 +132,7 @@ Cloudflare credentials are **not** env vars in the app. They live only in `~/.co
 | Live host | EC2 `i-0be6351eb53244b66` (`t4g.medium`, public IP `3.8.77.227`). Next on `:80`; nginx TLS on `:443`. Redeploy: `deploy/aws/redeploy.sh`. |
 | DNS | `covered.kawuc.uk` — proxied A to that IP. Zone SSL Full (strict). No other `kawuc.uk` records. |
 | S3 bucket | `covered-hack-616532055961` — receipts at `receipts/{id}.json`, snapshots at `searches/{slug}/{iso}.json` |
-| DynamoDB table | `covered-memory` — on-demand, PK `user_id` (string). Item: `{ user_id, display_name?, summary ≤ 600 chars, settings, events[≤ 25], orders[≤ 50], balance_pence, deposits[≤ 20], updated_at }` |
+| DynamoDB table | `covered-memory` — on-demand, PK `user_id` (string). Item: `{ user_id, display_name?, summary ≤ 600 chars, settings, events[≤ 25], orders[≤ 50], balance_pence, deposits[≤ 20], limits[≤ 10], onboarded, updated_at }` |
 | Bedrock model | `eu.anthropic.claude-haiku-4-5-20251001-v1:0` — EU cross-region inference profile, vision input, **$1.00 per 1M input / $5.00 per 1M output tokens**. Budget fallback via `BEDROCK_MODEL_ID`: `amazon.nova-lite-v1:0`. No xAI / Grok. |
 
 App Runner (`covered` / `covered-apprunner`) was retired. Do not create another service.
@@ -131,24 +142,24 @@ Anything else in this account (other Kawuc buckets, other DNS records, other EC2
 ## Conventions
 
 - No secrets in the repo, ever: not in code, `.env.example`, rules, commit messages, or chat summaries. `.env.local` and `*.env` are gitignored. Never print the Cloudflare token.
-- Model output is JSON only, validated with zod (`DecisionSchema`, `MemorySchema`). Retry once with the parse error appended, then fall back to the mock for that item. Never trust unparsed text.
+- Model output is JSON only, validated with zod (`DecisionSchema`, `MemorySchema`, `ProductBriefSchema`). Retry once with the parse error appended, then fall back to the mock for that batch. Never trust unparsed text.
 - Mock mode must always work: `COVERED_MOCK=1` and any Bedrock/DynamoDB failure degrade to the deterministic judge, template summary, and an in-process memory Map, with the reason in the trace.
 - The pound rule stays in code (`applyPremium`). The model never sees the premium as something to apply, and a mislisting never reaches the price comparison.
-- Every trace line is real: `research`, `read_fixtures` / `read_grid`, `learned` (memory was injected), `judge` (mode + model id), `apply_premium`, `memory`.
+- Every trace line is real: `research`, `read_fixtures` / `read_grid`, `learned` (memory was injected), `judge` (mode + model id + batch), `apply_premium`, `memory`.
 - Commit only your own paths with explicit `git add <path>`; never `git add -A` or `git add .`; never sweep another agent's staged files. Run `pnpm build && npx tsc --noEmit` before every push. Rebase only on a clean tree; never `git stash --include-untracked` while others have uncommitted work. No force-push.
-- Imports at the top of the file. Exhaustive `switch` with a `never` default over unions. Keep the three-panel layout and colours; do not redesign.
+- Imports at the top of the file. Exhaustive `switch` with a `never` default over unions. Keep the `/dev` three-panel layout and colours; do not redesign the dashboard into that layout.
 
 ## Demo script (one clock button, four fixtures, one chat)
 
-The exact 3-minute run — start commands, warm-up curls, the four clicks, what to say at each, timings, and what to do when Bedrock is slow or `/api/search` fails — is in **[`DEMO.md`](DEMO.md)**. Code freeze 16:30, live demo 17:30, viewport ≥1400px, **Forget me** first.
+The exact 3-minute run — start commands, warm-up curls, the four clicks, what to say at each, timings, and what to do when Bedrock is slow or `/api/search` fails — is in **[`DEMO.md`](DEMO.md)**. Viewport ≥1400px. Open `/dev` for the three-panel fixture walk. Click **Forget me** / **Reset memory** first so the Memory card reads "Nothing learned yet".
 
 The beats, for reference:
 
-0. **The real shelf.** Hit Live grid. Prefers the user's Brave via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads carry an `Ad` chip; browse rows show their returns line. Twelve rows (at most 4 ads) go to the judge; **All listings** on the centre panel shows every offer. Card photos are captured when the reader can; without an attached photo the judge cannot call a mislisting.
-1. **The photo beat.** Type the fleece, hit Fixtures. The £22 "Nike Tech Fleece" has the right title and a photo of a nylon bomber. The judge drops it from the picture before any price rule runs; the row is struck through with the photo reason.
+0. **The real shelf.** From the dashboard (or `/dev`), hit Live grid. Prefers the user's browser via the MV3 extension; otherwise the badge says `snapshot · captured <date>` (exact-slug fallback) — never the four fixtures for a different query. Ads are judged with the rest. Card photos are extension data URLs when the reader can capture them; without an attached photo the judge cannot call a mislisting. Titles link to `product_url`.
+1. **The photo beat.** On `/dev`, type the fleece, hit Fixtures. The £22 "Nike Tech Fleece" has the right title and a photo of a nylon bomber. The judge drops it from the picture before any price rule runs; the row is struck through with the photo reason.
 2. **The rights beat, £10.** Private seller £28 vs JD Sports £36. Gap £8 is inside the £10 premium, so it buys the shop and says exactly what the £8 buys: 14-day cancellation and a 30-day fault refund. The overseas "shop" at £34 gets no premium: a business badge is not protection.
 3. **The flip, £10 → £5.** Change "Pay up to" to 5 and Re-run. Same judgements, but now the £8 gap beats the premium: it buys the private listing and warns that a break is your problem. Same model output, different pound rule, deterministic.
-4. **Memory.** Deposit into the bot wallet, then Approve the JD Sports pick. The Memory card fills with a Bedrock-written summary and the last events; the next run shows a `learned` trace line and the judge's sentences lean towards "your proven choice". **Reset memory** wipes it. `/orders` lists approved receipts.
+4. **Memory.** Deposit into the bot wallet, then Approve the JD Sports pick. The Memory card on `/dev` fills with a Bedrock-written summary and the last events; the next run shows a `learned` trace line and the judge's sentences lean towards "your proven choice". **Reset memory** wipes it. `/orders` lists approved receipts.
 
 Say it in one line: it does not buy the cheapest listing. It buys the cheapest listing that is actually the item and still has your rights, and it remembers how you buy.
 
@@ -161,4 +172,4 @@ Say it in one line: it does not buy the cheapest listing. It buys the cheapest l
 - Do not start a second App Runner service.
 - Do not soften the mislisting rule or move the pound comparison into the prompt.
 - Do not switch the judge to xAI / Grok.
-- Do not commit another agent's in-progress files, and do not edit their folders without asking. Leave `src/app/ext` alone if it is mid-flight.
+- Do not commit another agent's in-progress files, and do not edit their folders without asking.
