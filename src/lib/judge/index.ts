@@ -1,10 +1,11 @@
 /**
  * Judge — owned by Judge+Memory. Amazon Bedrock via the Converse API.
  *
- * Batches of 6 listings per `ConverseCommand` so the JSON does not truncate.
- * Fixture and captured photos are attached as image blocks. Output is JSON
- * validated against `DecisionSchema`; on a validation failure we retry once
- * with the error appended, then fall back to the mock for that batch only.
+ * Batches of 6 listings per `ConverseCommand` so the JSON does not truncate, up to
+ * `JUDGE_CONCURRENCY` (default 4) batches in flight at once. Each batch carries only
+ * its own listings' photos. Output is JSON validated against `DecisionSchema`; on a
+ * validation failure we retry once with the error appended, then fall back to the mock
+ * for that batch only. Throttles back off separately and do not use up that retry.
  * A listing is never called a mislisting unless image bytes were sent.
  * The pound comparison stays in code.
  *
@@ -21,7 +22,17 @@ import { JUDGE_BATCH_SIZE, type JudgeMode, type ShortlistItem } from "@/lib/deci
 import { safeImageDataUrl, sniffImageFormat } from "@/lib/photo-safety";
 import { buildUserContent, SYSTEM_PROMPT } from "./prompt";
 import { mockDecision, mockJudge } from "./mock";
-import { BEDROCK_MODEL_ID, converse, errorLabel, isAccessError, judgeMode, shortModelName } from "./bedrock";
+import {
+  BEDROCK_MODEL_ID,
+  converse,
+  errorLabel,
+  isAccessError,
+  judgeMode,
+  shortModelName,
+  THROTTLE_BACKOFF_MS,
+  withThrottleBackoff,
+} from "./bedrock";
+import { mapPool } from "./pool";
 import type { ProductBrief } from "./research";
 export { researchProduct, researchTraceDetail } from "./research";
 export type { ProductBrief, ResearchResult } from "./research";
@@ -109,6 +120,18 @@ function parseResponse(text: string): JudgeResponse {
 /** Output budget: ~12 decisions × ~120 tokens plus a summary, with headroom so the JSON never truncates. */
 const JUDGE_MAX_TOKENS = 4000;
 
+const DEFAULT_JUDGE_CONCURRENCY = 4;
+
+/** Batches in flight at once: `JUDGE_CONCURRENCY`, default 4. Read per call. */
+export function judgeConcurrency(): number {
+  const n = Number.parseInt(process.env.JUDGE_CONCURRENCY ?? "", 10);
+  return Number.isFinite(n) && n >= 1 ? n : DEFAULT_JUDGE_CONCURRENCY;
+}
+
+function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
 function mockResult(
   items: ShortlistItem[],
   settings: UserSettings,
@@ -161,20 +184,34 @@ async function judgeBatch(
   items: ShortlistItem[],
   context: JudgeContext,
   batchLabel: string,
+  onThrottle: () => void = () => {},
 ): Promise<JudgeResult> {
+  const started = Date.now();
   const notes: string[] = [];
   const content = await buildUserContent(query, settings, items, loadImage, context.memory, context.brief ?? null);
   const images = content.filter((b) => "image" in b).length;
-  notes.push(`${batchLabel}: sent ${items.length} items, ${images} photos${context.memory ? ", buyer memory" : ""}`);
+  const sent = `${items.length} item${items.length === 1 ? "" : "s"}, ${images} photo${images === 1 ? "" : "s"}${context.memory ? ", buyer memory" : ""}`;
+  const withHeadline = (result: JudgeResult): JudgeResult => ({
+    ...result,
+    notes: [`${batchLabel}: ${sent} → ${result.mode} in ${seconds(Date.now() - started)}`, ...result.notes],
+  });
 
   const messages: Message[] = [{ role: "user", content }];
-  const started = Date.now();
 
   let parsed: JudgeResponse | null = null;
   for (let attempt = 1; attempt <= 2 && parsed === null; attempt += 1) {
     let raw = "";
     try {
-      const out = await converse(messages, { system: SYSTEM_PROMPT, maxTokens: JUDGE_MAX_TOKENS, temperature: 0.2 });
+      const out = await withThrottleBackoff(
+        () => converse(messages, { system: SYSTEM_PROMPT, maxTokens: JUDGE_MAX_TOKENS, temperature: 0.2 }),
+        {
+          onThrottle: (retry, waitMs, err) => {
+            onThrottle();
+            console.warn(`[covered/judge] ${batchLabel} attempt ${attempt} throttled (${errorLabel(err)}), waiting ${waitMs} ms`);
+            notes.push(`${batchLabel} attempt ${attempt}: throttled, backoff ${retry}/${THROTTLE_BACKOFF_MS.length} for ${waitMs} ms`);
+          },
+        },
+      );
       raw = out.text;
       if (out.stopReason === "max_tokens") {
         notes.push(`${batchLabel} attempt ${attempt}: output hit the ${JUDGE_MAX_TOKENS} token cap`);
@@ -186,7 +223,7 @@ async function judgeBatch(
       notes.push(`${batchLabel} attempt ${attempt} failed: ${message.slice(0, 160)}`);
       if (isAccessError(err)) {
         notes.push(`${batchLabel} mock: Bedrock credentials or model access missing`);
-        return mockResult(items, settings, notes, context.brief ?? null);
+        return withHeadline(mockResult(items, settings, notes, context.brief ?? null));
       }
       if (attempt === 1 && raw) {
         messages.push({ role: "assistant", content: [{ text: raw }] });
@@ -201,7 +238,6 @@ async function judgeBatch(
       }
     }
   }
-  notes.push(`${batchLabel}: bedrock took ${Date.now() - started} ms`);
 
   const photos = await loadPhotos(items);
   const withBytes = attachedPhotoIds(items, photos);
@@ -231,16 +267,21 @@ async function judgeBatch(
     notes.push(`${batchLabel}: ${filled} item${filled === 1 ? "" : "s"} missing from the model, mock filled`);
   }
 
-  return {
+  return withHeadline({
     decisions,
     summary,
     mode: parsed ? "bedrock" : "mock",
     model: parsed ? BEDROCK_MODEL_ID : "mock",
     notes,
-  };
+  });
 }
 
-/** Judge every listing. Batches of `JUDGE_BATCH_SIZE`. A failed batch mocks only that batch. */
+/**
+ * Judge every listing. Batches of `JUDGE_BATCH_SIZE`, `judgeConcurrency()` at a time.
+ * Every Bedrock throttle halves the batches allowed in flight (down to 1) for the rest of
+ * the call, so a low requests-per-minute quota slows the judge instead of pushing batches
+ * to the mock. A failed batch mocks only that batch. Decisions and notes come back in listing order.
+ */
 export async function judge(
   query: string,
   settings: UserSettings,
@@ -254,25 +295,41 @@ export async function judge(
   }
 
   const batches = chunkItems(items, JUDGE_BATCH_SIZE);
-  console.log(`[covered/judge] mode=bedrock (${why}) items=${items.length} batches=${batches.length}`);
-  const notes: string[] = [`bedrock: ${why}`, `judging ${items.length} listings in ${batches.length} batch${batches.length === 1 ? "" : "es"} of ${JUDGE_BATCH_SIZE}`];
+  const concurrency = Math.max(1, Math.min(judgeConcurrency(), batches.length));
+  const batchWord = `batch${batches.length === 1 ? "" : "es"}`;
+  console.log(
+    `[covered/judge] mode=bedrock (${why}) items=${items.length} batches=${batches.length} concurrency=${concurrency}`,
+  );
+  const notes: string[] = [`bedrock: ${why}`, `judging ${items.length} listings in ${batches.length} ${batchWord} of ${JUDGE_BATCH_SIZE}`];
+  const started = Date.now();
+
+  let allowed = concurrency;
+  const onThrottle = () => {
+    allowed = Math.max(1, Math.floor(allowed / 2));
+  };
+  const results = await mapPool(
+    batches,
+    () => allowed,
+    (batch, index) => judgeBatch(query, settings, batch, context, `batch ${index + 1}/${batches.length}`, onThrottle),
+  );
+  const elapsed = Date.now() - started;
+
   const decisions: Record<string, Decision> = {};
   const summaries: string[] = [];
   let bedrockBatches = 0;
-  const started = Date.now();
-
   for (const [index, batch] of batches.entries()) {
-    const label = `batch ${index + 1}/${batches.length}`;
-    const result = await judgeBatch(query, settings, batch, context, label);
-    Object.assign(decisions, result.decisions);
+    const result = results[index];
+    for (const item of batch) decisions[item.id] = result.decisions[item.id];
     notes.push(...result.notes);
     summaries.push(result.summary);
     if (result.mode === "bedrock") bedrockBatches += 1;
   }
+  const throttledTo = allowed < concurrency ? `, down to ${allowed} after Bedrock throttling` : "";
+  notes.push(`${batches.length} ${batchWord} in ${seconds(elapsed)} (concurrency ${concurrency}${throttledTo})`);
 
   const resultMode: JudgeMode = bedrockBatches > 0 ? "bedrock" : "mock";
   console.log(
-    `[covered/judge] done mode=${resultMode} model=${shortModelName(BEDROCK_MODEL_ID)} batches=${batches.length} bedrock=${bedrockBatches} in ${Date.now() - started} ms`,
+    `[covered/judge] done mode=${resultMode} model=${shortModelName(BEDROCK_MODEL_ID)} batches=${batches.length} bedrock=${bedrockBatches} concurrency=${concurrency}->${allowed} in ${elapsed} ms`,
   );
   return {
     decisions,

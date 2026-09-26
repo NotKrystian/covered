@@ -54,6 +54,42 @@ export function errorLabel(err: unknown): string {
   return err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 }
 
+/** Bedrock asked us to slow down. Worth waiting for; never a reason to fall back to the mock early. */
+export function isThrottleError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+  return err.name === "ThrottlingException" || err.name === "TooManyRequestsException" || status === 429;
+}
+
+/**
+ * Base waits before each throttle retry; each gets ±25% jitter so parallel batches do not retry in step.
+ * Sized for per-minute quotas: at 10 requests/min a slot frees every 6 s, so the waits must reach that far.
+ */
+export const THROTTLE_BACKOFF_MS: readonly number[] = [1000, 3000, 7000];
+
+export type ThrottleBackoffOptions = {
+  onThrottle?: (retry: number, waitMs: number, err: unknown) => void;
+  delaysMs?: readonly number[];
+};
+
+/** Run `call`, retrying only throttles, once per entry in `delaysMs`. Any other error, or a throttle after the last wait, is rethrown. */
+export async function withThrottleBackoff<T>(
+  call: () => Promise<T>,
+  { onThrottle, delaysMs = THROTTLE_BACKOFF_MS }: ThrottleBackoffOptions = {},
+): Promise<T> {
+  for (let retry = 0; ; retry += 1) {
+    try {
+      return await call();
+    } catch (err) {
+      const base = delaysMs[retry];
+      if (base === undefined || !isThrottleError(err)) throw err;
+      const waitMs = Math.round(base * (0.75 + Math.random() * 0.5));
+      onThrottle?.(retry + 1, waitMs, err);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 export type ConverseOptions = { system?: string; maxTokens?: number; temperature?: number };
 
 export type ConverseResult = {
