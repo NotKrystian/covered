@@ -16,7 +16,8 @@ import { formatBps, formatPence } from "@/lib/money";
 import type { Limit } from "@/lib/memory";
 import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
 import {
-  approveChosen,
+  approveListing,
+  recordOverride,
   createLimit,
   decide,
   fetchLimits,
@@ -38,6 +39,7 @@ import { PercentField } from "@/components/PercentField";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
 import { AppHeader } from "@/components/AppHeader";
+import { protectedAlternative } from "@/lib/protected-pick";
 import { LoadingDots } from "@/components/LoadingDots";
 
 type Props = {
@@ -236,6 +238,8 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [balancePence, setBalancePence] = useState(memory.balance_pence);
   const [payOpen, setPayOpen] = useState(false);
+  /** The listing the pay sheet is for: null is the verdict's pick; otherwise the UK-seller option. */
+  const [payId, setPayId] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [limits, setLimits] = useState<Limit[]>(memory.limits ?? []);
@@ -271,6 +275,13 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     if (!done.ok) throw new Error(done.error);
     setLimits(done.limits);
     setLimitDraft(null);
+  }, []);
+
+  /** A listing's Limit opens the editor at the top of the page: scroll up to it so the buyer sees what to confirm. */
+  const openLimit = useCallback((draft: { query: string; defaultPence: number | null }) => {
+    setLimitDraft(draft);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
   }, []);
 
   const cancelLimit = useCallback(async (id: string) => {
@@ -321,7 +332,9 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     setPayError(null);
     try {
       const live = reapplyPremium(result, settings);
-      const done = await approveChosen(query, live, settings);
+      const targetId = payId ?? live.verdict.chosen_id;
+      if (!targetId) return;
+      const done = await approveListing(query, live, targetId, settings);
       if (!done.ok) {
         if (done.status === 402) {
           setWalletError(done.error);
@@ -333,7 +346,17 @@ export function Dashboard({ memoryState, onMemory }: Props) {
         return;
       }
       setBalancePence(done.balance_pence);
-      const chosen = live.listings.find((i) => i.id === live.verdict.chosen_id);
+      const chosen = live.listings.find((i) => i.id === targetId);
+      const suggested = live.listings.find((i) => i.id === live.verdict.chosen_id);
+      if (chosen && suggested && chosen.id !== suggested.id) {
+        // Paying more for a UK seller is an override: memory should lean that way next time.
+        void recordOverride(
+          query,
+          chosen.id,
+          settings.protection_premium_pence,
+          `chose ${chosen.merchant} at ${chosen.price_label} over ${suggested.merchant} at ${suggested.price_label} to keep the right to return`.slice(0, 200),
+        );
+      }
       setPayOpen(false);
       setReceipt({
         line: `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
@@ -346,7 +369,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
     } finally {
       setApproving(false);
     }
-  }, [result, query, settings, refreshWatches]);
+  }, [result, payId, query, settings, refreshWatches]);
 
   const live = useMemo(() => (result ? reapplyPremium(result, settings) : null), [result, settings]);
   const rows = useMemo(
@@ -362,6 +385,13 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   );
   const chosenId = live?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
+  const ukOption = live ? protectedAlternative(live) : null;
+  const payItem = payId ? rows.find((i) => i.id === payId) ?? null : chosenItem;
+  const openPay = (id: string | null) => {
+    setPayError(null);
+    setPayId(id);
+    setPayOpen(true);
+  };
   const listingGroups = partitionCashAndMonthly(rows);
 
   return (
@@ -439,7 +469,8 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           </button>
         </form>
         {limitDraft && (
-          <div className="mt-3">
+          // Keyed per listing: a second Limit restarts the editor with that price and glows again.
+          <div key={`${limitDraft.query}|${limitDraft.defaultPence}`} className="chosen-glow mt-3 rounded-xl">
             <LimitEditor
               query={limitDraft.query}
               defaultPence={limitDraft.defaultPence}
@@ -531,15 +562,39 @@ export function Dashboard({ memoryState, onMemory }: Props) {
 
           {!running && live && (
             <div className="space-y-6">
-              <p
-                className={`text-base leading-relaxed ${
+              <section
+                aria-labelledby="agent-decision"
+                className={`rounded-xl border px-5 py-4 ${
                   chosenId && live.decisions[chosenId] && isProtected(live.decisions[chosenId])
-                    ? "text-accent"
-                    : "text-foreground"
+                    ? "border-accent/40 bg-accent-soft"
+                    : "border-line bg-panel"
                 }`}
               >
-                {live.verdict.summary}
-              </p>
+                <h2 id="agent-decision" className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Agent decision
+                </h2>
+                <p className="mt-1.5 text-base leading-relaxed">{live.verdict.summary}</p>
+              </section>
+              {ukOption && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel px-5 py-4">
+                  <p className="min-w-0 flex-1 basis-72 text-sm">
+                    <span className="font-medium">Rather be able to send it back?</span>{" "}
+                    <span className="text-muted">
+                      {ukOption.item.merchant} has it for {ukOption.item.price_label}
+                      {ukOption.extra_pence > 0 ? `, ${formatPence(ukOption.extra_pence)} more,` : ""} with the 14-day
+                      right to cancel and a 30-day fault refund.
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    disabled={approving}
+                    onClick={() => openPay(ukOption.item.id)}
+                    className="shrink-0 rounded-md border border-accent/60 px-4 py-2 text-sm font-semibold text-accent hover:bg-accent-soft disabled:opacity-50"
+                  >
+                    Buy from {ukOption.item.merchant}
+                  </button>
+                </div>
+              )}
               {walletError && (
                 <div className="rounded-xl border border-danger/40 bg-danger-soft px-5 py-4 text-sm">
                   <p className="font-medium">Wallet is short</p>
@@ -558,12 +613,9 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                     decisions={live.decisions}
                     chosenId={chosenId}
                     approving={approving}
-                    onApprove={() => {
-                      setPayError(null);
-                      setPayOpen(true);
-                    }}
+                    onApprove={() => openPay(null)}
                     onLimit={(item) =>
-                      setLimitDraft({
+                      openLimit({
                         query: query.trim(),
                         defaultPence: item.price_pence,
                       })
@@ -581,15 +633,27 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           </Link>
         </p>
       </main>
-      {payOpen && chosenItem && (
+      {payOpen && payItem && (
         <PaySheet
-          merchant={chosenItem.merchant}
-          title={chosenItem.title}
-          pricePence={chosenItem.price_pence}
-          priceLabel={chosenItem.price_label}
+          // Remount per listing: switching to the UK option starts that sheet fresh.
+          key={payItem.id}
+          merchant={payItem.merchant}
+          title={payItem.title}
+          pricePence={payItem.price_pence}
+          priceLabel={payItem.price_label}
           balancePence={balancePence}
-          rights={live?.decisions[chosenItem.id]?.rights ?? []}
-          decision={live?.decisions[chosenItem.id] ?? null}
+          rights={live?.decisions[payItem.id]?.rights ?? []}
+          decision={live?.decisions[payItem.id] ?? null}
+          alternative={
+            payItem.id === chosenId && ukOption
+              ? {
+                  merchant: ukOption.item.merchant,
+                  priceLabel: ukOption.item.price_label,
+                  extraPence: ukOption.extra_pence,
+                  onChoose: () => setPayId(ukOption.item.id),
+                }
+              : undefined
+          }
           onBalance={setBalancePence}
           paying={approving}
           error={payError}

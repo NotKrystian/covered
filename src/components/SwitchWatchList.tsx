@@ -71,7 +71,9 @@ export function SwitchWatchList({ watches, onWatches, onRefresh }: Props) {
     return () => window.clearInterval(timer);
   }, [awaitingMove, onWatches]);
 
-  if (watches.length === 0) return null;
+  // A private or overseas order can never be switched, so it is not on the watch at all.
+  const listed = watches.filter((watch) => !watch.blocked);
+  if (listed.length === 0) return null;
 
   const checkNow = async (watch: SwitchWatch) => {
     const id = watch.order.id;
@@ -138,21 +140,11 @@ export function SwitchWatchList({ watches, onWatches, onRefresh }: Props) {
         </p>
       </div>
       <ul className="mt-3 divide-y divide-line rounded-xl border border-line bg-panel">
-        {watches.map((watch) => {
+        {listed.map((watch) => {
           const { order } = watch;
           const offer = offerFor(watch);
           const check = order.switch_check;
           const working = busy[order.id];
-          if (watch.blocked) {
-            return (
-              <li key={order.id} className="px-4 py-3 text-sm text-muted">
-                <p className="truncate">{order.title}</p>
-                <p className="mt-0.5 text-xs">
-                  {order.merchant} · paid {formatPence(order.price_pence)} · no 14-day switch: {watch.blocked}
-                </p>
-              </li>
-            );
-          }
           if (!watch.watching) {
             return (
               <li key={order.id} className="px-4 py-3 text-sm text-muted">

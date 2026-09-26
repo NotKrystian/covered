@@ -20,6 +20,7 @@ import { DecisionSchema } from "@/lib/types";
 import type { Decision, UserSettings } from "@/lib/types";
 import { JUDGE_BATCH_SIZE, type JudgeMode, type ShortlistItem } from "@/lib/decision";
 import { safeImageDataUrl, sniffImageFormat } from "@/lib/photo-safety";
+import { applyRetailerWhitelist } from "@/lib/uk-retailers";
 import { buildUserContent, SYSTEM_PROMPT } from "./prompt";
 import { mockDecision, mockJudge } from "./mock";
 import {
@@ -277,16 +278,37 @@ async function judgeBatch(
 }
 
 /**
- * Judge every listing. Batches of `JUDGE_BATCH_SIZE`, `judgeConcurrency()` at a time.
- * Every Bedrock throttle halves the batches allowed in flight (down to 1) for the rest of
- * the call, so a low requests-per-minute quota slows the judge instead of pushing batches
- * to the mock. A failed batch mocks only that batch. Decisions and notes come back in listing order.
+ * Judge every listing, then promote whitelisted UK retailers the judge under-rated
+ * (`src/lib/uk-retailers.ts`). The whitelist only changes seller facts; identity and
+ * mislisting stay the judge's call. A promotion is a line in the trace.
  */
 export async function judge(
   query: string,
   settings: UserSettings,
   items: ShortlistItem[],
   context: JudgeContext = { memory: null },
+): Promise<JudgeResult> {
+  const judged = await judgeListings(query, settings, items, context);
+  const { decisions, promoted } = applyRetailerWhitelist(items, judged.decisions);
+  if (promoted.length === 0) return judged;
+  return {
+    ...judged,
+    decisions,
+    notes: [...judged.notes, `known UK retailer → ${promoted.join(", ")}: UK business, shop checkout`],
+  };
+}
+
+/**
+ * Batches of `JUDGE_BATCH_SIZE`, `judgeConcurrency()` at a time.
+ * Every Bedrock throttle halves the batches allowed in flight (down to 1) for the rest of
+ * the call, so a low requests-per-minute quota slows the judge instead of pushing batches
+ * to the mock. A failed batch mocks only that batch. Decisions and notes come back in listing order.
+ */
+async function judgeListings(
+  query: string,
+  settings: UserSettings,
+  items: ShortlistItem[],
+  context: JudgeContext,
 ): Promise<JudgeResult> {
   const { mode, why } = await judgeMode();
   if (mode === "mock") {

@@ -288,12 +288,12 @@ export function applyPremium(
     if (shopWins) {
       let summary: string;
       if (!unprotectedBest) {
-        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
+        summary = `Buying from ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
       } else if (discount <= 0) {
-        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}: the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.${droppedNote}`;
+        summary = `Buying from ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}: the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.${droppedNote}`;
       } else {
         const off = `${discountPercent(discount, protectedBest.price_pence)}%`;
-        summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. ${off} off the shop, inside your ${premiumLabel} (${formatPence(discount)}, ${off} of the shop): 14-day cancellation and a 30-day fault refund.${droppedNote}`;
+        summary = `Buying from ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. ${off} off the shop, inside your ${premiumLabel} (${formatPence(discount)}, ${off} of the shop): 14-day cancellation and a 30-day fault refund.${droppedNote}`;
       }
       return { chosen_id: protectedBest.id, per_offer: decisions, summary };
     }
@@ -304,7 +304,7 @@ export function applyPremium(
     if (protectedBest) {
       const discount = protectedBest.price_pence - unprotectedBest.price_pence;
       const off = `${discountPercent(discount, protectedBest.price_pence)}%`;
-      summary = `Buying ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)}: ${off} off, past your ${premiumLabel}, so the private listing wins and a fault is your problem (${formatPence(discount)}, ${off} of the shop). No cooling-off, no Consumer Rights Act remedy.${droppedNote}`;
+      summary = `Buying from ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)}: ${off} off, past your ${premiumLabel}, so the private listing wins and a fault is your problem (${formatPence(discount)}, ${off} of the shop). No cooling-off, no Consumer Rights Act remedy.${droppedNote}`;
     } else {
       summary = `No listing with UK rights survived. ${unprotectedBest.merchant} at ${formatPence(unprotectedBest.price_pence)} is the item, but a break is your problem.${droppedNote}`;
     }

@@ -23,6 +23,8 @@ type Props = {
   onClose: () => void;
   /** When set, a short wallet offers "Add money" here instead of sending the buyer away. */
   onBalance?: (pence: number) => void;
+  /** The cheapest UK seller with this item, offered on the warning so the buyer can pay for the right to return. */
+  alternative?: { merchant: string; priceLabel: string; extraPence: number; onChoose: () => void };
 };
 
 /** Two presses of Enter/Space inside this window count as the double-click. */
@@ -118,6 +120,7 @@ export function PaySheet({
   onPay,
   onClose,
   onBalance,
+  alternative,
 }: Props) {
   const targetRef = useRef<HTMLButtonElement | null>(null);
   const backRef = useRef<HTMLButtonElement | null>(null);
@@ -208,7 +211,24 @@ export function PaySheet({
             </span>
             <span className="tnum shrink-0 font-semibold">{priceLabel}</span>
           </div>
-          <div className="mt-5 flex gap-2">
+          {alternative && (
+            <button
+              type="button"
+              onClick={() => {
+                if (armed.current) alternative.onChoose();
+              }}
+              className="mt-4 w-full rounded-lg bg-accent px-4 py-3 text-left text-background outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
+            >
+              <span className="block font-semibold">
+                Buy from {alternative.merchant} instead · {alternative.priceLabel}
+              </span>
+              <span className="block text-xs opacity-80">
+                {alternative.extraPence > 0 ? `${formatPence(alternative.extraPence)} more, and you ` : "You "}
+                can send it back: 14-day right to cancel and a 30-day fault refund
+              </span>
+            </button>
+          )}
+          <div className={alternative ? "mt-2 flex gap-2" : "mt-5 flex gap-2"}>
             <button
               ref={backRef}
               type="button"

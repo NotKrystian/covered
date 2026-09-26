@@ -165,8 +165,17 @@ export async function approveChosen(
   settings: UserSettings = DEFAULT_USER_SETTINGS,
 ): Promise<ApproveResult> {
   if (result.verdict.chosen_id === null) return { ok: false, status: 400, error: "Nothing to approve." };
-  const chosen = result.listings.find((i) => i.id === result.verdict.chosen_id)
-    ?? result.shortlist.find((i) => i.id === result.verdict.chosen_id);
+  return approveListing(query, result, result.verdict.chosen_id, settings);
+}
+
+/** Buy one listing from this result: the verdict's pick, or one the buyer chose instead (the UK-seller option). */
+export async function approveListing(
+  query: string,
+  result: DecideResponse,
+  listingId: string,
+  settings: UserSettings = DEFAULT_USER_SETTINGS,
+): Promise<ApproveResult> {
+  const chosen = result.listings.find((i) => i.id === listingId) ?? result.shortlist.find((i) => i.id === listingId);
   const decision = chosen ? result.decisions[chosen.id] : undefined;
   if (!chosen || !decision) return { ok: false, status: 400, error: "Chosen listing is missing." };
   const body: ReceiptBody & { chosen_id: string } = {
@@ -195,6 +204,22 @@ export async function approveChosen(
     return { ok: true, id: json.id, balance_pence: json.balance_pence ?? 0 };
   } catch (err) {
     return { ok: false, status: 0, error: err instanceof Error ? err.message : "Approve failed." };
+  }
+}
+
+/**
+ * Tell memory the buyer overrode the pick (POST /api/memory, kind "override"), so the
+ * next judgement leans their way. Fire and forget: the purchase has already happened.
+ */
+export async function recordOverride(query: string, listingId: string, premiumPence: number, note: string): Promise<void> {
+  try {
+    await fetch("/api/memory", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "override", query, chosen_id: listingId, premium_pence: premiumPence, note }),
+    });
+  } catch {
+    // Memory is best effort; the order and receipt are already saved.
   }
 }
 

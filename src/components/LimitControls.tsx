@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Limit } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
 import { displayLimitStatus } from "@/lib/limit-status";
@@ -52,6 +52,12 @@ type EditorProps = {
 export function LimitEditor({ query, defaultPence, onConfirm, onCancel }: EditorProps) {
   const [pounds, setPounds] = useState(defaultPence === null ? "" : String(defaultPence / 100));
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Opened from a listing further down: put the cursor in the price without jumping the page.
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const pence = poundsToPence(pounds);
   const canSave = Boolean(query.trim()) && pence !== null && !saving;
@@ -66,6 +72,7 @@ export function LimitEditor({ query, defaultPence, onConfirm, onCancel }: Editor
         <label className="inline-flex items-center overflow-hidden rounded-md border border-line bg-panel-raised focus-within:border-accent">
           <span className="pl-2 text-muted">£</span>
           <input
+            ref={inputRef}
             aria-label="Limit price in pounds"
             type="number"
             min={0}
