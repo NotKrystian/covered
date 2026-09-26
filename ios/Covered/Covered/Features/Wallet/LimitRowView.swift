@@ -11,26 +11,25 @@ struct LimitRowView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(limit.query)
-                    .font(.ui(16, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.inkSoft)
                 Spacer(minLength: 8)
                 LimitChipLabel(chip: chip)
             }
             Text("buy at or under \(formatGBP(limit.maxPricePence))")
-                .font(.money(14))
-                .foregroundStyle(Color.white.opacity(0.72))
+                .font(.system(size: 13))
+                .foregroundStyle(Color.secondary)
             Text(LimitStatusChip.lastCheckedLabel(limit.lastCheckedAt))
-                .font(.ui(12))
-                .foregroundStyle(Color.white.opacity(0.5))
-            if !limit.lastResult.isEmpty {
-                Text(limit.lastResult)
-                    .font(.ui(12))
-                    .foregroundStyle(Color.white.opacity(0.45))
-            }
+                .font(.system(size: 12))
+                .foregroundStyle(Color.tertiary)
         }
-        .padding(Theme.pad)
+        .padding(14.5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.ink, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .strokeBorder(Color.hairline, lineWidth: 1)
+        )
     }
 }
 
@@ -39,43 +38,19 @@ struct LimitChipLabel: View {
 
     var body: some View {
         Text(chip.rawValue)
-            .font(.ui(11, weight: .semibold))
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(background, in: Capsule())
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(good ? Color.accentInk : Color.chipText)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6.5)
+            .background((good ? Color.chipGood : Color.chipNeutral), in: Capsule())
     }
 
-    private var foreground: Color {
+    private var good: Bool {
         switch chip {
         case .filled, .watching:
-            return Color.ink
+            return true
         case .paused, .walletShort:
-            return .white
-        }
-    }
-
-    private var background: Color {
-        switch chip {
-        case .watching:
-            return Color.accent
-        case .filled:
-            return Color.accent
-        case .paused:
-            return Color.muted
-        case .walletShort:
-            return Color.dangerGrey
-        }
-    }
-}
-
-extension View {
-    @ViewBuilder
-    func coveredSwap() -> some View {
-        if #available(iOS 18.0, *) {
-            self.transition(.blurReplace)
-        } else {
-            self.transition(.opacity)
+            return false
         }
     }
 }

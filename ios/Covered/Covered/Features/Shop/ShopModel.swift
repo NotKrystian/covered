@@ -90,6 +90,13 @@ final class ShopModel {
                 offers = try await pollReader(query: q)
                 source = .live
                 label = "laptop reader · \(offers?.count ?? 0) offers"
+            } catch let error as APIError {
+                if case .http(let status, let message) = error, status == 401 {
+                    errorText = message
+                    offers = nil
+                } else {
+                    offers = nil
+                }
             } catch {
                 offers = nil
             }
@@ -178,24 +185,23 @@ final class ShopModel {
     }
 
     private func pollReader(query: String) async throws -> [Offer] {
-        let jobId: String
-        do {
-            jobId = try await AppState.shared.api.startReaderJob(query: query)
-        } catch let error as APIError {
-            throw error
+        let created = try await AppState.shared.api.startReaderJob(query: query)
+        guard let jobId = created.jobId, !jobId.isEmpty else {
+            throw APIError.unexpected(message: "The reader did not return a job id")
         }
 
-        let deadline = Date().addingTimeInterval(45)
+        let readerOffline = created.readerOnline == false
+        if readerOffline {
+            statusText = "Open Brave on your laptop — the Covered reader hasn't checked in"
+        }
+
+        let started = Date()
+        let deadline = started.addingTimeInterval(45)
         while Date() < deadline {
-            let job: ReaderJobSnapshot
-            do {
-                job = try await AppState.shared.api.readerJob(id: jobId)
-            } catch let error as APIError {
-                if case .http(let status, _) = error, status == 404 {
-                    throw error
-                }
-                throw error
+            if readerOffline, Date().timeIntervalSince(started) >= 10 {
+                throw APIError.unexpected(message: "reader_offline")
             }
+            let job = try await AppState.shared.api.readerJob(id: jobId)
             switch job.status {
             case .queued, .running:
                 try await Task.sleep(for: .seconds(1))

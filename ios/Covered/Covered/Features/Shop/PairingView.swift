@@ -12,13 +12,12 @@ struct PairingView: View {
         VStack(alignment: .leading, spacing: embedded ? 16 : Theme.padLarge) {
             if !embedded {
                 Text("Pair with your laptop")
-                    .font(.ui(28, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .headline(29)
             }
 
             Text("Searches run in your Brave on the laptop.")
-                .font(.ui(16))
-                .foregroundStyle(Color.muted)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
 
             codeField
 
@@ -26,18 +25,16 @@ struct PairingView: View {
                 Task { await claim() }
             } label: {
                 Text(status == .claiming ? "Claiming…" : "Claim")
-                    .font(.ui(17, weight: .semibold))
+                    .font(.system(size: 18.5, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .foregroundStyle(Color.ink)
-                    .background(
-                        Color.accent,
-                        in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    )
+                    .frame(height: Theme.approveHeight)
+                    .foregroundStyle(Color.white)
+                    .background(Color.ink, in: Capsule())
             }
+            .buttonStyle(PressScaleStyle(scale: 0.965))
             .disabled(!canClaim)
             .opacity(canClaim ? 1 : 0.45)
-            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: canClaim)
+            .animation(Motion.ui, value: canClaim)
             .accessibilityIdentifier("pairing.claim")
 
             resultLine
@@ -49,10 +46,9 @@ struct PairingView: View {
         .frame(maxWidth: .infinity, maxHeight: embedded ? nil : .infinity, alignment: .topLeading)
         .background {
             if !embedded {
-                Color.canvas.ignoresSafeArea()
+                Color.screen.ignoresSafeArea()
             }
         }
-        .navigationTitle("Pair")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focused = true }
     }
@@ -62,21 +58,18 @@ struct PairingView: View {
     }
 
     private var codeField: some View {
-        TextField("ABC123", text: $code)
+        TextField("ABC234", text: $code)
             .textInputAutocapitalization(.characters)
             .autocorrectionDisabled()
             .keyboardType(.asciiCapable)
             .textContentType(.oneTimeCode)
-            .font(.system(size: 32, weight: .semibold, design: .monospaced))
+            .font(.system(size: 28, weight: .semibold, design: .monospaced))
             .monospacedDigit()
             .multilineTextAlignment(.center)
             .focused($focused)
-            .padding(.vertical, 18)
-            .foregroundStyle(Color.canvas)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(Color.ink)
-            )
+            .padding(.vertical, 16)
+            .foregroundStyle(Color.inkSoft)
+            .background(Color.composer, in: Capsule())
             .onChange(of: code) { _, next in
                 let clipped = String(PairingCode.normalize(next).prefix(6))
                 if clipped != next { code = clipped }
@@ -92,14 +85,14 @@ struct PairingView: View {
             EmptyView()
         case .success:
             Text("Paired. This phone now uses the same Covered buyer as your laptop.")
-                .font(.ui(15))
-                .foregroundStyle(Color.accent)
-                .transition(.blurReplace)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.inkSoft)
+                .coveredSwap()
         case .failure(let message):
             Text(message)
-                .font(.ui(15))
-                .foregroundStyle(Color.muted)
-                .transition(.blurReplace)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
+                .coveredSwap()
                 .accessibilityIdentifier("pairing.error")
         }
     }
@@ -112,18 +105,18 @@ struct PairingView: View {
         do {
             let claimed = try await AppState.shared.api.claimPair(code: value)
             Haptics.success()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            withAnimation(Motion.soft) {
                 status = .success(userId: claimed.userId)
             }
             await AppState.shared.refresh()
         } catch let error as APIError {
             Haptics.light()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            withAnimation(Motion.soft) {
                 status = .failure(PairingCode.plainError(error))
             }
         } catch {
             Haptics.light()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            withAnimation(Motion.soft) {
                 status = .failure(error.localizedDescription)
             }
         }
@@ -138,15 +131,23 @@ enum ClaimStatus: Equatable {
 }
 
 enum PairingCode {
+    /// A–Z and 2–9, excluding 0 / O / 1 / I.
+    private static let alphabet = Set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+
     static func normalize(_ raw: String) -> String {
-        raw.uppercased().filter { $0.isLetter || $0.isNumber }
+        raw.uppercased()
+            .replacingOccurrences(of: " ", with: "")
+            .filter { alphabet.contains($0) }
     }
 
     static func plainError(_ error: APIError) -> String {
         switch error {
         case .http(let status, let message):
             if status == 404 {
-                return "Pairing isn't live on the server yet"
+                if message == "route_missing" {
+                    return "Pairing isn't live on the server yet"
+                }
+                return "That code isn't valid — get a fresh one from the Covered icon in Brave"
             }
             if status == 410 {
                 return message.isEmpty ? "That code has expired or already been used." : message

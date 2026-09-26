@@ -3,7 +3,11 @@ import UIKit
 
 struct OfferPhoto: View {
     let item: ShortlistItem
-    var size: CGFloat = 72
+    var size: CGFloat = Theme.listPhoto
+    var corner: CGFloat = Theme.radiusPhoto
+    var rejected = false
+    var banner = false
+    var bannerWidth: CGFloat = 154
 
     var body: some View {
         Group {
@@ -17,22 +21,24 @@ struct OfferPhoto: View {
                     case .success(let image):
                         image.resizable().scaledToFill()
                     case .empty:
-                        Color.muted.opacity(0.18)
+                        Color.photoHole
                     case .failure:
-                        placeholder
+                        Color.photoHole
                     @unknown default:
-                        placeholder
+                        Color.photoHole
                     }
                 }
             } else {
-                placeholder
+                Color.photoHole
             }
         }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(width: banner ? bannerWidth : size, height: banner ? 150 : size)
+        .saturation(rejected ? 0 : 1)
+        .opacity(rejected ? 0.55 : 1)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.muted.opacity(0.18))
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(Color.photoHole)
         )
     }
 
@@ -40,9 +46,5 @@ struct OfferPhoto: View {
         if let imageUrl = item.imageUrl, let url = URL(string: imageUrl) { return url }
         if let first = item.imageUrls.first, let url = URL(string: first) { return url }
         return nil
-    }
-
-    private var placeholder: some View {
-        Color.muted.opacity(0.18)
     }
 }

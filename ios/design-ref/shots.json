@@ -1,0 +1,226 @@
+{
+  "scale": "393/430",
+  "beats": 48,
+  "shots": [
+    {
+      "file": "01-chat-bubble.png",
+      "k": 2,
+      "t": 1.12,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "02-listing-cards.png",
+      "k": 5,
+      "t": 2.78,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "03-mislisting-strike.png",
+      "k": 9,
+      "t": 4.82,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "04-rights-chips-meter.png",
+      "k": 13,
+      "t": 6.72,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "05-premium-slider.png",
+      "k": 16,
+      "t": 8.18,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "06-approve-button.png",
+      "k": 21,
+      "t": 10.58,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "07-pay-sheet.png",
+      "k": 23,
+      "t": 11.72,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "08-check.png",
+      "k": 27,
+      "t": 13.62,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "09-order-row.png",
+      "k": 29,
+      "t": 14.68,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "10-orders-tracker.png",
+      "k": 34,
+      "t": 17.12,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "11-return-ring.png",
+      "k": 35,
+      "t": 17.78,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "12-price-drop-alert.png",
+      "k": 38,
+      "t": 19.18,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "13-sum.png",
+      "k": 42,
+      "t": 21.22,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "14-memory-chip.png",
+      "k": 46,
+      "t": 23.28,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "15-tab-bar.png",
+      "k": 4,
+      "t": 2.22,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "16-composer.png",
+      "k": 0,
+      "t": 0.1,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "17-lightbox.png",
+      "k": 8,
+      "t": 4.18,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "18-header-wallet.png",
+      "k": 29,
+      "t": 14.68,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "19-orders-tab.png",
+      "k": 30,
+      "t": 15.18,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    },
+    {
+      "file": "20-chosen-pick.png",
+      "k": 16,
+      "t": 8.18,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "width": 430,
+        "height": 930
+      }
+    }
+  ]
+}

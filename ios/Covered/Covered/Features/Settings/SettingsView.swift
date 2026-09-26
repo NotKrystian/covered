@@ -4,8 +4,8 @@ struct SettingsView: View {
     private let state = AppState.shared
 
     @State private var displayName = ""
-    @State private var premiumPounds = 10
-    @State private var switchPounds = 8
+    @State private var premiumPence = UserSettings.defaults.protectionPremiumPence
+    @State private var switchPence = UserSettings.defaults.switchMinimumPence
     @State private var baseURL = UserDefaults.standard.string(forKey: APIClient.baseURLDefaultsKey)
         ?? APIClient.defaultBaseURL.absoluteString
     @State private var saveError: String?
@@ -16,165 +16,129 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                identitySection
-                rightsSection
-                pairingSection
-                memorySection
-                resetSection
-                serverSection
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color.canvas.ignoresSafeArea())
-            .navigationTitle("Settings")
-            .toolbarBackground(Color.canvas, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.light, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(saving ? "Saving…" : "Save") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    FilmHeader()
+                        .padding(.horizontal, -Theme.inset)
+
+                    field("Name") {
+                        TextField("Name", text: $displayName)
+                            .font(.system(size: 14.5))
+                            .textInputAutocapitalization(.words)
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Rights")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.secondary)
+                        PremiumControl(
+                            premiumPence: $premiumPence,
+                            gapPence: nil,
+                            shopWins: true,
+                            verdictLead: "Pay up to \(formatGBP(premiumPence))",
+                            verdictBody: "More for UK buyer rights."
+                        )
+                        PremiumControl(
+                            premiumPence: $switchPence,
+                            gapPence: nil,
+                            shopWins: true,
+                            verdictLead: "Switch floor \(formatGBP(switchPence))",
+                            verdictBody: "Only switch inside 14 days if I still clear this after postage."
+                        )
+                    }
+
+                    NavigationLink {
+                        PairingView()
+                    } label: {
+                        Text("Pair with your laptop")
+                            .font(.system(size: 14.5))
+                            .foregroundStyle(Color.inkSoft)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 12)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Remembered")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.secondary)
+                        if let summary = state.memory?.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !summary.isEmpty {
+                            HStack(spacing: 8) {
+                                Circle().fill(Color.accent).frame(width: 6.5, height: 6.5)
+                                Text(summary)
+                                    .font(.system(size: 15.5, weight: .medium))
+                                    .foregroundStyle(Color.inkSoft)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 38.5)
+                            .background(Color.panel, in: Capsule())
+                        } else {
+                            Text("Nothing learned yet.")
+                                .font(.system(size: 14.5))
+                                .foregroundStyle(Color.secondary)
+                        }
+                    }
+
+                    Button("Reset memory") { confirmReset = true }
+                        .font(.system(size: 14.5, weight: .medium))
+                        .foregroundStyle(Color.inkSoft)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .overlay(Capsule().strokeBorder(Color.ink, lineWidth: 1))
+                        .disabled(resetting)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Server")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.secondary)
+                        TextField("https://covered.kawuc.uk", text: $baseURL)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.tertiary)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .accessibilityIdentifier("settings.baseURL")
+                            .onChange(of: baseURL) { _, next in persistBaseURL(next) }
+                    }
+
+                    if let saveError {
+                        Text(saveError).font(.system(size: 13)).foregroundStyle(Color.secondary)
+                    } else if let saveNote {
+                        Text(saveNote).font(.system(size: 13)).foregroundStyle(Color.secondary)
+                    }
+
+                    InkPillButton(title: saving ? "Saving…" : "Save", enabled: !saving) {
                         Task { await save() }
                     }
-                    .font(.ui(16, weight: .semibold))
-                    .foregroundStyle(Color.ink)
-                    .disabled(saving)
                 }
+                .padding(.horizontal, Theme.inset)
+                .padding(.bottom, 24)
             }
+            .background(Color.screen.ignoresSafeArea())
+            .navigationBarHidden(true)
             .confirmationDialog(
                 "Reset memory?",
                 isPresented: $confirmReset,
                 titleVisibility: .visible
             ) {
-                Button("Reset memory") {
-                    Task { await resetMemory() }
-                }
+                Button("Reset memory") { Task { await resetMemory() } }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This forgets how you buy and clears the demo wallet on this phone.")
             }
             .task { await load() }
         }
-        .tint(Color.accent)
+        .tint(Color.ink)
     }
 
-    private var identitySection: some View {
-        Section {
-            TextField("Name", text: $displayName)
-                .font(.ui(16))
-                .textInputAutocapitalization(.words)
-                .listRowBackground(Color.white.opacity(0.72))
-        } header: {
-            Text("Name")
-                .textCase(nil)
-        }
-    }
-
-    private var rightsSection: some View {
-        Section {
-            Stepper(value: $premiumPounds, in: 0...50) {
-                Text("Pay up to £\(premiumPounds) more for UK buyer rights")
-                    .font(.ui(15))
-                    .foregroundStyle(Color.ink)
-                    .monospacedDigit()
-            }
-            .listRowBackground(Color.white.opacity(0.72))
-
-            Stepper(value: $switchPounds, in: 0...50) {
-                Text("Only switch inside 14 days if I clear £\(switchPounds) after postage")
-                    .font(.ui(15))
-                    .foregroundStyle(Color.ink)
-                    .monospacedDigit()
-            }
-            .listRowBackground(Color.white.opacity(0.72))
-
-            if let saveError {
-                Text(saveError)
-                    .font(.ui(13))
-                    .foregroundStyle(Color.dangerGrey)
-                    .listRowBackground(Color.clear)
-                    .coveredSwap()
-            } else if let saveNote {
-                Text(saveNote)
-                    .font(.ui(13))
-                    .foregroundStyle(Color.muted)
-                    .listRowBackground(Color.clear)
-                    .coveredSwap()
-            }
-        } header: {
-            Text("Rights")
-                .textCase(nil)
-        }
-    }
-
-    private var pairingSection: some View {
-        Section {
-            NavigationLink {
-                PairingView()
-            } label: {
-                Text("Pair with your laptop")
-                    .font(.ui(16))
-                    .foregroundStyle(Color.ink)
-            }
-            .listRowBackground(Color.white.opacity(0.72))
-        }
-    }
-
-    private var memorySection: some View {
-        Section {
-            if let summary = state.memory?.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !summary.isEmpty {
-                Text(summary)
-                    .font(.ui(14))
-                    .foregroundStyle(Color.ink)
-                    .listRowBackground(Color.white.opacity(0.72))
-            } else {
-                Text("Nothing learned yet.")
-                    .font(.ui(14))
-                    .foregroundStyle(Color.muted)
-                    .listRowBackground(Color.white.opacity(0.72))
-            }
-        } header: {
-            Text("Memory")
-                .textCase(nil)
-        }
-    }
-
-    private var resetSection: some View {
-        Section {
-            Button("Reset memory") {
-                confirmReset = true
-            }
-            .font(.ui(16, weight: .semibold))
-            .foregroundStyle(Color.ink)
-            .disabled(resetting)
-            .listRowBackground(Color.white.opacity(0.72))
-        } footer: {
-            Text("Clears preference memory on the server. Approve events are how Covered learns; this wipes that.")
-        }
-    }
-
-    private var serverSection: some View {
-        Section {
-            TextField("https://covered.kawuc.uk", text: $baseURL)
-                .font(.ui(13))
-                .foregroundStyle(Color.muted)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-                .accessibilityIdentifier("settings.baseURL")
-                .onChange(of: baseURL) { _, next in
-                    persistBaseURL(next)
-                }
-                .listRowBackground(Color.white.opacity(0.55))
-        } header: {
-            Text("Server")
-                .font(.ui(12, weight: .semibold))
-                .foregroundStyle(Color.muted)
-                .textCase(nil)
-        } footer: {
-            Text("Default is https://covered.kawuc.uk. Use http://localhost:3000 for a local Next server.")
-                .font(.ui(11))
+    private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.secondary)
+            content()
+                .padding(.vertical, 10)
+            Rectangle().fill(Color.divider).frame(height: 1)
         }
     }
 
@@ -184,8 +148,8 @@ struct SettingsView: View {
         }
         displayName = state.memory?.displayName ?? ""
         let settings = state.memory?.settings ?? state.settings
-        premiumPounds = max(0, settings.protectionPremiumPence / 100)
-        switchPounds = max(0, settings.switchMinimumPence / 100)
+        premiumPence = settings.protectionPremiumPence
+        switchPence = settings.switchMinimumPence
         if let stored = UserDefaults.standard.string(forKey: APIClient.baseURLDefaultsKey), !stored.isEmpty {
             baseURL = stored
         }
@@ -198,8 +162,8 @@ struct SettingsView: View {
         defer { saving = false }
         persistBaseURL(baseURL)
         let next = UserSettings(
-            protectionPremiumPence: premiumPounds * 100,
-            switchMinimumPence: switchPounds * 100,
+            protectionPremiumPence: premiumPence,
+            switchMinimumPence: switchPence,
             approval: state.settings.approval
         )
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -221,8 +185,8 @@ struct SettingsView: View {
         do {
             try await state.resetMemory()
             displayName = ""
-            premiumPounds = UserSettings.defaults.protectionPremiumPence / 100
-            switchPounds = UserSettings.defaults.switchMinimumPence / 100
+            premiumPence = UserSettings.defaults.protectionPremiumPence
+            switchPence = UserSettings.defaults.switchMinimumPence
             saveError = nil
             saveNote = nil
             Haptics.success()

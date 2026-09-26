@@ -11,12 +11,22 @@ struct ShopView: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.canvas.ignoresSafeArea()
+        ZStack {
+            Color.screen.ignoresSafeArea()
+            VStack(spacing: 0) {
+                FilmHeader()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.pad) {
-                        searchBar
+                    VStack(alignment: .leading, spacing: 14) {
+                        ComposerBar(
+                            text: $shop.query,
+                            placeholder: shop.judgedQuery.isEmpty ? "Message Covered" : shop.judgedQuery,
+                            identifier: "shop.search",
+                            sendIdentifier: "shop.searchButton",
+                            focused: $searchFocused,
+                            enabled: !shop.isBusy,
+                            onSend: runSearch
+                        )
+
                         if shop.isBusy {
                             loadingState
                         } else if let error = shop.errorText, shop.items.isEmpty {
@@ -29,99 +39,60 @@ struct ShopView: View {
                             idleState
                         }
                     }
-                    .padding(Theme.pad)
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, Theme.inset)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .opacity(confirming ? 0.15 : 1)
+            }
+            .opacity(confirming ? 0.08 : 1)
 
-                if confirming, let chosen = shop.chosenItem {
-                    ApproveConfirm(
-                        item: chosen,
-                        balancePence: AppState.shared.wallet?.balancePence ?? 0,
-                        namespace: morph,
-                        onConfirm: { await shop.approve(item: chosen) },
-                        onDismiss: { closeConfirm() },
-                        onViewOrder: {
-                            closeConfirm()
-                            CoveredTabs.shared.open(.orders)
-                        },
-                        onWallet: {
-                            closeConfirm()
-                            CoveredTabs.shared.open(.wallet)
-                        },
-                        approveCheck: shop.approveCheck,
-                        approvedBalancePence: shop.approvedBalancePence,
-                        walletShortfallPence: shop.walletShortfallPence,
-                        walletShortMessage: shop.walletShortMessage,
-                        errorText: shop.errorText
-                    )
-                    .transition(.blurReplace)
-                }
-            }
-            .navigationTitle("Shop")
-            .navigationBarTitleDisplayMode(.inline)
-            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: confirming)
-            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: shop.phase)
-            .sheet(item: $limitItem) { item in
-                limitSheet(item)
-            }
-            .task {
-                shop.localPremiumPence = AppState.shared.settings.protectionPremiumPence
-                if AppState.shared.wallet == nil {
-                    await AppState.shared.refresh()
-                }
-                if let seeded = LaunchFlags.seededSearchQuery, shop.query.isEmpty {
-                    shop.query = seeded
-                }
+            if confirming, let chosen = shop.chosenItem {
+                ApproveConfirm(
+                    item: chosen,
+                    decision: shop.decisions[chosen.id],
+                    balancePence: AppState.shared.wallet?.balancePence ?? 0,
+                    namespace: morph,
+                    onConfirm: { await shop.approve(item: chosen) },
+                    onDismiss: { closeConfirm() },
+                    onViewOrder: {
+                        closeConfirm()
+                        CoveredTabs.shared.open(.orders)
+                    },
+                    onWallet: {
+                        closeConfirm()
+                        CoveredTabs.shared.open(.wallet)
+                    },
+                    approveCheck: shop.approveCheck,
+                    approvedBalancePence: shop.approvedBalancePence,
+                    walletShortfallPence: shop.walletShortfallPence,
+                    walletShortMessage: shop.walletShortMessage,
+                    errorText: shop.errorText
+                )
             }
         }
-    }
-
-    private var searchBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                TextField("What do you want to buy?", text: $shop.query)
-                    .font(.ui(17))
-                    .foregroundStyle(Color.canvas)
-                    .focused($searchFocused)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("shop.search")
-                    .onSubmit { runSearch() }
-                    .disabled(shop.isBusy)
-                Button("Search") { runSearch() }
-                    .buttonStyle(CoveredPrimaryButtonStyle())
-                    .disabled(shop.isBusy || shop.query.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityIdentifier("shop.searchButton")
+        .animation(Motion.merge, value: confirming)
+        .animation(Motion.ui, value: shop.phase)
+        .sheet(item: $limitItem) { item in
+            limitSheet(item)
+        }
+        .task {
+            shop.localPremiumPence = AppState.shared.settings.protectionPremiumPence
+            if AppState.shared.wallet == nil {
+                await AppState.shared.refresh()
             }
-            .padding(.leading, 16)
-            .padding(.trailing, 8)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                    .fill(Color.ink)
-            )
+            if let seeded = LaunchFlags.seededSearchQuery, shop.query.isEmpty {
+                shop.query = seeded
+            }
         }
     }
 
     @ViewBuilder
     private var results: some View {
-        if let summary = shop.verdict?.summary, !summary.isEmpty {
-            Text(summary)
-                .font(.ui(16))
-                .lineSpacing(4)
-                .foregroundStyle(Color.ink)
-        }
-
-        premiumSlider
-
         HStack {
-            if !shop.sourceLabel.isEmpty {
-                Text(shop.sourceLabel)
-                    .font(.ui(13))
-                    .foregroundStyle(Color.muted)
-            }
+            Text(countLabel)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.secondary)
             Spacer()
             Menu {
                 Picker("Sort", selection: $shop.sort) {
@@ -130,146 +101,247 @@ struct ShopView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Text(shop.sort.label)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .font(.ui(13))
-                .foregroundStyle(Color.muted)
+                Text(shop.sort.label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.secondary)
             }
         }
 
-        LazyVStack(spacing: 12) {
-            ForEach(shop.rows) { item in
-                ListingCard(
-                    item: item,
-                    decision: shop.decisions[item.id],
-                    chosen: item.id == shop.verdict?.chosenId,
-                    namespace: morph,
-                    onApprove: {
-                        shop.resetReceipt()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                            confirming = true
-                        }
-                    },
-                    onLimit: {
-                        limitPounds = poundsText(item.pricePence)
-                        limitError = nil
-                        limitItem = item
-                    }
-                )
-                .transition(.blurReplace)
+        if let chosen = shop.chosenItem {
+            approveSummary(chosen)
+            InkPillButton(
+                title: "Approve · \(chosen.priceLabel)",
+                identifier: "shop.approve"
+            ) {
+                shop.resetReceipt()
+                withAnimation(Motion.merge) { confirming = true }
             }
+            .matchedGeometryEffect(id: "chosen-card", in: morph)
+
+            PremiumControl(
+                premiumPence: Binding(
+                    get: { shop.localPremiumPence },
+                    set: { shop.applyLocalPremium($0) }
+                ),
+                gapPence: premiumGap,
+                shopWins: shopWins,
+                verdictLead: verdictLead,
+                verdictBody: shop.verdict?.summary ?? "",
+                onEditingChanged: { editing in
+                    if !editing { Task { await savePremium() } }
+                }
+            )
+            .padding(.top, 4)
         }
-        .accessibilityIdentifier("shop.results")
+
+        if useTwoUp {
+            HStack(alignment: .top, spacing: 11) {
+                ForEach(visibleRows) { item in
+                    ListingCard(
+                        item: item,
+                        decision: shop.decisions[item.id],
+                        chosen: item.id == shop.verdict?.chosenId,
+                        twoUp: true,
+                        namespace: morph,
+                        onLimit: { openLimit(item) }
+                    )
+                }
+            }
+            .accessibilityIdentifier("shop.results")
+        } else {
+            LazyVStack(spacing: 10) {
+                ForEach(shop.rows) { item in
+                    ListingCard(
+                        item: item,
+                        decision: shop.decisions[item.id],
+                        chosen: item.id == shop.verdict?.chosenId,
+                        namespace: morph,
+                        onLimit: { openLimit(item) }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .accessibilityIdentifier("shop.results")
+        }
     }
 
-    private var premiumSlider: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Pay up to \(formatGBP(shop.localPremiumPence))")
-                .font(.money(16, weight: .semibold))
-                .foregroundStyle(Color.ink)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.35, dampingFraction: 0.9), value: shop.localPremiumPence)
-            Slider(
-                value: Binding(
-                    get: { Double(shop.localPremiumPence) },
-                    set: { shop.applyLocalPremium(Int($0.rounded())) }
-                ),
-                in: 0...3_000,
-                step: 100
-            ) { editing in
-                if !editing {
-                    Task { await savePremium() }
+    private func approveSummary(_ item: ShortlistItem) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            OfferPhoto(item: item, size: 80.5, corner: 14.5)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.merchant)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Color.inkSoft)
+                Text(item.title)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.secondary)
+                    .lineLimit(2)
+                if let decision = shop.decisions[item.id], isProtected(decision) {
+                    RightsChip(compact: true)
                 }
             }
-            .tint(Color.accent)
         }
-        .padding(.vertical, 4)
+        .padding(.top, 8)
     }
 
     private var loadingState: some View {
-        VStack(spacing: 14) {
-            ProgressView().tint(Color.accent)
+        VStack(alignment: .leading, spacing: 14) {
+            if !shop.query.isEmpty {
+                SentBubble(text: shop.query)
+            }
+            TypingDots()
             Text(shop.statusText.isEmpty ? "Working…" : shop.statusText)
-                .font(.ui(15))
-                .foregroundStyle(Color.muted)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.secondary)
                 .accessibilityIdentifier("shop.status")
+            ForEach(0..<3, id: \.self) { _ in
+                HStack(spacing: 14) {
+                    RoundedRectangle(cornerRadius: Theme.radiusPhoto, style: .continuous)
+                        .fill(Color.photoHole)
+                        .frame(width: 130, height: 130)
+                    VStack(alignment: .leading, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 4).fill(Color.photoHole).frame(width: 90, height: 22)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.photoHole).frame(width: 160, height: 12)
+                        RoundedRectangle(cornerRadius: 4).fill(Color.photoHole).frame(width: 120, height: 12)
+                    }
+                    Spacer()
+                }
+                .padding(13)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                        .strokeBorder(Color.hairline, lineWidth: 1)
+                )
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 56)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .fill(Color.ink)
-        )
-        .foregroundStyle(Color.canvas)
     }
 
     private var idleState: some View {
         Text("Search for something. Covered buys the cheapest listing that is actually the item and still has your rights.")
-            .font(.ui(15))
-            .foregroundStyle(Color.muted)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 48)
-            .padding(.horizontal, 12)
+            .font(.system(size: 14.5))
+            .foregroundStyle(Color.secondary)
+            .padding(.top, 24)
     }
 
     private var emptyState: some View {
         Text("No listings came back for that search.")
-            .font(.ui(15))
-            .foregroundStyle(Color.muted)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 48)
+            .font(.system(size: 14.5))
+            .foregroundStyle(Color.secondary)
+            .padding(.top, 24)
     }
 
     private func errorState(_ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Could not finish the search")
-                .font(.ui(20, weight: .semibold))
-                .foregroundStyle(Color.canvas)
+                .font(.system(size: 17.5, weight: .semibold))
+                .foregroundStyle(Color.inkSoft)
             Text(message)
-                .font(.ui(15))
-                .foregroundStyle(Color.muted)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
                 .accessibilityIdentifier("shop.error")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .fill(Color.ink)
-        )
+        .padding(.top, 16)
     }
 
     private func limitSheet(_ item: ShortlistItem) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set a limit")
-                .font(.ui(22, weight: .semibold))
+                .headline(29)
             Text(item.title)
-                .font(.ui(15))
-                .foregroundStyle(Color.muted)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
             HStack {
                 Text("£")
-                    .font(.money(22))
+                    .filmMoney(22, weight: .semibold)
                 TextField("0", text: $limitPounds)
                     .keyboardType(.decimalPad)
-                    .font(.money(22))
+                    .filmMoney(22, weight: .semibold)
             }
             if let limitError {
                 Text(limitError)
-                    .font(.ui(13))
-                    .foregroundStyle(Color.muted)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.secondary)
             }
-            Button("Save limit") {
+            InkPillButton(title: "Save limit") {
                 Task { await saveLimit(item) }
             }
-            .buttonStyle(CoveredPrimaryButtonStyle())
             Spacer()
         }
         .padding(24)
         .presentationDetents([.height(280)])
-        .background(Color.canvas)
+        .background(Color.screen)
+    }
+
+    private var visibleRows: [ShortlistItem] {
+        shop.rows.filter { item in
+            guard let decision = shop.decisions[item.id] else { return true }
+            return !decision.mislisting && decision.sameItem
+        }
+    }
+
+    private var useTwoUp: Bool {
+        visibleRows.count == 2 && shop.rows.contains { item in
+            guard let decision = shop.decisions[item.id] else { return false }
+            return decision.mislisting || !decision.sameItem
+        }
+    }
+
+    private var countLabel: String {
+        let left = visibleRows.count
+        if left == shop.rows.count {
+            return left == 1 ? "1 listing" : "\(left) listings"
+        }
+        return left == 1 ? "1 left" : "\(left) left"
+    }
+
+    private var premiumPair: (protected: ShortlistItem, unprotected: ShortlistItem)? {
+        let survivors = survivorsForPremium(items: shop.items, decisions: shop.decisions)
+        let protectedBest = survivors.first { item in
+            guard let d = shop.decisions[item.id] else { return false }
+            return isProtected(d)
+        }
+        let unprotectedBest = survivors.first { item in
+            guard let d = shop.decisions[item.id] else { return true }
+            return !isProtected(d)
+        }
+        if let protectedBest, let unprotectedBest { return (protectedBest, unprotectedBest) }
+        return nil
+    }
+
+    private var premiumGap: Int? {
+        guard let pair = premiumPair,
+              let high = pair.protected.pricePence,
+              let low = pair.unprotected.pricePence
+        else { return nil }
+        return max(0, high - low)
+    }
+
+    private var shopWins: Bool {
+        guard let gap = premiumGap else { return true }
+        return gap <= shop.localPremiumPence
+    }
+
+    private var verdictLead: String {
+        guard let gap = premiumGap else {
+            return shop.verdict?.summary.split(separator: ".").first.map(String.init) ?? ""
+        }
+        let sign = shopWins ? "shop wins" : "private wins"
+        return "\(formatGBP(gap)) ≤ \(formatGBP(shop.localPremiumPence)) · \(sign)"
+            .replacingOccurrences(
+                of: "≤",
+                with: shopWins ? "≤" : ">"
+            )
+            .replacingOccurrences(
+                of: "\(formatGBP(gap)) ≤",
+                with: shopWins
+                    ? "\(formatGBP(gap)) ≤"
+                    : "\(formatGBP(gap)) >"
+            )
+    }
+
+    private func openLimit(_ item: ShortlistItem) {
+        limitPounds = poundsText(item.pricePence)
+        limitError = nil
+        limitItem = item
     }
 
     private func runSearch() {
@@ -278,9 +350,7 @@ struct ShopView: View {
     }
 
     private func closeConfirm() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-            confirming = false
-        }
+        withAnimation(Motion.soft) { confirming = false }
         shop.resetReceipt()
     }
 
@@ -314,13 +384,11 @@ struct ShopView: View {
 
     private func poundsText(_ pence: Int?) -> String {
         guard let pence else { return "" }
-        let pounds = Double(pence) / 100
         if pence % 100 == 0 { return String(pence / 100) }
-        return String(format: "%.2f", pounds)
+        return String(format: "%.2f", Double(pence) / 100)
     }
 }
 
-/// RootView still looks for this name.
 struct HomeView: View {
     var body: some View {
         ShopView()

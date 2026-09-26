@@ -4,8 +4,8 @@ struct ListingCard: View {
     let item: ShortlistItem
     let decision: Decision?
     let chosen: Bool
+    var twoUp = false
     let namespace: Namespace.ID
-    let onApprove: () -> Void
     let onLimit: () -> Void
 
     private var rejected: Bool {
@@ -13,88 +13,122 @@ struct ListingCard: View {
         return decision.mislisting || !decision.sameItem
     }
 
-    private var reason: String? {
-        guard let decision else { return nil }
-        if decision.mislisting, let photo = decision.photoReason, !photo.isEmpty {
-            return photo
-        }
-        return decision.reason.isEmpty ? nil : decision.reason
+    private var rejectChip: String? {
+        guard let decision, rejected else { return nil }
+        if decision.mislisting { return "not the item" }
+        if !decision.sameItem { return "not the item" }
+        return nil
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                OfferPhoto(item: item)
-                    .opacity(rejected ? 0.45 : 1)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        title
-                        Spacer(minLength: 8)
-                        Text(item.priceLabel)
-                            .font(.money(18))
-                            .foregroundStyle(rejected ? Color.dangerGrey : Color.canvas)
-                    }
-                    HStack(spacing: 6) {
-                        if chosen {
-                            chip("Chosen", accent: true)
-                        }
-                        if item.section == .sponsored {
-                            chip("Ad", accent: false)
-                        }
-                    }
-                    Text(metaLine)
-                        .font(.ui(13))
-                        .foregroundStyle(Color.muted)
-                        .lineLimit(2)
-                }
-            }
-
-            if let reason {
-                Text(reason)
-                    .font(.ui(14))
-                    .foregroundStyle(chosen ? Color.accent : Color.muted)
-                    .strikethrough(rejected, color: Color.dangerGrey)
-            }
-
-            HStack(spacing: 10) {
-                if chosen {
-                    Button("Approve", action: onApprove)
-                        .buttonStyle(CoveredPrimaryButtonStyle())
-                        .accessibilityIdentifier("shop.approve")
-                        .accessibilityAddTraits(.isButton)
-                }
-                Menu {
-                    Button("Set a limit…", action: onLimit)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.ui(15, weight: .semibold))
-                        .foregroundStyle(Color.muted)
-                        .frame(width: 36, height: 36)
-                }
-                Spacer()
+        Group {
+            if twoUp {
+                twoUpBody
+            } else {
+                listBody
             }
         }
-        .padding(16)
-        .foregroundStyle(Color.canvas)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .fill(Color.ink)
-        )
+        .matchedGeometryEffect(id: item.id, in: namespace)
+    }
+
+    private var listBody: some View {
+        HStack(alignment: .top, spacing: 14) {
+            OfferPhoto(item: item, rejected: rejected)
+            VStack(alignment: .leading, spacing: 4) {
+                if chosen {
+                    CoveredPickLabel()
+                        .padding(.bottom, 2)
+                }
+                priceRow
+                title
+                Text(item.merchant)
+                    .font(.system(size: 13))
+                    .foregroundStyle(rejected ? Color.mutedLine : Color.secondary)
+                    .lineLimit(1)
+                if item.section == .sponsored {
+                    NeutralChip(text: "Ad")
+                }
+                if let rejectChip {
+                    NeutralChip(text: rejectChip)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            cardMenu
+        }
+        .padding(13)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .strokeBorder(chosen ? Color.accent : Color.clear, lineWidth: 1.5)
+                .strokeBorder(chosen ? Color.ink : Color.hairline, lineWidth: chosen ? 2.5 : 1)
         )
-        .matchedGeometryEffect(id: chosen ? "chosen-card" : item.id, in: namespace)
+    }
+
+    private var twoUpBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OfferPhoto(item: item, rejected: rejected, banner: true, bannerWidth: 154)
+                .padding(7.5)
+            VStack(alignment: .leading, spacing: 4) {
+                if chosen { CoveredPickLabel() }
+                priceRow
+                title
+                Text(item.merchant)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.secondary)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 11)
+            Spacer(minLength: 8)
+            chip
+                .padding(11)
+        }
+        .frame(width: 169, height: 347, alignment: .topLeading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .strokeBorder(chosen ? Color.ink : Color.hairline, lineWidth: chosen ? 2.5 : 1)
+        )
+    }
+
+    @ViewBuilder
+    private var chip: some View {
+        if rejected, let rejectChip {
+            NeutralChip(text: rejectChip)
+        } else if let decision, isProtected(decision) {
+            RightsChip(text: rightsLine(decision), compact: true)
+        } else if let decision, decision.sellerType == .privateSeller {
+            NeutralChip(text: "private sale · as described only")
+        } else if let decision, decision.sellerType == .overseasBusiness {
+            NeutralChip(text: "ships from overseas")
+        }
+    }
+
+    private var priceRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(item.priceLabel)
+                .filmMoney(29, weight: .bold, tracking: -0.9)
+                .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
+                .overlay(alignment: .center) {
+                    if rejected {
+                        Rectangle()
+                            .fill(Color.mutedLine)
+                            .frame(height: 2.5)
+                    }
+                }
+            if let compare = itemCompare {
+                Text("was \(compare)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.tertiary)
+                    .strikethrough(true, color: Color.tertiary)
+            }
+        }
     }
 
     @ViewBuilder
     private var title: some View {
         let text = Text(item.title)
-            .font(.ui(16, weight: .medium))
-            .foregroundStyle(rejected ? Color.dangerGrey : Color.canvas)
-            .strikethrough(rejected, color: Color.dangerGrey)
-            .lineLimit(3)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
+            .lineLimit(2)
             .multilineTextAlignment(.leading)
         if let raw = item.productUrl, let url = URL(string: raw) {
             Link(destination: url) { text }
@@ -103,23 +137,28 @@ struct ListingCard: View {
         }
     }
 
-    private var metaLine: String {
-        [item.merchant, item.delivery, item.returns]
-            .compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
-            .joined(separator: " · ")
+    private var cardMenu: some View {
+        Menu {
+            Button("Set a limit…", action: onLimit)
+        } label: {
+            Text("···")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 22, height: 22)
+        }
     }
 
-    private func chip(_ text: String, accent: Bool) -> some View {
-        Text(text)
-            .font(.ui(11, weight: .semibold))
-            .foregroundStyle(accent ? Color.ink : Color.canvas)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-                Capsule().fill(accent ? Color.accent : Color.muted.opacity(0.35))
-            )
+    private var itemCompare: String? {
+        if case .offer(let offer) = item.raw, let compare = offer.compareAt, !compare.isEmpty {
+            return compare.hasPrefix("£") ? compare : "£\(compare)"
+        }
+        return nil
+    }
+
+    private func rightsLine(_ decision: Decision) -> String {
+        if decision.rights.isEmpty {
+            return "14-day cancellation · 30-day fault refund"
+        }
+        return decision.rights.prefix(2).joined(separator: " · ")
     }
 }

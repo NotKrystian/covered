@@ -69,20 +69,20 @@ struct Offer: Codable, Sendable, Hashable {
         try container.encodeIfPresent(merchantId, forKey: .merchantId)
         try container.encodeIfPresent(offerId, forKey: .offerId)
         try container.encodeIfPresent(offerDocid, forKey: .offerDocid)
-        try container.encodeIfPresent(location, forKey: .location)
+        try container.encode(location, forKey: .location)
         try container.encode(badge, forKey: .badge)
         try container.encode(delivery, forKey: .delivery)
-        try container.encodeIfPresent(returns, forKey: .returns)
-        try container.encodeIfPresent(energy, forKey: .energy)
+        try container.encode(returns, forKey: .returns)
+        try container.encode(energy, forKey: .energy)
         try container.encode(rating, forKey: .rating)
         try container.encode(ratingCount, forKey: .ratingCount)
         try container.encodeIfPresent(specs, forKey: .specs)
         try container.encodeIfPresent(productUrl, forKey: .productUrl)
-        try container.encodeIfPresent(moreMerchants, forKey: .moreMerchants)
-        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encode(moreMerchants, forKey: .moreMerchants)
+        try container.encode(summary, forKey: .summary)
         try container.encodeIfPresent(imageUrls, forKey: .imageUrls)
-        try container.encodeIfPresent(imageUrl, forKey: .imageUrl)
-        try container.encodeIfPresent(imageDataUrl, forKey: .imageDataUrl)
+        try container.encode(imageUrl, forKey: .imageUrl)
+        try container.encode(imageDataUrl, forKey: .imageDataUrl)
     }
 }
 
@@ -381,6 +381,27 @@ struct AftercareEntry: Codable, Sendable, Hashable {
     var note: String
 }
 
+struct SwitchOffer: Codable, Sendable, Hashable {
+    var foundAt: String
+    var simulated: Bool
+    var chosenId: String
+    var chosen: ChosenItem
+    var decision: Decision
+    var section: ReceiptSection
+    var title: String
+    var merchant: String
+    var pricePence: Int
+    var postagePence: Int
+    var deliveryPence: Int
+    var clearPence: Int
+}
+
+struct SwitchCheck: Codable, Sendable, Hashable {
+    var checkedAt: String
+    var note: String
+    var offer: SwitchOffer?
+}
+
 struct Order: Codable, Sendable, Hashable, Identifiable {
     var id: String
     var t: String
@@ -390,6 +411,51 @@ struct Order: Codable, Sendable, Hashable, Identifiable {
     var pricePence: Int
     var section: ReceiptSection
     var aftercare: [AftercareEntry]?
+    var returns: String?
+    var sellerType: SellerType?
+    var switchCheck: SwitchCheck?
+    var cancelledAt: String?
+    var refundPence: Int?
+    var switchedTo: String?
+    var switchedFrom: String?
+
+    var shortId: String {
+        let trimmed = id.hasPrefix("#") ? String(id.dropFirst()) : id
+        if trimmed.count <= 10 { return "#\(trimmed)" }
+        return "#\(trimmed.suffix(6).uppercased())"
+    }
+}
+
+struct SwitchWatch: Codable, Sendable, Hashable, Identifiable {
+    var order: Order
+    var endsAt: String
+    var postagePence: Int
+    var watching: Bool
+    var blocked: String?
+
+    var id: String { order.id }
+}
+
+struct SwitchWatchesResponse: Codable, Sendable {
+    var ok: Bool?
+    var watches: [SwitchWatch]?
+    var error: String?
+}
+
+struct SwitchRunResponse: Codable, Sendable {
+    var ok: Bool?
+    var order: Order?
+    var found: Bool?
+    var error: String?
+}
+
+struct SwitchAcceptResponse: Codable, Sendable {
+    var ok: Bool?
+    var newOrderId: String?
+    var refundPence: Int?
+    var clearPence: Int?
+    var balancePence: Int?
+    var error: String?
 }
 
 struct OrdersResponse: Codable, Sendable {

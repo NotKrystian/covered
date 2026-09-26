@@ -10,7 +10,7 @@ struct CoveredApp: App {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.light)
-                .tint(Color.accent)
+                .tint(Color.ink)
         }
     }
 }

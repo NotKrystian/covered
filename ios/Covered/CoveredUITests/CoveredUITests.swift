@@ -2,7 +2,7 @@ import XCTest
 
 final class CoveredUITests: XCTestCase {
     private var app: XCUIApplication!
-    private let shots = URL(fileURLWithPath: "/tmp/covered-ios-shots", isDirectory: true)
+    private let shots = URL(fileURLWithPath: "/tmp/covered-ios-restyle-shots", isDirectory: true)
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -46,12 +46,12 @@ final class CoveredUITests: XCTestCase {
         let search = app.textFields["shop.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 25), "Should land on Shop after onboarding")
 
-        app.tabBars.buttons["Wallet"].tap()
+        tapTab("tabs.wallet")
         XCTAssertTrue(app.descendants(matching: .any)["wallet.balance"].waitForExistence(timeout: 12))
         let walletBefore = app.descendants(matching: .any)["wallet.balance"].firstMatch.value as? String ?? ""
         attach("wallet-before")
 
-        app.tabBars.buttons["Shop"].tap()
+        tapTab("tabs.shop")
         XCTAssertTrue(search.waitForExistence(timeout: 8))
         search.tap()
         let existing = (search.value as? String) ?? ""
@@ -82,15 +82,15 @@ final class CoveredUITests: XCTestCase {
         )
         attach("shop-results")
 
-        app.tabBars.buttons["Orders"].tap()
+        tapTab("tabs.orders")
         attach("orders-before")
-        app.tabBars.buttons["Wallet"].tap()
+        tapTab("tabs.wallet")
         attach("wallet")
-        app.tabBars.buttons["Settings"].tap()
+        tapTab("tabs.settings")
         XCTAssertTrue(app.textFields["settings.baseURL"].waitForExistence(timeout: 8))
         attach("settings")
 
-        app.tabBars.buttons["Shop"].tap()
+        tapTab("tabs.shop")
         XCTAssertTrue(approve.waitForExistence(timeout: 8))
         approve.tap()
         XCTAssertTrue(app.buttons["approve.confirm"].waitForExistence(timeout: 8))
@@ -152,10 +152,10 @@ final class CoveredUITests: XCTestCase {
         if app.keyboards.element.exists {
             app.swipeDown()
         }
-        app.tabBars.buttons["Wallet"].tap()
+        tapTab("tabs.wallet")
         let walletBalance = app.descendants(matching: .any)["wallet.balance"].firstMatch
         if !walletBalance.waitForExistence(timeout: 8) {
-            app.tabBars.buttons["Wallet"].tap()
+            tapTab("tabs.wallet")
             _ = walletBalance.waitForExistence(timeout: 8)
         }
         attach("wallet-after")
@@ -176,6 +176,10 @@ final class CoveredUITests: XCTestCase {
         attachment.name = "approve-report"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func tapTab(_ identifier: String) {
+        tapIdentified(identifier)
     }
 
     private func tapIdentified(_ identifier: String) {

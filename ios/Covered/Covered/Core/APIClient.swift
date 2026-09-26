@@ -238,6 +238,59 @@ actor APIClient {
 
     // MARK: - JSON helpers
 
+    func switchWatches() async throws -> [SwitchWatch] {
+        let response: SwitchWatchesResponse = try await send("GET", "/api/switch")
+        if response.ok == false {
+            throw APIError.unexpected(message: response.error ?? "Could not load the switch window")
+        }
+        return response.watches ?? []
+    }
+
+    func runSwitch(orderId: String, offers: [Offer]) async throws -> SwitchRunResponse {
+        struct Body: Encodable {
+            var orderId: String
+            var offers: [Offer]
+        }
+        let (response, status): (SwitchRunResponse, Int) = try await sendRaw(
+            "POST",
+            "/api/switch/run",
+            body: Body(orderId: orderId, offers: offers)
+        )
+        if status >= 400 || response.ok != true {
+            throw APIError.http(status: status, message: response.error ?? "Switch check failed (\(status)).")
+        }
+        return response
+    }
+
+    func simulateSwitch(orderId: String) async throws -> SwitchRunResponse {
+        struct Body: Encodable { var orderId: String }
+        let (response, status): (SwitchRunResponse, Int) = try await sendRaw(
+            "POST",
+            "/api/switch/simulate",
+            body: Body(orderId: orderId)
+        )
+        if status >= 400 || response.ok != true {
+            throw APIError.http(status: status, message: response.error ?? "Simulation failed (\(status)).")
+        }
+        return response
+    }
+
+    func acceptSwitch(orderId: String) async throws -> SwitchAcceptResponse {
+        struct Body: Encodable { var orderId: String }
+        let (response, status): (SwitchAcceptResponse, Int) = try await sendRaw(
+            "POST",
+            "/api/switch/accept",
+            body: Body(orderId: orderId)
+        )
+        if status == 402 {
+            throw APIError.walletShort(message: response.error ?? "Wallet is short.")
+        }
+        if status >= 400 || response.ok != true {
+            throw APIError.http(status: status, message: response.error ?? "Switch failed (\(status)).")
+        }
+        return response
+    }
+
     func send<T: Decodable>(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws -> T {
         let (decoded, status): (T, Int) = try await sendRaw(method, path, body: body)
         if status >= 400 {
@@ -254,11 +307,39 @@ actor APIClient {
         let data: Data
         let response: HTTPURLResponse
         (data, response) = try await perform(method, path, body: body)
+        if response.statusCode == 401 {
+            if let err = try? decoder.decode(ServerErrorBody.self, from: data) {
+                let token = (err.error ?? err.message ?? "").lowercased()
+                if token.contains("invalid_token") {
+                    KeychainToken.clear()
+                    throw APIError.http(status: 401, message: "Pair again — that token is no longer valid.")
+                }
+            }
+        }
+        if response.statusCode == 404 {
+            if let err = try? decoder.decode(ServerErrorBody.self, from: data) {
+                let message = err.error ?? err.message ?? ""
+                if T.self == PairClaim.self || T.self == SwitchRunResponse.self || T.self == SwitchAcceptResponse.self {
+                    // Caller maps JSON 404 (unknown pair code / missing order).
+                } else if !message.isEmpty {
+                    throw APIError.http(status: 404, message: message)
+                }
+            } else if !Self.looksLikeJSON(data) {
+                throw APIError.http(status: 404, message: "route_missing")
+            }
+        }
         if response.statusCode >= 400 {
             if let err = try? decoder.decode(ServerErrorBody.self, from: data),
                let message = err.error ?? err.message,
                !message.isEmpty {
-                if T.self == ApproveResponse.self || T.self == MemoryResponse.self || T.self == LimitsResponse.self {
+                if T.self == ApproveResponse.self
+                    || T.self == MemoryResponse.self
+                    || T.self == LimitsResponse.self
+                    || T.self == PairClaim.self
+                    || T.self == SwitchRunResponse.self
+                    || T.self == SwitchAcceptResponse.self
+                    || T.self == ReaderJobCreateResponse.self
+                    || T.self == SwitchWatchesResponse.self {
                     // Fall through and let the caller inspect the typed body.
                 } else {
                     throw APIError.http(status: response.statusCode, message: message)
@@ -309,6 +390,13 @@ actor APIClient {
             throw APIError.unexpected(message: "Not an HTTP response")
         }
         return (data, http)
+    }
+
+    nonisolated static func looksLikeJSON(_ data: Data) -> Bool {
+        guard let first = data.first(where: { !($0 == 9 || $0 == 10 || $0 == 13 || $0 == 32) }) else {
+            return false
+        }
+        return first == 123 || first == 91
     }
 }
 

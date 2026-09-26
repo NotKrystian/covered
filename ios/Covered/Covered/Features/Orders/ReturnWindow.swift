@@ -1,13 +1,13 @@
 import Foundation
 
-/// 14-day cooling-off, counted on the device from the order date `t`.
-/// We do not have a delivery date, so this is an estimate — say so in the UI.
+/// 14-day cooling-off as the server reports it (`ends_at` + `blocked`).
 struct ReturnWindow: Equatable, Sendable {
     static let coolingOffDays = 14
 
-    var daysElapsed: Int
     var daysRemaining: Int
     var isOpen: Bool
+    var blocked: String?
+    var endsAt: Date?
 
     var progress: Double {
         guard Self.coolingOffDays > 0 else { return 0 }
@@ -15,6 +15,9 @@ struct ReturnWindow: Equatable, Sendable {
     }
 
     var headline: String {
+        if let blocked, !blocked.isEmpty {
+            return blocked
+        }
         if !isOpen {
             return "Return window closed"
         }
@@ -24,25 +27,34 @@ struct ReturnWindow: Equatable, Sendable {
         return "\(daysRemaining) days left to change your mind"
     }
 
+    var daysLabel: String {
+        "\(max(0, daysRemaining))"
+    }
+
     var footnote: String {
-        "Counts from the order date because we don't have a delivery date."
-    }
-
-    static func compute(orderDate: Date, now: Date = Date()) -> ReturnWindow {
-        let elapsed = max(0, Int(floor(now.timeIntervalSince(orderDate) / 86_400)))
-        let remaining = Self.coolingOffDays - elapsed
-        return ReturnWindow(
-            daysElapsed: elapsed,
-            daysRemaining: max(0, remaining),
-            isOpen: elapsed <= Self.coolingOffDays
-        )
-    }
-
-    static func compute(iso: String, now: Date = Date()) -> ReturnWindow {
-        guard let date = OrderDate.parse(iso) else {
-            return ReturnWindow(daysElapsed: 0, daysRemaining: Self.coolingOffDays, isOpen: true)
+        if let blocked, !blocked.isEmpty { return blocked }
+        if let endsAt {
+            return "Window closes \(OrderDate.listLabel(ISO8601DateFormatter().string(from: endsAt)))"
         }
-        return compute(orderDate: date, now: now)
+        return "14-day cooling-off from the server."
+    }
+
+    static func from(endsAt: String?, blocked: String?, now: Date = Date()) -> ReturnWindow {
+        let end = endsAt.flatMap(OrderDate.parse)
+        let remaining: Int
+        if let end {
+            remaining = max(0, Int(ceil(end.timeIntervalSince(now) / 86_400)))
+        } else {
+            remaining = 0
+        }
+        let blockedText = (blocked?.isEmpty == false) ? blocked : nil
+        let open = blockedText == nil && remaining > 0
+        return ReturnWindow(
+            daysRemaining: remaining,
+            isOpen: open,
+            blocked: blockedText,
+            endsAt: end
+        )
     }
 }
 
@@ -70,35 +82,26 @@ enum OrderDate {
     }
 }
 
-enum PrivateSellerHint {
-    private static let tokens = [
-        "facebook", "marketplace", "gumtree", "vinted", "depop",
-        "private seller", "private", "collection only",
-    ]
-
-    static func matches(_ merchant: String) -> Bool {
-        let lower = merchant.lowercased()
-        return tokens.contains { lower.contains($0) }
-    }
-}
-
-extension ReceiptSection {
-    func englishLabel(merchant: String) -> String {
-        switch self {
-        case .sponsored:
-            return "ad"
-        case .browse, .fixture:
-            return PrivateSellerHint.matches(merchant) ? "private seller" : "UK shop"
-        }
-    }
-}
-
 extension Order {
-    func returnWindow(now: Date = Date()) -> ReturnWindow {
-        ReturnWindow.compute(iso: t, now: now)
+    func returnWindow(watch: SwitchWatch?, now: Date = Date()) -> ReturnWindow {
+        ReturnWindow.from(endsAt: watch?.endsAt, blocked: watch?.blocked, now: now)
     }
 
-    var sectionLabel: String {
-        section.englishLabel(merchant: merchant)
+    var rightsChipText: String {
+        if cancelledAt != nil {
+            return "return started · \(formatGBP(refundPence ?? pricePence)) refund pending"
+        }
+        return "Rights kept · 14-day cancellation · 30-day fault refund"
+    }
+
+    func paidMeta(watch: SwitchWatch?) -> String {
+        if cancelledAt != nil {
+            return "return started · \(formatGBP(refundPence ?? pricePence)) refund pending"
+        }
+        if let watch, let remaining = Optional(ReturnWindow.from(endsAt: watch.endsAt, blocked: watch.blocked)),
+           remaining.isOpen {
+            return "Paid · \(merchant)"
+        }
+        return "Paid · \(merchant)"
     }
 }

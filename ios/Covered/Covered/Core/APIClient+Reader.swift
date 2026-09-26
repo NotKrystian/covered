@@ -24,10 +24,14 @@ struct ReaderJobSnapshot: Codable, Sendable, Hashable {
     var error: String?
 }
 
-private struct ReaderJobCreateResponse: Codable, Sendable {
+struct ReaderJobCreateResponse: Codable, Sendable {
     var ok: Bool?
     var jobId: String?
     var status: ReaderJobStatus?
+    var createdAt: String?
+    var expiresAt: String?
+    var readerSeenAt: String?
+    var readerOnline: Bool?
     var error: String?
 }
 
@@ -65,54 +69,60 @@ extension APIClient {
             var label: String
         }
         let body = Body(code: code, label: "iPhone")
-        do {
-            let claimed: PairClaim = try await send("POST", "/api/pair/claim", body: body)
-            if claimed.ok == false {
-                throw APIError.http(status: 400, message: claimed.error ?? "Could not pair.")
+        let claimed: PairClaim
+        let status: Int
+        (claimed, status) = try await sendRaw("POST", "/api/pair/claim", body: body)
+        if status == 404 {
+            if claimed.ok == false || claimed.error != nil {
+                throw APIError.http(
+                    status: 404,
+                    message: "That code isn't valid — get a fresh one from the Covered icon in Brave"
+                )
             }
-            if let token = claimed.token, !token.isEmpty {
-                KeychainToken.store(token)
-            }
-            return claimed
-        } catch let error as APIError {
-            throw Self.rewriteMissingRoute(error, message: "Pairing isn't live on the server yet")
+            throw APIError.http(status: 404, message: "route_missing")
         }
+        if claimed.ok == false {
+            throw APIError.http(status: status >= 400 ? status : 400, message: claimed.error ?? "Could not pair.")
+        }
+        if status >= 400 {
+            throw APIError.http(status: status, message: claimed.error ?? "Could not pair (\(status)).")
+        }
+        if let token = claimed.token, !token.isEmpty {
+            KeychainToken.store(token)
+        }
+        return claimed
     }
 
-    func startReaderJob(query: String) async throws -> String {
+    func startReaderJob(query: String) async throws -> ReaderJobCreateResponse {
         struct Body: Encodable { var query: String }
-        do {
-            let response: ReaderJobCreateResponse = try await send(
-                "POST",
-                "/api/reader/jobs",
-                body: Body(query: query)
-            )
+        let response: ReaderJobCreateResponse
+        let status: Int
+        (response, status) = try await sendRaw(
+            "POST",
+            "/api/reader/jobs",
+            body: Body(query: query)
+        )
+        if status == 201 || (status < 400 && response.ok != false) {
             if response.ok == false {
                 throw APIError.unexpected(message: response.error ?? "Could not start the laptop reader")
             }
             guard let id = response.jobId, !id.isEmpty else {
                 throw APIError.unexpected(message: "The reader did not return a job id")
             }
-            return id
-        } catch let error as APIError {
-            throw Self.rewriteMissingRoute(error, message: "The laptop reader isn't live on the server yet")
+            return response
         }
+        if status == 404, !((response.error ?? "").isEmpty) {
+            throw APIError.http(status: 404, message: response.error ?? "route_missing")
+        }
+        if status >= 400 {
+            throw APIError.http(status: status, message: response.error ?? "Could not start the laptop reader")
+        }
+        throw APIError.unexpected(message: response.error ?? "Could not start the laptop reader")
     }
 
     func readerJob(id: String) async throws -> ReaderJobSnapshot {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        do {
-            let envelope: ReaderJobEnvelope = try await send("GET", "/api/reader/jobs/\(encoded)")
-            return envelope.resolved(fallbackId: id)
-        } catch let error as APIError {
-            throw Self.rewriteMissingRoute(error, message: "The laptop reader isn't live on the server yet")
-        }
-    }
-
-    private static func rewriteMissingRoute(_ error: APIError, message: String) -> APIError {
-        if case .http(let status, _) = error, status == 404 {
-            return .http(status: 404, message: message)
-        }
-        return error
+        let envelope: ReaderJobEnvelope = try await send("GET", "/api/reader/jobs/\(encoded)")
+        return envelope.resolved(fallbackId: id)
     }
 }

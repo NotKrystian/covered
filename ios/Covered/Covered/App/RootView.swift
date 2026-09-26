@@ -11,9 +11,10 @@ struct RootView: View {
                 OnboardingFlow()
             }
         }
-        .animation(Motion.spring, value: state.onboarded)
+        .animation(Motion.soft, value: state.onboarded)
         .task { await state.refresh() }
         .preferredColorScheme(.light)
+        .tint(Color.ink)
     }
 }
 
@@ -21,20 +22,26 @@ private struct MainTabs: View {
     @Bindable private var tabs = CoveredTabs.shared
 
     var body: some View {
-        TabView(selection: $tabs.selection) {
-            ShopView()
-                .tabItem { Label("Shop", systemImage: "bag") }
-                .tag(CoveredTabs.Tab.shop)
-            OrdersView()
-                .tabItem { Label("Orders", systemImage: "shippingbox") }
-                .tag(CoveredTabs.Tab.orders)
-            WalletView()
-                .tabItem { Label("Wallet", systemImage: "creditcard") }
-                .tag(CoveredTabs.Tab.wallet)
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(CoveredTabs.Tab.settings)
+        VStack(spacing: 0) {
+            ZStack {
+                ShopView()
+                    .opacity(tabs.selection == .shop ? 1 : 0)
+                    .allowsHitTesting(tabs.selection == .shop)
+                OrdersView()
+                    .opacity(tabs.selection == .orders ? 1 : 0)
+                    .allowsHitTesting(tabs.selection == .orders)
+                WalletView()
+                    .opacity(tabs.selection == .wallet ? 1 : 0)
+                    .allowsHitTesting(tabs.selection == .wallet)
+                SettingsView()
+                    .opacity(tabs.selection == .settings ? 1 : 0)
+                    .allowsHitTesting(tabs.selection == .settings)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            CoveredTabBar(selection: $tabs.selection)
         }
-        .tint(Color.accent)
+        .background(Color.screen.ignoresSafeArea())
+        .tint(Color.ink)
     }
 }

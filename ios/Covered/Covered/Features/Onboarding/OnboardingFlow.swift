@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One calm step per screen: name, two pound rules, the fleece sentence, pair, deposit.
+/// One idea per screen: name, two pound rules, the example, pair, deposit.
 struct OnboardingFlow: View {
     var onFinished: ((Memory?) -> Void)?
 
@@ -16,18 +16,15 @@ struct OnboardingFlow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Covered")
-                .font(.ui(15, weight: .semibold))
-                .foregroundStyle(Color.ink)
+            CoveredWordmark()
                 .padding(.top, 8)
-                .accessibilityIdentifier("onboarding.wordmark")
 
             Text("\(step) / \(Self.steps)")
-                .font(.ui(12, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .tracking(2)
-                .foregroundStyle(Color.muted)
+                .foregroundStyle(Color.tertiary)
                 .padding(.top, Theme.padLarge)
-                .padding(.bottom, 36)
+                .padding(.bottom, 28)
 
             Group {
                 switch step {
@@ -40,41 +37,37 @@ struct OnboardingFlow: View {
                 }
             }
             .id(step)
-            .transition(.blurReplace)
+            .coveredSwap()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             if let error {
                 Text(error)
-                    .font(.ui(14))
-                    .foregroundStyle(Color.muted)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.secondary)
                     .padding(.top, Theme.pad)
             }
 
             footer
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, Theme.inset)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.canvas.ignoresSafeArea())
-        .animation(.spring(response: 0.35, dampingFraction: 0.9), value: step)
+        .background(Color.screen.ignoresSafeArea())
+        .animation(Motion.soft, value: step)
         .onAppear { nameFocused = true }
         .onTapGesture { nameFocused = false }
     }
 
     private var footer: some View {
         HStack {
-            Button("Back") { move(-1) }
-                .font(.ui(15))
-                .foregroundStyle(Color.muted)
+            QuietTextButton(title: "Back") { move(-1) }
                 .opacity(step == 1 || busy ? 0 : 1)
                 .disabled(step == 1 || busy)
 
             Spacer()
 
             if step == 5 {
-                Button("Skip") { move(1) }
-                    .font(.ui(15, weight: .medium))
-                    .foregroundStyle(Color.muted)
+                QuietTextButton(title: "Skip") { move(1) }
                     .padding(.trailing, 12)
                     .disabled(busy)
                     .accessibilityIdentifier("onboarding.skipPair")
@@ -85,16 +78,17 @@ struct OnboardingFlow: View {
                     .buttonStyle(CoveredPrimaryButtonStyle())
                     .disabled(busy)
                     .accessibilityIdentifier("onboarding.continue")
+                    .frame(width: 180)
             } else {
                 HStack(spacing: 10) {
-                    Button("Skip") { finish(deposit: 0) }
-                        .buttonStyle(CoveredQuietButtonStyle())
+                    QuietTextButton(title: "Skip") { finish(deposit: 0) }
                         .disabled(busy)
                         .accessibilityIdentifier("onboarding.skipDeposit")
                     Button(busy ? "Saving…" : "Save") { finish(deposit: depositPence) }
                         .buttonStyle(CoveredPrimaryButtonStyle())
                         .disabled(busy)
                         .accessibilityIdentifier("onboarding.save")
+                        .frame(width: 160)
                 }
             }
         }
@@ -102,7 +96,7 @@ struct OnboardingFlow: View {
 
     private func move(_ delta: Int) {
         error = nil
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+        withAnimation(Motion.soft) {
             step = min(Self.steps, max(1, step + delta))
         }
     }
@@ -131,11 +125,10 @@ struct OnboardingFlow: View {
     private var nameStep: some View {
         VStack(alignment: .leading, spacing: 28) {
             Text("What should it call you?")
-                .font(.ui(32, weight: .semibold))
-                .foregroundStyle(Color.ink)
+                .headline(29)
             TextField("Your name", text: $name)
-                .font(.ui(26, weight: .medium))
-                .foregroundStyle(Color.ink)
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(Color.inkSoft)
                 .textInputAutocapitalization(.words)
                 .submitLabel(.next)
                 .focused($nameFocused)
@@ -147,49 +140,78 @@ struct OnboardingFlow: View {
                 .padding(.vertical, 10)
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(nameFocused ? Color.accent : Color.muted.opacity(0.35))
+                        .fill(nameFocused ? Color.accent : Color.hairline)
                         .frame(height: 1)
                 }
         }
     }
 
     private var premiumStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Pay up to £\(settings.protectionPremiumPence / 100) more to keep UK buyer rights")
-                .font(.ui(28, weight: .semibold))
-                .foregroundStyle(Color.ink)
-            Text("Default £10. Covered spends this extra to buy from a shop you can enforce against.")
-                .font(.ui(16))
-                .foregroundStyle(Color.muted)
-            PoundStepper(pence: $settings.protectionPremiumPence)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Pay up to £\(settings.protectionPremiumPence / 100) more to keep UK buyer rights.")
+                .headline(29)
+            PremiumControl(
+                premiumPence: $settings.protectionPremiumPence,
+                gapPence: nil,
+                shopWins: true,
+                verdictLead: "Pay up to \(formatGBP(settings.protectionPremiumPence))",
+                verdictBody: "Covered spends this extra to buy from a shop you can enforce against."
+            )
         }
     }
 
     private var switchStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Inside 14 days, only switch if I clear £\(settings.switchMinimumPence / 100) after postage")
-                .font(.ui(28, weight: .semibold))
-                .foregroundStyle(Color.ink)
-            Text("Default £8. A cheaper find has to beat this after you pay to send the first one back.")
-                .font(.ui(16))
-                .foregroundStyle(Color.muted)
-            PoundStepper(pence: $settings.switchMinimumPence)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Only switch inside 14 days if I still clear £\(settings.switchMinimumPence / 100) after postage.")
+                .headline(29)
+            PremiumControl(
+                premiumPence: $settings.switchMinimumPence,
+                gapPence: nil,
+                shopWins: true,
+                verdictLead: "Switch floor \(formatGBP(settings.switchMinimumPence))",
+                verdictBody: "A cheaper find has to beat this after you pay to send the first one back."
+            )
         }
     }
 
     private var explainStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("In plain English")
-                .font(.ui(32, weight: .semibold))
-                .foregroundStyle(Color.ink)
-            Text("A £28 private seller vs a £36 UK shop: £8 is inside your £10, so it buys the shop and keeps your 14-day returns.")
-                .font(.ui(20))
-                .lineSpacing(6)
-                .foregroundStyle(Color.ink)
+                .headline(29)
+            HStack(spacing: 11) {
+                miniCard(title: "Private", price: "£28", chip: "private sale")
+                miniCard(title: "UK shop", price: "£36", chip: "14-day cancellation", good: true)
+            }
+            RightsChip()
+            Text("£8 ≤ £10 · shop wins")
+                .font(.system(size: 17.5, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(Color.inkSoft)
             Text("Your numbers: pay up to \(formatGBP(settings.protectionPremiumPence)) for rights, and only move after delivery if a cheaper listing still clears \(formatGBP(settings.switchMinimumPence)) once postage is paid.")
-                .font(.ui(16))
-                .foregroundStyle(Color.muted)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
         }
+    }
+
+    private func miniCard(title: String, price: String, chip: String, good: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(price)
+                .filmMoney(29, weight: .bold, tracking: -0.9)
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+            if good {
+                RightsChip(text: chip, compact: true)
+            } else {
+                NeutralChip(text: chip)
+            }
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .strokeBorder(Color.hairline, lineWidth: 1)
+        )
     }
 
     private var pairStep: some View {
@@ -199,12 +221,10 @@ struct OnboardingFlow: View {
     private var depositStep: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Deposit into the bot wallet")
-                .font(.ui(32, weight: .semibold))
-                .foregroundStyle(Color.ink)
-            Text("Approve spends this ledger. Demo money only — skip if you want. You can add more later.")
-                .font(.ui(16))
-                .foregroundStyle(Color.muted)
-            PoundStepper(pence: $depositPence, range: 0...50_000)
+                .headline(29)
+            Text("Approve spends this ledger. Demo money only — skip if you want.")
+                .font(.system(size: 14.5))
+                .foregroundStyle(Color.secondary)
             HStack(spacing: 8) {
                 ForEach([10, 20, 50], id: \.self) { pounds in
                     Button("£\(pounds)") {
@@ -212,11 +232,11 @@ struct OnboardingFlow: View {
                         Haptics.light()
                     }
                     .font(.money(15, weight: .semibold))
-                    .foregroundStyle(depositPence == pounds * 100 ? Color.ink : Color.ink.opacity(0.7))
+                    .foregroundStyle(Color.ink)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(
-                        (depositPence == pounds * 100 ? Color.accent : Color.ink.opacity(0.08)),
+                        (depositPence == pounds * 100 ? Color.accent : Color.panel),
                         in: Capsule()
                     )
                     .accessibilityIdentifier("onboarding.deposit\(pounds)")
@@ -226,84 +246,6 @@ struct OnboardingFlow: View {
     }
 }
 
-/// Large monospaced pounds with a stepper. Binding is integer pence.
-struct PoundStepper: View {
-    @Binding var pence: Int
-    var range: ClosedRange<Int> = 0...5_000
-    var step: Int = 100
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Button {
-                pence = max(range.lowerBound, pence - step)
-                Haptics.light()
-            } label: {
-                Image(systemName: "minus")
-                    .font(.ui(18, weight: .semibold))
-                    .foregroundStyle(Color.canvas)
-                    .frame(width: 44, height: 44)
-                    .background(Color.ink, in: Circle())
-            }
-            .disabled(pence <= range.lowerBound)
-            .accessibilityIdentifier("onboarding.stepperMinus")
-
-            Text(formatGBP(pence))
-                .font(.money(44, weight: .semibold))
-                .foregroundStyle(Color.ink)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.35, dampingFraction: 0.9), value: pence)
-                .frame(maxWidth: .infinity)
-
-            Button {
-                pence = min(range.upperBound, pence + step)
-                Haptics.light()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.ui(18, weight: .semibold))
-                    .foregroundStyle(Color.ink)
-                    .frame(width: 44, height: 44)
-                    .background(Color.accent, in: Circle())
-            }
-            .disabled(pence >= range.upperBound)
-            .accessibilityIdentifier("onboarding.stepperPlus")
-        }
-        .padding(.top, 12)
-    }
-}
-
-struct CoveredPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.ui(16, weight: .semibold))
-            .foregroundStyle(Color.ink)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(Color.accent)
-            )
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: configuration.isPressed)
-    }
-}
-
-struct CoveredQuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.ui(16, weight: .medium))
-            .foregroundStyle(Color.muted)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .strokeBorder(Color.muted.opacity(0.35), lineWidth: 1)
-            )
-            .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
-
-/// Alias kept so any leftover call site still compiles.
 struct OnboardingView: View {
     var body: some View {
         OnboardingFlow()
