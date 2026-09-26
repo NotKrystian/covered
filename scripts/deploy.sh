@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# App Runner path retired; live host is EC2 3.8.77.227 / covered.kawuc.uk
 # Deploy Covered to AWS App Runner (eu-west-2): build image -> push to ECR ->
 # create-or-update the `covered` service -> wait -> print the URL.
 #

@@ -1,3 +1,4 @@
+# App Runner path retired; live host is EC2 3.8.77.227 / covered.kawuc.uk
 # DNS for `covered.kawuc.uk` → App Runner
 
 Status (2026-09-26): the custom domain is **associated** with the App Runner
