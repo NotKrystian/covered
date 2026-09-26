@@ -7,6 +7,8 @@ export type ChatMessage = {
   role: "user" | "bot";
   text: string;
   tone?: "neutral" | "warn" | "good";
+  /** True on the verdict line, the only message that carries the Approve button. */
+  verdict?: boolean;
 };
 
 export type SourceKind = "live" | "fixture";
@@ -68,7 +70,7 @@ export function ChatPanel({
               }
             >
               {m.text}
-              {m.role === "bot" && i === lastBotIndex && canApprove && !receiptLine && (
+              {m.role === "bot" && m.verdict && i === lastBotIndex && canApprove && !receiptLine && (
                 <div className="mt-2.5">
                   <button
                     type="button"

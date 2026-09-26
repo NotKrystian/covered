@@ -53,11 +53,16 @@ export function errorLabel(err: unknown): string {
   return err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 }
 
-/** Send one Converse call and return the first text block. Throws on an empty answer. */
-export async function converseText(
-  messages: Message[],
-  options: { system?: string; maxTokens?: number; temperature?: number } = {},
-): Promise<string> {
+export type ConverseOptions = { system?: string; maxTokens?: number; temperature?: number };
+
+export type ConverseResult = {
+  text: string;
+  /** "end_turn", "max_tokens", … as reported by the API; "unknown" when missing. */
+  stopReason: string;
+};
+
+/** Send one Converse call and return the first text block plus the stop reason. Throws on an empty answer. */
+export async function converse(messages: Message[], options: ConverseOptions = {}): Promise<ConverseResult> {
   const input: ConverseCommandInput = {
     modelId: BEDROCK_MODEL_ID,
     messages,
@@ -67,7 +72,12 @@ export async function converseText(
   const out = await bedrockClient().send(new ConverseCommand(input));
   const text = out.output?.message?.content?.find((b): b is ContentBlock.TextMember => "text" in b)?.text;
   if (typeof text !== "string" || text.length === 0) throw new Error("empty completion");
-  return text;
+  return { text, stopReason: out.stopReason ?? "unknown" };
+}
+
+/** Send one Converse call and return the first text block. Throws on an empty answer. */
+export async function converseText(messages: Message[], options: ConverseOptions = {}): Promise<string> {
+  return (await converse(messages, options)).text;
 }
 
 export type ModeProbe = { mode: JudgeMode; why: string };

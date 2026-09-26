@@ -179,7 +179,9 @@ export function memoryPromptBlock(memory: Memory): string | null {
   if (memory.display_name) lines.push(`- Name: ${memory.display_name}`);
   if (memory.summary) lines.push(`- Summary: ${memory.summary}`);
   if (recent.length > 0) {
-    lines.push("- Recent events (oldest first):");
+    lines.push(
+      "- Recent events (oldest first). Kinds: decision = what the bot recommended (the buyer may not have acted); approve = the buyer actually bought that pick; override = the buyer chose a different listing than recommended. Only approve/override say anything about the buyer:",
+    );
     for (const e of recent) {
       lines.push(`  · ${e.t.slice(0, 10)} ${e.kind}${e.chosen_id ? ` ${e.chosen_id}` : ""} — "${e.query}" — ${e.note}`);
     }

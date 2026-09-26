@@ -18,7 +18,7 @@ import type { Decision, UserSettings } from "@/lib/types";
 import type { JudgeMode, ShortlistItem } from "@/lib/decision";
 import { buildUserContent, SYSTEM_PROMPT } from "./prompt";
 import { mockDecision, mockJudge } from "./mock";
-import { BEDROCK_MODEL_ID, converseText, errorLabel, isAccessError, judgeMode, shortModelName } from "./bedrock";
+import { BEDROCK_MODEL_ID, converse, errorLabel, isAccessError, judgeMode, shortModelName } from "./bedrock";
 
 export type { Decision, Verdict, Listing, Offer } from "@/lib/types";
 export { BEDROCK_MODEL_ID, BEDROCK_REGION, judgeMode, shortModelName } from "./bedrock";
@@ -70,16 +70,26 @@ export async function loadImage(url: string): Promise<LoadedImage | null> {
   }
 }
 
-function stripFences(text: string): string {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenced ? fenced[1] : trimmed;
+/**
+ * Pull the JSON object out of a completion. Tolerates a leading ```json fence with or
+ * without its closing fence (a truncated answer has none) and any prose around the object.
+ */
+function extractJson(text: string): string {
+  let body = text.trim();
+  body = body.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start === -1) return body;
+  return body.slice(start, end === -1 ? undefined : end + 1);
 }
 
 function parseResponse(text: string): JudgeResponse {
-  const json: unknown = JSON.parse(stripFences(text));
+  const json: unknown = JSON.parse(extractJson(text));
   return JudgeResponseSchema.parse(json);
 }
+
+/** Output budget: ~12 decisions × ~120 tokens plus a summary, with headroom so the JSON never truncates. */
+const JUDGE_MAX_TOKENS = 4000;
 
 function mockResult(items: ShortlistItem[], settings: UserSettings, notes: string[]): JudgeResult {
   const { decisions, summary } = mockJudge(items, settings);
@@ -112,7 +122,11 @@ export async function judge(
   for (let attempt = 1; attempt <= 2 && parsed === null; attempt += 1) {
     let raw = "";
     try {
-      raw = await converseText(messages, { system: SYSTEM_PROMPT, maxTokens: 1500, temperature: 0.2 });
+      const out = await converse(messages, { system: SYSTEM_PROMPT, maxTokens: JUDGE_MAX_TOKENS, temperature: 0.2 });
+      raw = out.text;
+      if (out.stopReason === "max_tokens") {
+        notes.push(`attempt ${attempt}: output hit the ${JUDGE_MAX_TOKENS} token cap`);
+      }
       parsed = parseResponse(raw);
     } catch (err) {
       const message = errorLabel(err);

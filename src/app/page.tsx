@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_USER_SETTINGS, ReaderResponseSchema } from "@/lib/types";
-import type { Offer, Receipt, UserSettings } from "@/lib/types";
+import type { Receipt, SearchResult, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse } from "@/lib/decision";
 import type { Memory } from "@/lib/memory";
-import { FIXTURE_QUERY } from "@/lib/fixtures";
+import { FIXTURE_LISTINGS, FIXTURE_QUERY } from "@/lib/fixtures";
 import { formatPence } from "@/lib/money";
 import { SettingsStrip } from "@/components/SettingsStrip";
 import { ChatPanel, type ChatMessage, type SourceKind } from "@/components/ChatPanel";
-import { Shortlist } from "@/components/Shortlist";
+import { Shortlist, type ShortlistSource } from "@/components/Shortlist";
 import { TracePanel } from "@/components/TracePanel";
 import { MemoryCard } from "@/components/MemoryCard";
 
@@ -38,10 +38,10 @@ function msg(role: ChatMessage["role"], text: string, tone?: ChatMessage["tone"]
   return { id: `m${messageSeq}`, role, text, tone };
 }
 
-/** Try the Reader agent's endpoint. Returns offers, or a reason to fall back. */
+/** Try the Reader agent's endpoint. Returns the read (live or snapshot), or a reason to fall back. */
 async function readLiveGrid(
   query: string,
-): Promise<{ ok: true; offers: Offer[] } | { ok: false; reason: string }> {
+): Promise<{ ok: true; result: SearchResult } | { ok: false; reason: string }> {
   try {
     const res = await fetch("/api/search", {
       method: "POST",
@@ -56,20 +56,73 @@ async function readLiveGrid(
       return { ok: false, reason: `${parsed.data.error.kind}: ${parsed.data.error.message}` };
     }
     if (parsed.data.result.offers.length === 0) return { ok: false, reason: "no_offers: grid was empty" };
-    return { ok: true, offers: parsed.data.result.offers };
+    return { ok: true, result: parsed.data.result };
   } catch (err) {
     return { ok: false, reason: `network: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
+
+function sourceOf(result: SearchResult): ShortlistSource {
+  return {
+    source: result.source,
+    fetched_at: result.fetched_at,
+    note: result.note,
+    fallback_from: result.fallback_from,
+    offers: result.offers.length,
+  };
+}
+
+const FIXTURE_SOURCE: ShortlistSource = {
+  source: "fixture",
+  fetched_at: "",
+  offers: FIXTURE_LISTINGS.length,
+};
+
+function whenCaptured(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "earlier";
+  const today = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return today ? `today at ${time}` : d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+/** One honest line about where the rows came from, for the chat. Null when it was a plain live read. */
+function sourceLine(result: SearchResult): string | null {
+  switch (result.source) {
+    case "live":
+      return null;
+    case "snapshot": {
+      const why = result.fallback_from
+        ? result.fallback_from.kind === "challenge"
+          ? "Google served a challenge page to the headless reader"
+          : `live read failed (${result.fallback_from.kind})`
+        : "live read skipped";
+      return `${why}, so this is a real Google Shopping grid for this query captured ${whenCaptured(result.fetched_at)}: ${result.offers.length} offers, ads marked.`;
+    }
+    case "fixture":
+      return null;
+    default: {
+      const never: never = result.source;
+      return String(never);
+    }
+  }
+}
+
 async function decide(
   query: string,
   settings: UserSettings,
   displayName: string,
-  offers?: Offer[],
+  read?: SearchResult,
 ): Promise<DecideResponse> {
   const name = displayName.trim() || undefined;
-  const body = offers
-    ? { query, settings, display_name: name, offers }
+  const body = read
+    ? {
+        query,
+        settings,
+        display_name: name,
+        offers: read.offers,
+        grid: { source: read.source, fetched_at: read.fetched_at, note: read.note, fallback_from: read.fallback_from },
+      }
     : { query, settings, display_name: name, source: "fixture" as const };
   const res = await fetch("/api/decide", {
     method: "POST",
@@ -86,6 +139,7 @@ export default function Home() {
   const [source, setSource] = useState<SourceKind>("fixture");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [result, setResult] = useState<DecideResponse | null>(null);
+  const [shortlistSource, setShortlistSource] = useState<ShortlistSource | null>(null);
   const [running, setRunning] = useState(false);
   const [approving, setApproving] = useState(false);
   const [receiptLine, setReceiptLine] = useState<string | null>(null);
@@ -96,25 +150,26 @@ export default function Home() {
 
   const push = useCallback((m: ChatMessage) => setMessages((prev) => [...prev, m]), []);
 
-  const refreshMemory = useCallback(async () => {
-    const next = await fetchMemory();
-    if (next) {
-      setMemoryState(next);
-      if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
-    }
+  const applyMemory = useCallback((next: MemoryState) => {
+    setMemoryState(next);
+    if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
   }, []);
 
+  const refreshMemory = useCallback(async () => {
+    const next = await fetchMemory();
+    if (next) applyMemory(next);
+  }, [applyMemory]);
+
+  // Initial load: state is set from the fetch callback, never synchronously in the effect.
   useEffect(() => {
     let cancelled = false;
     fetchMemory().then((next) => {
-      if (cancelled || !next) return;
-      setMemoryState(next);
-      if (next.memory.display_name) setDisplayName((cur) => cur || next.memory.display_name || "");
+      if (!cancelled && next) applyMemory(next);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyMemory]);
 
   const forget = useCallback(async () => {
     setMemoryBusy(true);
@@ -137,22 +192,25 @@ export default function Home() {
       setReceiptLine(null);
       push(msg("user", q));
       try {
-        let offers: Offer[] | undefined;
+        let read: SearchResult | undefined;
         if (nextSource === "live") {
-          const read = await readLiveGrid(q);
-          if (read.ok) {
-            offers = read.offers;
+          const attempt = await readLiveGrid(q);
+          if (attempt.ok) {
+            read = attempt.result;
+            const line = sourceLine(read);
+            if (line) push(msg("bot", line, "neutral"));
           } else {
-            push(msg("bot", `Live grid unavailable (${read.reason}). Using the fixtures instead.`, "warn"));
+            push(msg("bot", `Live grid unavailable (${attempt.reason}). Using the fixtures instead.`, "warn"));
             setSource("fixture");
           }
         }
-        const data = await decide(q, settings, displayName, offers);
+        const data = await decide(q, settings, displayName, read);
         setResult(data);
+        setShortlistSource(read ? sourceOf(read) : FIXTURE_SOURCE);
         const chosen = data.shortlist.find((i) => i.id === data.verdict.chosen_id);
         const chosenDecision = chosen ? data.decisions[chosen.id] : undefined;
         const tone: ChatMessage["tone"] = chosenDecision && isProtected(chosenDecision) ? "good" : "warn";
-        push(msg("bot", data.verdict.summary, tone));
+        push({ ...msg("bot", data.verdict.summary, tone), verdict: true });
         void refreshMemory();
       } catch (err) {
         push(msg("bot", `Something broke: ${err instanceof Error ? err.message : String(err)}`, "warn"));
@@ -248,6 +306,7 @@ export default function Home() {
             decisions={result?.decisions ?? {}}
             chosenId={result?.verdict.chosen_id ?? null}
             loading={running}
+            source={shortlistSource}
           />
         </main>
         <TracePanel

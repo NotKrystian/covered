@@ -60,6 +60,8 @@ export type DecideResponse = {
 };
 
 export const SHORTLIST_MAX = 12;
+/** At most this many sponsored rows make the shortlist. Ads are marked, never preferred. */
+export const SHORTLIST_SPONSORED_MAX = 4;
 
 export function listingToItem(listing: Listing): ShortlistItem {
   return {
@@ -105,7 +107,21 @@ export function offerToItem(offer: Offer, index: number): ShortlistItem {
   };
 }
 
-/** Dedupe, sort by price ascending (unparsed prices last), cap at `SHORTLIST_MAX`. */
+function byPrice(a: ShortlistItem, b: ShortlistItem): number {
+  if (a.price_pence === null && b.price_pence === null) return 0;
+  if (a.price_pence === null) return 1;
+  if (b.price_pence === null) return -1;
+  return a.price_pence - b.price_pence;
+}
+
+/**
+ * Build the shortlist the judge sees from a grid read.
+ *
+ * Dedupe on `offer_id` (sponsored) or title + merchant, then pick a mix rather than
+ * the 12 cheapest rows: the cheapest sponsored rows up to `SHORTLIST_SPONSORED_MAX`,
+ * and browse rows with a returns line before browse rows without one. The result is
+ * sorted by price (unparsed prices last) and capped at `SHORTLIST_MAX`.
+ */
 export function buildShortlistFromOffers(offers: Offer[]): {
   items: ShortlistItem[];
   deduped: number;
@@ -116,19 +132,26 @@ export function buildShortlistFromOffers(offers: Offer[]): {
     const key =
       offer.offer_id !== undefined
         ? `id:${offer.offer_id}`
-        : `tpm:${offer.title}|${offer.price}|${offer.merchant}`;
+        : `tm:${offer.title.trim().toLowerCase()}|${offer.merchant.trim().toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(offer);
   }
-  const items = unique.map(offerToItem);
-  items.sort((a, b) => {
-    if (a.price_pence === null && b.price_pence === null) return 0;
-    if (a.price_pence === null) return 1;
-    if (b.price_pence === null) return -1;
-    return a.price_pence - b.price_pence;
-  });
-  return { items: items.slice(0, SHORTLIST_MAX), deduped: offers.length - unique.length };
+  const all = unique.map(offerToItem).sort(byPrice);
+
+  const sponsored = all.filter((i) => i.section === "sponsored").slice(0, SHORTLIST_SPONSORED_MAX);
+  const browseWithReturns = all.filter((i) => i.section === "browse" && i.returns !== null);
+  const browseNoReturns = all.filter((i) => i.section === "browse" && i.returns === null);
+
+  const picked: ShortlistItem[] = [...sponsored];
+  for (const pool of [browseWithReturns, browseNoReturns]) {
+    for (const item of pool) {
+      if (picked.length >= SHORTLIST_MAX) break;
+      picked.push(item);
+    }
+  }
+  picked.sort(byPrice);
+  return { items: picked.slice(0, SHORTLIST_MAX), deduped: offers.length - unique.length };
 }
 
 /** A seller you can enforce against at a venue that honours it. A business badge alone is not this. */
@@ -186,9 +209,15 @@ export function applyPremium(
   const droppedNote = dropped > 0 ? ` ${dropped} listing${dropped === 1 ? "" : "s"} dropped before price.` : "";
 
   if (protectedBest && (!unprotectedBest || protectedBest.price_pence - unprotectedBest.price_pence <= premium)) {
-    const summary = unprotectedBest
-      ? `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. That is ${formatPence(protectedBest.price_pence - unprotectedBest.price_pence)} more than ${unprotectedBest.merchant}, inside your ${formatPence(premium)} for rights: 14-day cancellation and a 30-day fault refund.${droppedNote}`
-      : `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
+    const gap = unprotectedBest ? protectedBest.price_pence - unprotectedBest.price_pence : 0;
+    let summary: string;
+    if (!unprotectedBest) {
+      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}, the only listing that is the item and keeps your rights.${droppedNote}`;
+    } else if (gap <= 0) {
+      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}: the cheapest listing that is the item, and it keeps your rights (14-day cancellation and a 30-day fault refund). No premium needed.${droppedNote}`;
+    } else {
+      summary = `Buying ${protectedBest.merchant} at ${formatPence(protectedBest.price_pence)}. That is ${formatPence(gap)} more than ${unprotectedBest.merchant}, inside your ${formatPence(premium)} for rights: 14-day cancellation and a 30-day fault refund.${droppedNote}`;
+    }
     return { chosen_id: protectedBest.id, per_offer: decisions, summary };
   }
 

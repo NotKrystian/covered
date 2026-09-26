@@ -109,6 +109,9 @@ Anything else in this account (other Kawuc buckets, DNS zones, EC2) is off limit
 
 ## Demo script (one clock button, four fixtures, one chat)
 
+The exact 3-minute run — start commands, warm-up curls, the four clicks, what to say at each, timings, and what to do when Bedrock is slow or `/api/search` fails — is in **[`DEMO.md`](DEMO.md)**. The beats, for reference:
+
+0. **The real shelf.** Hit Live grid. The badge over the shortlist says `live`, `snapshot · captured <date>` (a real Google Shopping grid saved when headless Chromium got Google's challenge page) or `fixtures`. Ads carry an `Ad` chip and their merchant domain; browse rows show their returns line. Twelve rows (at most 4 ads, browse rows with a returns line first) go to the judge with no photos, so it is told it cannot call a mislisting.
 1. **The photo beat.** Type the fleece, hit Fixtures. The £22 "Nike Tech Fleece" has the right title and a photo of a nylon bomber. The judge drops it from the picture before any price rule runs; the row is struck through with the photo reason.
 2. **The rights beat, £10.** Private seller £28 vs JD Sports £36. Gap £8 is inside the £10 premium, so it buys the shop and says exactly what the £8 buys: 14-day cancellation and a 30-day fault refund. The overseas "shop" at £34 gets no premium: a business badge is not protection.
 3. **The flip, £10 → £5.** Change "Pay up to" to 5 and Re-run. Same judgements, but now the £8 gap beats the premium: it buys the private listing and warns that a break is your problem. Same model output, different pound rule, deterministic.

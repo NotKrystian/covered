@@ -18,15 +18,16 @@ RIGHTS CARD (UK):
 - Marketplace with a written money-back / buyer-protection policy (e.g. eBay Money Back Guarantee): that is venue policy, not statute. Say which one you are relying on.
 - Sponsored rows are ads. A "Sale" badge, a struck-through price, or the top slot is never a reason to buy.
 
-MISLISTING: photos are the check, titles are the bait. If the photos show a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without photos you cannot call a mislisting; set mislisting=false and judge identity from the text only. If the title clearly describes a different product from the request, same_item=false.
+MISLISTING: photos are the check, titles are the bait. If the photos show a different garment, colour, size tag, a replica logo, a bundle, or a stock photo paired with something else, set mislisting=true, same_item=false, recommendation="skip", and name the photo evidence in photo_reason. Do this regardless of price. Without photos you cannot call a mislisting: mislisting=false, photo_reason=null, and judge identity from the text only. If the title clearly describes a different product from the request (wrong garment, wrong gender/fit when the request names one, an accessory, a bundle of something else), same_item=false. A different brand or a missing colour word is not a mismatch on its own.
 
 VENUE TRUST values: shop_checkout (a retailer's own checkout), marketplace_protected (written buyer protection), marketplace_unprotected, stranger (private sale, cash on collection), unclear.
 SELLER TYPE values: uk_business, private, overseas_business, unclear.
+GRID ROWS (no photos): a merchant domain ending .co.uk / .uk, a well-known UK retailer name (Amazon.co.uk, Decathlon UK, Sports Direct, Tu Clothing, Argos, JD Sports, Next, M&S…), or a returns line like "30-day returns" with a UK-facing price is a uk_business at shop_checkout. "Amazon.co.uk - <name>-Seller" is a third-party seller under Amazon's A-to-z Guarantee: seller_type by the seller's evidence (unclear if none), venue_trust marketplace_protected. A .com workwear or trade site with no returns line and no UK signal is unclear, not overseas_business, unless the text says it ships from abroad.
 RECOMMENDATION: "buy" when it is the item and the rights are real; "skip" when it is a mislisting, not the item, or the rights are missing/weak; "ask" only when you genuinely cannot tell.
 
 BUYER MEMORY: the user turn may include "what we know about this buyer" — a summary and recent events from their own past approvals and overrides. Use it to lean your recommendation and your sentence the way this person actually buys (someone who keeps taking the UK shop should see you favour rights; someone who keeps overriding to private bargains should see you say plainly when a bargain is worth the risk). It never changes same_item, mislisting or photo_reason, and it never invents rights the venue does not give.
 
-OUTPUT: a single JSON object, no prose, no markdown fences:
+OUTPUT: a single JSON object. Start your answer with "{" and end with "}". No prose, no markdown fences. Keep it compact: "reason" is one sentence of at most 160 characters, "rights" has at most 3 short entries, "photo_reason" is null whenever no photo was attached.
 {
   "summary": "one sentence for the user about the shortlist as a whole",
   "decisions": [
@@ -87,7 +88,13 @@ export async function buildUserContent(
     },
   ];
   if (memory) blocks.push({ text: memory });
-  blocks.push({ text: `Shortlist of ${items.length}:` });
+  const withPhotos = items.filter((i) => i.image_urls.length > 0).length;
+  blocks.push({
+    text:
+      withPhotos === 0
+        ? `Shortlist of ${items.length}. These are rows read from the Google Shopping grid: NO photos are attached for any of them. Set mislisting=false and photo_reason=null for every listing and judge identity from the title alone.`
+        : `Shortlist of ${items.length} (${withPhotos} with photos attached):`,
+  });
   for (const [index, item] of items.entries()) {
     blocks.push({ text: describeItem(item, index) });
     for (const url of item.image_urls) {

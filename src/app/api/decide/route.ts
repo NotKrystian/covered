@@ -8,7 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { OfferSchema, UserSettingsSchema } from "@/lib/types";
+import { OfferSchema, ReaderErrorSchema, SearchSourceSchema, UserSettingsSchema } from "@/lib/types";
 import { FIXTURE_LISTINGS } from "@/lib/fixtures";
 import { judge } from "@/lib/judge";
 import {
@@ -32,7 +32,32 @@ const BodySchema = z.object({
   display_name: z.string().max(DISPLAY_NAME_MAX).optional(),
   source: z.literal("fixture").optional(),
   offers: z.array(OfferSchema).optional(),
+  /** Where `offers` came from, so the trace can say "snapshot captured …" instead of pretending it was live. */
+  grid: z
+    .object({
+      source: SearchSourceSchema,
+      fetched_at: z.string(),
+      note: z.string().optional(),
+      fallback_from: ReaderErrorSchema.optional(),
+    })
+    .optional(),
 });
+
+function gridLabel(grid: NonNullable<z.infer<typeof BodySchema>["grid"]> | undefined): string {
+  if (!grid) return "grid";
+  switch (grid.source) {
+    case "live":
+      return `live Google Shopping grid read ${grid.fetched_at}`;
+    case "snapshot":
+      return `real Google Shopping grid captured ${grid.fetched_at}${grid.fallback_from ? ` (live read failed: ${grid.fallback_from.kind})` : ""}`;
+    case "fixture":
+      return "fixture offers";
+    default: {
+      const never: never = grid.source;
+      return String(never);
+    }
+  }
+}
 
 export async function POST(request: Request) {
   let body: z.infer<typeof BodySchema>;
@@ -61,7 +86,7 @@ export async function POST(request: Request) {
     const sponsored = items.filter((i) => i.section === "sponsored").length;
     log(
       "read_grid",
-      `${offers.length} offers → ${items.length} shortlisted (${built.deduped} duplicates dropped, ${sponsored} ads marked)`,
+      `${gridLabel(body.grid)}: ${offers.length} offers → ${items.length} shortlisted (${built.deduped} duplicates dropped, ${sponsored} ads marked, no photos)`,
     );
   }
 
