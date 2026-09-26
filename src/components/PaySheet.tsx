@@ -76,11 +76,11 @@ export function PaySheet({
         aria-modal="true"
         aria-labelledby="pay-sheet-title"
         onClick={(e) => e.stopPropagation()}
-        className="sheet-up mb-6 w-full max-w-sm rounded-2xl border border-line bg-panel p-5 shadow-2xl"
+        className="sheet-up mx-4 mb-6 w-full max-w-sm rounded-2xl border border-line bg-panel p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <span id="pay-sheet-title" className="font-semibold tracking-tight">
+            <span id="pay-sheet-title" className="text-sm font-semibold tracking-tight">
               Covered
             </span>
             <span className="rounded-full border border-line px-1.5 py-px text-[10px] uppercase tracking-wide text-muted">
@@ -153,12 +153,12 @@ export function PaySheet({
               setHint(true);
             }
           }}
-          className="relative mt-5 flex h-12 w-full select-none items-center justify-center rounded-xl border border-accent/50 bg-accent-soft font-semibold text-accent outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:border-line disabled:bg-panel-raised disabled:text-muted"
+          className="relative mt-5 flex h-12 w-full select-none items-center justify-center rounded-lg bg-accent font-semibold text-background outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel disabled:bg-panel-raised disabled:text-muted disabled:hover:brightness-100"
         >
           {targetLabel}
           {canPay && (
             // The side-button cue: a pulsing bar at the edge, like the phone's double-click prompt.
-            <span aria-hidden="true" className="side-pulse absolute top-2 right-2 bottom-2 w-1 rounded-full bg-accent" />
+            <span aria-hidden="true" className="side-pulse absolute top-2 right-2 bottom-2 w-1 rounded-full bg-background/70" />
           )}
         </button>
         <p className="mt-2 text-center text-[11px] text-muted">

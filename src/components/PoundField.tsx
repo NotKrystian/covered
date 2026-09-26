@@ -6,16 +6,20 @@ function poundsToPence(value: string): number | null {
   return Math.round(n * 100);
 }
 
-function Chevron({ up }: { up: boolean }) {
+function Chevron({ up, large }: { up: boolean; large: boolean }) {
   return (
-    <svg viewBox="0 0 8 5" aria-hidden="true" className={`h-[5px] w-2 ${up ? "" : "rotate-180"}`}>
+    <svg
+      viewBox="0 0 8 5"
+      aria-hidden="true"
+      className={`${large ? "h-[7px] w-3" : "h-[5px] w-2"} ${up ? "" : "rotate-180"}`}
+    >
       <path d="M1 4l3-3 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 const STEP_BUTTON =
-  "flex flex-1 items-center justify-center px-1 text-muted hover:bg-line hover:text-foreground active:text-accent disabled:pointer-events-none disabled:opacity-30";
+  "flex flex-1 items-center justify-center text-muted hover:bg-line hover:text-foreground active:text-accent disabled:pointer-events-none disabled:opacity-30";
 
 type Props = {
   pence: number;
@@ -53,8 +57,14 @@ export function PoundField({ pence, onPence, onEnter, label, large = false }: Pr
         }`}
       />
       <span className="flex flex-col self-stretch border-l border-line">
-        <button type="button" tabIndex={-1} aria-label={`${label}, £1 more`} onClick={() => step(1)} className={STEP_BUTTON}>
-          <Chevron up />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`${label}, £1 more`}
+          onClick={() => step(1)}
+          className={`${STEP_BUTTON} ${large ? "px-2.5" : "px-1"}`}
+        >
+          <Chevron up large={large} />
         </button>
         <button
           type="button"
@@ -62,9 +72,9 @@ export function PoundField({ pence, onPence, onEnter, label, large = false }: Pr
           aria-label={`${label}, £1 less`}
           onClick={() => step(-1)}
           disabled={pence <= 0}
-          className={STEP_BUTTON}
+          className={`${STEP_BUTTON} ${large ? "px-2.5" : "px-1"}`}
         >
-          <Chevron up={false} />
+          <Chevron up={false} large={large} />
         </button>
       </span>
     </span>

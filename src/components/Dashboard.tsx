@@ -230,7 +230,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
       const chosen = result.listings.find((i) => i.id === result.verdict.chosen_id);
       setPayOpen(false);
       setReceipt(
-        `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} · wallet ${formatPence(done.balance_pence)}`,
+        `Paid ${chosen?.price_label ?? ""} to ${chosen?.merchant ?? "listing"} from your Covered demo wallet · balance ${formatPence(done.balance_pence)}`,
       );
     } finally {
       setApproving(false);
@@ -379,12 +379,12 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                   <Link href="/ext" className="text-accent hover:underline">
                     Install the Covered reader
                   </Link>{" "}
-                  in Brave, then reload the extension and try again.
+                  in Brave, Chrome or Firefox, then reload this page and try again.
                 </p>
               )}
               {error.kind === "challenge" && (
                 <p className="mt-4 text-sm text-muted">
-                  Sign in to Google in Brave, pass the check in a normal tab, then search again. Covered will not bypass it.
+                  Sign in to Google in your browser, pass the check in a normal tab, then search again. Covered will not bypass it.
                 </p>
               )}
             </div>
@@ -416,7 +416,21 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                 </div>
               )}
               {receipt && (
-                <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
+                <>
+                  <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
+                  <div className="rounded-xl border border-dashed border-line px-5 py-4">
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                      14-day price-drop watch
+                      <span className="rounded-full border border-line px-2 py-px text-[10px] font-normal uppercase tracking-wide text-muted">
+                        Coming next
+                      </span>
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted">
+                      Inside your cooling-off window, Covered will re-check this price and move you if you would clear{" "}
+                      {formatPence(settings.switch_minimum_pence)} after postage. Not built yet.
+                    </p>
+                  </div>
+                </>
               )}
               {rows.length === 0 ? (
                 <p className="text-sm text-muted">No listings came back for that search.</p>

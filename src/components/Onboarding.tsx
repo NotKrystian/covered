@@ -95,6 +95,12 @@ export function Onboarding({ onDone }: Props) {
           <section className="space-y-8">
             <h1 className="text-4xl font-semibold tracking-tight">Inside 14 days, only switch if you clear this after postage</h1>
             <p className="text-muted">Default £8. A cheaper find has to beat this after you pay to send the first one back.</p>
+            <p className="text-sm leading-relaxed text-muted">
+              <span className="mr-2 inline-block rounded-full border border-line px-2 py-px align-[1px] text-[10px] uppercase tracking-wide">
+                Coming next
+              </span>
+              The 14-day price-drop watch that uses this is not built yet. Your number is saved for it.
+            </p>
             <PoundField
               large
               label="Switch minimum in pounds"
