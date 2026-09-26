@@ -66,6 +66,7 @@ enum Theme {
     static let radiusHandle: CGFloat = 20
     static let radiusTrack: CGFloat = 6.5
     static let listPhoto: CGFloat = 130
+    static let listPhotoCompact: CGFloat = 72
     static let approveHeight: CGFloat = 69.5
     static let successDisc: CGFloat = 117
     static let tabPillHeight: CGFloat = 36.5

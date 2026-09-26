@@ -5,6 +5,7 @@ struct ListingCard: View {
     let decision: Decision?
     let chosen: Bool
     var twoUp = false
+    var compact = false
     let namespace: Namespace.ID
     let onLimit: () -> Void
     @State private var showLightbox = false
@@ -26,7 +27,9 @@ struct ListingCard: View {
 
     var body: some View {
         Group {
-            if twoUp {
+            if compact {
+                compactBody
+            } else if twoUp {
                 twoUpBody
             } else {
                 listBody
@@ -39,6 +42,53 @@ struct ListingCard: View {
                 reason: decision?.photoReason ?? decision?.reason ?? "not the item"
             )
         }
+    }
+
+    private var compactBody: some View {
+        HStack(alignment: .center, spacing: 11) {
+            OfferPhoto(
+                item: item,
+                size: Theme.listPhotoCompact,
+                corner: Theme.radiusPhotoCompact,
+                rejected: rejected
+            )
+            .onTapGesture {
+                if rejected { showLightbox = true }
+            }
+            .accessibilityIdentifier(rejected ? "shop.mislisting" : "")
+            .accessibilityAddTraits(.isButton)
+
+            VStack(alignment: .leading, spacing: 4) {
+                compactPrice
+                title
+                if let rejectChip {
+                    Text(rejectChip)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.chipText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(11)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .strokeBorder(Color.hairline, lineWidth: 1)
+        )
+    }
+
+    private var compactPrice: some View {
+        Text(item.priceLabel)
+            .filmMoney(20, weight: .bold, tracking: -0.6)
+            .foregroundStyle(rejected ? Color.mutedLine : Color.inkSoft)
+            .overlay(alignment: .center) {
+                if rejected {
+                    Rectangle()
+                        .fill(Color.mutedLine)
+                        .frame(height: 2.5)
+                }
+            }
     }
 
     private var listBody: some View {

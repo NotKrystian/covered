@@ -127,6 +127,9 @@ struct ShopView: View {
 
         if let chosen = shop.chosenItem {
             approveSummary(chosen)
+            if !useTwoUp {
+                rejectedStrip
+            }
             InkPillButton(
                 title: "Approve · \(chosen.priceLabel)",
                 identifier: "shop.approve"
@@ -154,37 +157,51 @@ struct ShopView: View {
                 }
             )
             .padding(.top, 4)
+        } else {
+            rejectedStrip
         }
 
         if useTwoUp {
             HStack(alignment: .top, spacing: 11) {
                 ForEach(visibleRows) { item in
-                    ListingCard(
-                        item: item,
-                        decision: shop.decisions[item.id],
-                        chosen: item.id == shop.verdict?.chosenId,
-                        twoUp: true,
-                        namespace: morph,
-                        onLimit: { openLimit(item) }
-                    )
+                    listingCard(item, twoUp: true)
                 }
             }
             .accessibilityIdentifier("shop.results")
+            rejectedStrip
         } else {
             LazyVStack(spacing: 10) {
-                ForEach(shop.rows) { item in
-                    ListingCard(
-                        item: item,
-                        decision: shop.decisions[item.id],
-                        chosen: item.id == shop.verdict?.chosenId,
-                        namespace: morph,
-                        onLimit: { openLimit(item) }
-                    )
-                    .transition(.opacity)
+                ForEach(visibleRows) { item in
+                    listingCard(item)
+                        .transition(.opacity)
                 }
             }
             .accessibilityIdentifier("shop.results")
         }
+    }
+
+    @ViewBuilder
+    private var rejectedStrip: some View {
+        if !rejectedRows.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(rejectedRows) { item in
+                    listingCard(item, compact: true)
+                }
+            }
+            .accessibilityIdentifier("shop.rejected")
+        }
+    }
+
+    private func listingCard(_ item: ShortlistItem, twoUp: Bool = false, compact: Bool = false) -> some View {
+        ListingCard(
+            item: item,
+            decision: shop.decisions[item.id],
+            chosen: item.id == shop.verdict?.chosenId,
+            twoUp: twoUp,
+            compact: compact,
+            namespace: morph,
+            onLimit: { openLimit(item) }
+        )
     }
 
     private func approveSummary(_ item: ShortlistItem) -> some View {
@@ -293,11 +310,17 @@ struct ShopView: View {
         .background(Color.screen)
     }
 
+    private func isRejected(_ item: ShortlistItem) -> Bool {
+        guard let decision = shop.decisions[item.id] else { return false }
+        return decision.mislisting || !decision.sameItem
+    }
+
+    private var rejectedRows: [ShortlistItem] {
+        shop.rows.filter(isRejected)
+    }
+
     private var visibleRows: [ShortlistItem] {
-        shop.rows.filter { item in
-            guard let decision = shop.decisions[item.id] else { return true }
-            return !decision.mislisting && decision.sameItem
-        }
+        shop.rows.filter { !isRejected($0) }
     }
 
     private var useTwoUp: Bool {
