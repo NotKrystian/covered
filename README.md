@@ -39,7 +39,7 @@ Copy `.env.example` to `.env.local`. Never commit real values.
 | `src/lib/grok/` | Decision+UI | xAI call, prompt, `Verdict` parsing. Pound rule in code. |
 | `src/lib/fixtures/` | Decision+UI | Four seeded `Listing`s with real photos, incl. the wrong-jacket mislisting. |
 | `src/app/api/decide/` | Decision+UI | Shortlist in, `Verdict` out. |
-| `src/lib/reader/` | Reader | Playwright read of the `udm=28` first paint, both lists, deduped, typed challenge error. |
+| `src/lib/reader/` | Reader | Playwright read of the `udm=28` first paint, both lists, deduped, typed challenge error. Headless by default; `COVERED_READER_CDP=http://127.0.0.1:9222` attaches to your own Chrome (start it with `scripts/chrome-debug.sh`, stop with `scripts/chrome-debug.sh stop`). CLI: `npx tsx scripts/read-grid.ts "query"`. |
 | `src/app/api/search/` | Reader | Query in, `ReaderResponse` out. |
 | `src/lib/s3.ts` | Infra | `receipts/{id}.json` PutObject to the new bucket. |
 | `src/app/api/approve/` | Infra | `Receipt` in, S3 key out. |
@@ -49,3 +49,48 @@ Copy `.env.example` to `.env.local`. Never commit real values.
 ## Out of scope today
 
 Paging through `start=10`, challenge bypass, limit watcher, 14-day clock, fault refund, new EC2/CloudFront, any write to an existing Kawuc bucket.
+
+## Run / Deploy
+
+Owned by Infra. One laptop runs everything; the public URL is a Cloudflare Tunnel into it.
+
+### `.env.local`
+
+| Key | Value |
+| --- | --- |
+| `XAI_API_KEY` | xAI key. Required for real Grok calls; without it the app runs in mock mode. |
+| `XAI_MODEL` | Optional model override. |
+| `AWS_REGION` | `eu-west-2`. |
+| `S3_BUCKET` | `covered-hack-616532055961`. |
+
+AWS credentials come from the default credential chain (local `default` profile). Nothing AWS-shaped goes in `.env.local`.
+
+### Local
+
+```bash
+pnpm dev                     # http://localhost:3000
+```
+
+### Demo (app + public URL)
+
+```bash
+scripts/demo.sh              # starts pnpm dev on :3000 and the Cloudflare Tunnel; Ctrl-C stops both
+PORT=3100 scripts/demo.sh    # if :3000 is busy
+scripts/tunnel.sh            # tunnel only, against an already-running pnpm dev
+```
+
+`scripts/demo.sh` prints the public URL once the tunnel is up. With a named tunnel it is `https://covered.kawuc.uk`; otherwise it is a throwaway `https://*.trycloudflare.com` URL that changes on every run. Logs go to `/tmp/covered-dev.log` and `/tmp/covered-tunnel.log`.
+
+Cloudflare credentials live outside the repo in `~/.config/covered/cloudflare.env` (mode 600): `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_ACCOUNT_ID`, and, once created, `CLOUDFLARE_TUNNEL_TOKEN`. `scripts/tunnel.sh` sources it and picks the named tunnel when `CLOUDFLARE_TUNNEL_TOKEN` is present. To get there: grant the API token `Cloudflare Tunnel:Edit` (account) and `DNS:Edit` (zone `kawuc.uk`), then run `infra/cloudflare/setup-tunnel.py` once. It creates the `covered` tunnel, the ingress to `http://localhost:3000`, and the `CNAME covered.kawuc.uk` record, and writes the run token into that env file. Nothing under `~/.config/covered/` is ever committed; `*.env` is gitignored.
+
+Fallback if the tunnel is down: `cloudflared tunnel --url http://localhost:3000` and read the new URL off the console (or just demo on `http://localhost:3000`).
+
+### S3 receipts
+
+`infra/aws/create-bucket.sh` creates `covered-hack-616532055961` in `eu-west-2` (idempotent): public access blocked, versioning on, objects expire after 30 days. Approve writes `receipts/{id}.json`; snapshots go to `searches/{slug}/{iso}.json`.
+
+`POST /api/approve` takes a `Receipt` without `id` / `created_at` and returns `{ ok: true, id, key }` (400 on a bad body, 502 if S3 fails). `GET /api/approve?id=` returns the stored receipt.
+
+```bash
+aws s3 ls s3://covered-hack-616532055961/receipts/
+```

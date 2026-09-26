@@ -10,13 +10,13 @@
 import type { Page } from "playwright";
 import { parsePricePence } from "@/lib/money";
 import type { Offer, ReaderError, ReaderResponse, SearchResult } from "@/lib/types";
-import { evaluateInPage, newPage } from "./browser";
+import { evaluateInPage, newPage, readerMode } from "./browser";
 import { acceptConsentOnce, classifyPage } from "./challenge";
 import { dedupeBrowse, dedupeSponsored } from "./dedupe";
 import { extractGrid, type GridExtraction, type SelectorHits } from "./extract";
 
 export type { ReaderResponse, ReaderError, SearchResult, Offer } from "@/lib/types";
-export { closeBrowser } from "./browser";
+export { closeBrowser, readerMode, cdpUrl, type ReaderMode } from "./browser";
 
 /** Hard cap per section after dedupe. The first paint is already more than the bot should show. */
 export const MAX_PER_SECTION = 40;
@@ -122,12 +122,14 @@ export async function readGrid(query: string): Promise<ReaderResponse> {
   const trimmed = query.trim();
   if (trimmed.length === 0) return fail("unknown", "query is empty");
 
+  const mode = readerMode();
   let page: Page;
   try {
     page = await newPage();
   } catch (err) {
-    return fail("unknown", `could not launch browser: ${errorMessage(err)}`);
+    return fail("unknown", `could not open browser (mode=${mode}): ${errorMessage(err)}`);
   }
+  console.log(`[reader] "${trimmed}" mode=${mode}`);
 
   try {
     const url = gridUrl(trimmed);
@@ -180,7 +182,11 @@ export async function readGrid(query: string): Promise<ReaderResponse> {
     return { ok: true, result };
   } catch (err) {
     if (isTimeoutError(err)) return fail("timeout", errorMessage(err));
-    return fail("unknown", errorMessage(err));
+    const message = errorMessage(err);
+    if (mode === "cdp" && /has been closed|ECONNREFUSED|disconnected/i.test(message)) {
+      return fail("unknown", `${message} (the attached browser went away; rerun scripts/chrome-debug.sh)`);
+    }
+    return fail("unknown", message);
   } finally {
     await page.close().catch(() => undefined);
   }

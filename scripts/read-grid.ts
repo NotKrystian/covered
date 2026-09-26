@@ -4,9 +4,15 @@
  *
  *   npx tsx scripts/read-grid.ts "samsung 50 inch tv"
  *
+ * Attach to the user's own Chrome instead of a headless profile:
+ *
+ *   scripts/chrome-debug.sh
+ *   COVERED_READER_CDP=http://127.0.0.1:9222 npx tsx scripts/read-grid.ts "samsung 50 inch tv"
+ *
  * (`tsx` resolves the `@/` path alias from tsconfig.json.)
  */
 import { closeBrowser, readGrid } from "../src/lib/reader";
+import { cdpUrl, readerMode } from "../src/lib/reader/browser";
 import type { Offer } from "../src/lib/types";
 
 async function main(): Promise<number> {
@@ -15,6 +21,9 @@ async function main(): Promise<number> {
     console.error('usage: npx tsx scripts/read-grid.ts "samsung 50 inch tv"');
     return 2;
   }
+
+  const mode = readerMode();
+  console.log(`mode=${mode}${mode === "cdp" ? ` (${cdpUrl()})` : ""}`);
 
   const started = Date.now();
   const response = await readGrid(query);

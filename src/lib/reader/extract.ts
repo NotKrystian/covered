@@ -135,8 +135,43 @@ export function extractGrid(): GridExtraction {
     if (matched) hits[key] = (hits[key] ?? 0) + 1;
   };
 
+  /** Pre-seed keys so a rotated class shows up as `0/N` in the log rather than vanishing. */
+  const seed = (keys: string[]): SelectorHits => {
+    const hits: SelectorHits = {};
+    for (const key of keys) hits[key] = 0;
+    return hits;
+  };
+
+  /** "Sale", "Price drop", "£50 off", "10% off": the badge vocabulary, used when the class rotates. */
+  const badgePattern = /^(sale|price drop|reduced|£\s?\d[\d,.]*\s+off|\d+%\s+off)$/i;
+
+  const leafTexts = (root: Element): string[] =>
+    Array.from(root.querySelectorAll("span,div"))
+      .filter((el) => el.children.length === 0)
+      .map((el) => clean(el.textContent))
+      .filter((text) => text.length > 0);
+
   // ---- sponsored row ----------------------------------------------------
-  const sponsoredHits: SelectorHits = {};
+  const sponsoredHits = seed([
+    "data-offer-id",
+    "data-dtld",
+    "title:[role=heading] div",
+    "price:.VbBaOe",
+    "compare_at:.tWaJ3e",
+    "merchant:.UsGWMe",
+    "location:.rhOrK",
+    "location:fallback",
+    "badge:.k7oAqd",
+    "badge:fallback",
+    "delivery:.PPi4nd(any)",
+    "delivery:matched",
+    "energy:[aria-label^=Energy]",
+    "rating:pla-reviews[aria-label*=Rated]",
+    "rating_count",
+    "specs:.OCkIVb span",
+    "card:a.plantl.clickable-card",
+    "product_url:unwrapped",
+  ]);
   const sponsoredUnits = Array.from(
     document.querySelectorAll<HTMLElement>("div.ArOTm.top-pla-group-inner div.mnr-c.pla-unit"),
   );
@@ -171,11 +206,31 @@ export function extractGrid(): GridExtraction {
     bump(sponsoredHits, "merchant:.UsGWMe", merchant !== null);
     if (!merchant) merchant = merchantDomain ?? null;
 
-    const locationText = textOf(unit, ".rhOrK");
+    let locationText = textOf(unit, ".rhOrK");
     bump(sponsoredHits, "location:.rhOrK", locationText !== null);
+    if (!locationText) {
+      // 2026-09 markup: <div class="dBmERc"><img><span>London</span></div>. Try the class,
+      // then the structure: a pin icon immediately followed by a short, digit-free span.
+      locationText = textOf(unit, ".dBmERc span");
+      if (!locationText) {
+        for (const el of Array.from(unit.querySelectorAll("div > img + span"))) {
+          const text = clean(el.textContent);
+          if (text.length > 0 && text.length <= 30 && !/[\d£]/.test(text)) {
+            locationText = text;
+            break;
+          }
+        }
+      }
+      bump(sponsoredHits, "location:fallback", locationText !== null);
+    }
 
-    const badge = textOf(unit, ".k7oAqd");
+    let badge = textOf(unit, ".k7oAqd");
     bump(sponsoredHits, "badge:.k7oAqd", badge !== null);
+    if (!badge) {
+      // 2026-09 markup: .jGPvkb "Sale", .fo20hd "10% off". Then any leaf matching the badge vocabulary.
+      badge = textOf(unit, ".jGPvkb, .fo20hd") ?? leafTexts(unit).find((text) => badgePattern.test(text)) ?? null;
+      bump(sponsoredHits, "badge:fallback", badge !== null);
+    }
 
     const deliveryCandidates = Array.from(unit.querySelectorAll(".PPi4nd"));
     bump(sponsoredHits, "delivery:.PPi4nd(any)", deliveryCandidates.length > 0);
@@ -200,9 +255,11 @@ export function extractGrid(): GridExtraction {
     if (!ratingCount) ratingCount = stripParens(textOf(unit, ".RDApEe"));
     bump(sponsoredHits, "rating_count", ratingCount !== null);
 
-    const specs = Array.from(unit.querySelectorAll(".OCkIVb span"))
+    // The hover card repeats the chip row inside the unit, so read the first `.OCkIVb` only.
+    const specsRoot = unit.querySelector(".OCkIVb");
+    const specs = Array.from(specsRoot ? specsRoot.querySelectorAll("span") : [])
       .map((el) => clean(el.textContent))
-      .filter((text) => text.length > 0 && text !== "·" && text !== "•");
+      .filter((text, index, all) => text.length > 0 && text !== "·" && text !== "•" && all.indexOf(text) === index);
     bump(sponsoredHits, "specs:.OCkIVb span", specs.length > 0);
 
     const card = unit.querySelector<HTMLAnchorElement>("a.plantl.clickable-card");
@@ -236,7 +293,18 @@ export function extractGrid(): GridExtraction {
   }
 
   // ---- browse grid ------------------------------------------------------
-  const browseHits: SelectorHits = {};
+  const browseHits = seed([
+    "summary:.njFjte",
+    "title:.gkQHve",
+    "price:.lmQWe",
+    "price:aria Current price",
+    "merchant:.WJMUdc",
+    "more_merchants:.Ludoze",
+    "delivery:.ybnj7e",
+    "returns:.l9Ycjb",
+    "rating:.yi40Hd",
+    "rating_count:.RDApEe",
+  ]);
   let browseRows = Array.from(
     document.querySelectorAll<HTMLElement>("product-viewer-group ul product-viewer-entrypoint"),
   );
