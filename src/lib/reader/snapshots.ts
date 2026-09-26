@@ -2,8 +2,8 @@
  * Saved live reads in `public/snapshots/<slug>.json`.
  *
  * Captured with the Cursor browser (see the Reader notes) when the laptop's
- * network is served a challenge, and used as the fallback for any failed live
- * read — including a container with no Chromium at all. A snapshot is a
+ * network is served a challenge, and used as the fallback for a failed live
+ * read only when the slug matches the query exactly. A snapshot is a
  * `SearchResult` with `source: "snapshot"` and a `note` on how it was captured.
  */
 import { promises as fs } from "node:fs";
@@ -85,22 +85,12 @@ export async function loadSnapshot(slug: string): Promise<SearchResult | null> {
 export type SnapshotMatch = { slug: string; exact: boolean; shared: number; result: SearchResult };
 
 /**
- * Exact slug first; otherwise the snapshot whose slug shares the most words
- * with the query (at least two). Null when nothing qualifies.
+ * Exact slug only. A closest-match on shared words serves the wrong catalog
+ * (a TV query must not get the fleece or 50-inch snapshot).
  */
 export async function findSnapshot(query: string): Promise<SnapshotMatch | null> {
   const slug = slugify(query);
   const exact = await loadSnapshot(slug);
   if (exact) return { slug, exact: true, shared: words(slug).size, result: exact };
-
-  const queryWords = words(query);
-  let best: { slug: string; shared: number } | null = null;
-  for (const candidate of await listSnapshotSlugs()) {
-    let shared = 0;
-    for (const w of words(candidate)) if (queryWords.has(w)) shared += 1;
-    if (shared >= 2 && (!best || shared > best.shared)) best = { slug: candidate, shared };
-  }
-  if (!best) return null;
-  const result = await loadSnapshot(best.slug);
-  return result ? { slug: best.slug, exact: false, shared: best.shared, result } : null;
+  return null;
 }

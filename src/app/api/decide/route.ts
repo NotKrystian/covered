@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OfferSchema, ReaderErrorSchema, SearchSourceSchema, UserSettingsSchema } from "@/lib/types";
-import { FIXTURE_LISTINGS } from "@/lib/fixtures";
+import { FIXTURE_LISTINGS, isFixtureQuery } from "@/lib/fixtures";
 import { judge } from "@/lib/judge";
 import {
   applyPremium,
@@ -77,6 +77,12 @@ export async function POST(request: Request) {
   const useFixtures = body.source === "fixture" || !body.offers;
   let items;
   if (useFixtures) {
+    if (!isFixtureQuery(body.query)) {
+      return NextResponse.json(
+        { error: "Fixtures are the black fleece demo. Switch to Live grid for this search." },
+        { status: 400 },
+      );
+    }
     items = FIXTURE_LISTINGS.map(listingToItem);
     log("read_fixtures", `${items.length} listings for "${body.query}"`);
   } else {

@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_USER_SETTINGS, ReaderResponseSchema } from "@/lib/types";
-import type { Receipt, SearchResult, UserSettings } from "@/lib/types";
+import type { Offer, Receipt, SearchResult, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse } from "@/lib/decision";
 import type { Memory } from "@/lib/memory";
-import { FIXTURE_LISTINGS, FIXTURE_QUERY } from "@/lib/fixtures";
+import { FIXTURE_LISTINGS, FIXTURE_QUERY, isFixtureQuery } from "@/lib/fixtures";
 import { formatPence } from "@/lib/money";
+import { isExtensionSearchError, searchViaExtension } from "@/lib/reader/extension";
 import { SettingsStrip } from "@/components/SettingsStrip";
 import { ChatPanel, type ChatMessage, type SourceKind } from "@/components/ChatPanel";
 import { Shortlist, type ShortlistSource } from "@/components/Shortlist";
@@ -38,15 +39,16 @@ function msg(role: ChatMessage["role"], text: string, tone?: ChatMessage["tone"]
   return { id: `m${messageSeq}`, role, text, tone };
 }
 
-/** Try the Reader agent's endpoint. Returns the read (live or snapshot), or a reason to fall back. */
-async function readLiveGrid(
+/** POST offers (or just the query) to `/api/search`. Offers skip the server Playwright path. */
+async function postSearch(
   query: string,
+  offers?: Offer[],
 ): Promise<{ ok: true; result: SearchResult } | { ok: false; reason: string }> {
   try {
     const res = await fetch("/api/search", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(offers ? { query, offers } : { query }),
     });
     if (res.status === 404) return { ok: false, reason: "search endpoint not wired yet" };
     const json: unknown = await res.json();
@@ -60,6 +62,34 @@ async function readLiveGrid(
   } catch (err) {
     return { ok: false, reason: `network: ${err instanceof Error ? err.message : String(err)}` };
   }
+}
+
+function liveGridErrorLine(reason: string): string {
+  switch (reason) {
+    case "no_extension":
+      return "Install the Covered reader extension so this search runs in your Google session";
+    case "challenge":
+      return "Google challenged this tab";
+    default:
+      return `Live grid unavailable (${reason}).`;
+  }
+}
+
+/**
+ * Live grid: ask the user's extension first. On success, ingest those offers
+ * (no Playwright). If the extension is missing or challenged, try the server
+ * path (exact-slug snapshot only). Never substitute the fleece fixtures.
+ */
+async function readLiveGrid(
+  query: string,
+): Promise<{ ok: true; result: SearchResult } | { ok: false; reason: string }> {
+  const ext = await searchViaExtension(query);
+  if (!isExtensionSearchError(ext)) {
+    return postSearch(query, ext);
+  }
+  const server = await postSearch(query);
+  if (server.ok) return server;
+  return { ok: false, reason: ext.error };
 }
 
 function sourceOf(result: SearchResult): ShortlistSource {
@@ -136,7 +166,7 @@ async function decide(
 export default function Home() {
   const [query, setQuery] = useState(FIXTURE_QUERY);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [source, setSource] = useState<SourceKind>("fixture");
+  const [source, setSource] = useState<SourceKind>("live");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [result, setResult] = useState<DecideResponse | null>(null);
   const [shortlistSource, setShortlistSource] = useState<ShortlistSource | null>(null);
@@ -193,15 +223,29 @@ export default function Home() {
       push(msg("user", q));
       try {
         let read: SearchResult | undefined;
-        if (nextSource === "live") {
-          const attempt = await readLiveGrid(q);
-          if (attempt.ok) {
+        switch (nextSource) {
+          case "fixture":
+            if (!isFixtureQuery(q)) {
+              push(
+                msg("bot", "Fixtures are the black fleece demo. Switch to Live grid for this search.", "warn"),
+              );
+              return;
+            }
+            break;
+          case "live": {
+            const attempt = await readLiveGrid(q);
+            if (!attempt.ok) {
+              push(msg("bot", liveGridErrorLine(attempt.reason), "warn"));
+              return;
+            }
             read = attempt.result;
             const line = sourceLine(read);
             if (line) push(msg("bot", line, "neutral"));
-          } else {
-            push(msg("bot", `Live grid unavailable (${attempt.reason}). Using the fixtures instead.`, "warn"));
-            setSource("fixture");
+            break;
+          }
+          default: {
+            const never: never = nextSource;
+            throw new Error(`unknown source: ${String(never)}`);
           }
         }
         const data = await decide(q, settings, displayName, read);

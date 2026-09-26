@@ -124,10 +124,11 @@ export function readerDisabled(): boolean {
  * Read the Shopping grid for `query`: live first, snapshot second.
  *
  * Any failed live read (challenge, timeout, no_offers, unknown — including a
- * missing Chromium) falls back to `public/snapshots/<slug>.json`, exact slug or
- * the closest one sharing at least two words. The snapshot result carries
- * `source: "snapshot"` and `fallback_from` with the live error. Only when no
- * snapshot qualifies does the original error come back.
+ * missing Chromium) falls back to `public/snapshots/<slug>.json` only when the
+ * slug matches the query exactly. The snapshot result carries `source:
+ * "snapshot"` and `fallback_from` with the live error. A close-but-wrong
+ * snapshot is never served. Only when no exact snapshot exists does the
+ * original error come back.
  */
 export async function readGrid(query: string): Promise<ReaderResponse> {
   const trimmed = query.trim();
@@ -152,9 +153,7 @@ export async function readGrid(query: string): Promise<ReaderResponse> {
     console.log(`[reader] "${trimmed}" path=snapshot none matched (slug=${slugify(trimmed)})`);
     return { ok: false, error: liveError };
   }
-  console.log(
-    `[reader] "${trimmed}" path=snapshot ${match.exact ? "exact" : `closest (${match.shared} shared words)`} slug=${match.slug} offers=${match.result.offers.length}`,
-  );
+  console.log(`[reader] "${trimmed}" path=snapshot exact slug=${match.slug} offers=${match.result.offers.length}`);
   return {
     ok: true,
     result: { ...match.result, query: trimmed, source: "snapshot", fallback_from: liveError },

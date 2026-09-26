@@ -2,8 +2,8 @@
  * Detect the Google JS challenge / captcha / consent interstitial.
  *
  * We classify, and at most click the consent dialog once. We never attempt to
- * bypass or solve a challenge; a challenge is a typed error and the UI falls
- * back to fixtures.
+ * bypass or solve a challenge; a challenge is a typed error. The UI may try
+ * an exact-slug snapshot next; it does not substitute the fleece fixtures.
  */
 import type { Page } from "playwright";
 import { evaluateInPage } from "./browser";

@@ -11,6 +11,11 @@ export type { Listing } from "@/lib/types";
 
 export const FIXTURE_QUERY = "black fleece jacket medium";
 
+/** Fixtures are the black fleece demo only. Any other query must use Live grid. */
+export function isFixtureQuery(query: string): boolean {
+  return query.toLowerCase().includes("fleece");
+}
+
 export const FIXTURE_LISTINGS: Listing[] = [
   {
     id: "mislisting-22",
