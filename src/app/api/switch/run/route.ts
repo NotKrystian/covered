@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { OfferSchema } from "@/lib/types";
-import { peekUserId } from "@/lib/memory/identity";
+import { peekUser, unauthorizedResponse } from "@/lib/memory/identity";
 import type { OrderRecord } from "@/lib/memory";
 import { runSwitchCheck } from "@/lib/switch";
 
@@ -29,10 +29,17 @@ export async function POST(request: Request): Promise<NextResponse<RunOk | RunEr
   } catch (err) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
   }
-  const userId = await peekUserId();
-  if (!userId) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
 
-  const result = await runSwitchCheck(userId, body.order_id, body.offers, { simulated: false });
+  const result = await runSwitchCheck(user.userId, body.order_id, body.offers, { simulated: false });
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, order: result.order, found: result.found });
 }

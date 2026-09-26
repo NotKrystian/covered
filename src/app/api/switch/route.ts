@@ -6,15 +6,25 @@
  * extension's hourly poll never creates users.
  */
 import { NextResponse } from "next/server";
-import { peekUserId } from "@/lib/memory/identity";
+import { peekUser, unauthorizedResponse } from "@/lib/memory/identity";
 import { getMemory } from "@/lib/memory";
 import { switchWatches, type SwitchWatch } from "@/lib/switch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<NextResponse<{ ok: true; watches: SwitchWatch[] }>> {
-  const userId = await peekUserId();
-  if (!userId) return NextResponse.json({ ok: true, watches: [] });
-  return NextResponse.json({ ok: true, watches: switchWatches(await getMemory(userId)) });
+type WatchesOk = { ok: true; watches: SwitchWatch[] };
+type WatchesErr = { ok: false; error: string };
+
+export async function GET(request: Request): Promise<NextResponse<WatchesOk | WatchesErr>> {
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) return NextResponse.json({ ok: true, watches: [] });
+  return NextResponse.json({ ok: true, watches: switchWatches(await getMemory(user.userId)) });
 }

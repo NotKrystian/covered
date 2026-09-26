@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
@@ -117,6 +117,12 @@ function sellerLabel(d: Decision): string {
 export function Shortlist({ items, listings, decisions, chosenId, loading, source, briefBrand = "" }: Props) {
   const all = listings && listings.length > 0 ? listings : items;
   const [tab, setTab] = useState<CentreTab>("shortlist");
+  const tabResetKey = `${source?.fetched_at}|${items.length}|${all.length}`;
+  const [tabResetFor, setTabResetFor] = useState(tabResetKey);
+  if (tabResetFor !== tabResetKey) {
+    setTabResetFor(tabResetKey);
+    setTab("shortlist");
+  }
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const sortedItems = useMemo(
     () => sortListings(items, sort, decisions, briefBrand, chosenId),
@@ -126,10 +132,6 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
     () => sortListings(all, sort, decisions, briefBrand, chosenId),
     [all, sort, decisions, briefBrand, chosenId],
   );
-
-  useEffect(() => {
-    setTab("shortlist");
-  }, [source?.fetched_at, items.length, all.length]);
 
   if (items.length === 0 && all.length === 0) {
     return (

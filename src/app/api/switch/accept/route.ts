@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { peekUserId } from "@/lib/memory/identity";
+import { peekUser, unauthorizedResponse } from "@/lib/memory/identity";
 import { acceptSwitch } from "@/lib/switch";
 
 export const runtime = "nodejs";
@@ -24,10 +24,17 @@ export async function POST(request: Request): Promise<NextResponse<AcceptOk | Ac
   } catch (err) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
   }
-  const userId = await peekUserId();
-  if (!userId) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
+  let user;
+  try {
+    user = await peekUser(request);
+  } catch (err) {
+    const denied = unauthorizedResponse(err);
+    if (denied) return denied;
+    throw err;
+  }
+  if (!user) return NextResponse.json({ ok: false, error: "Not signed in" }, { status: 401 });
 
-  const result = await acceptSwitch(userId, body.order_id);
+  const result = await acceptSwitch(user.userId, body.order_id);
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   return NextResponse.json(result);
 }

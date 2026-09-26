@@ -54,16 +54,14 @@ export function AftercareChat({ orders, selectedId, onSelect }: Props) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [turns, setTurns] = useState<Turn[]>(() => (orders.length === 0 ? [emptyIntro()] : []));
+  const [introFor, setIntroFor] = useState<{ count: number; order: OrderRecord | null } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (orders.length === 0) {
-      setTurns([emptyIntro()]);
-      return;
-    }
-    if (!selected) return;
-    setTurns([readyIntro(selected)]);
-  }, [orders.length, selected]);
+  if (introFor === null || introFor.count !== orders.length || introFor.order !== selected) {
+    setIntroFor({ count: orders.length, order: selected });
+    if (orders.length === 0) setTurns([emptyIntro()]);
+    else if (selected) setTurns([readyIntro(selected)]);
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
