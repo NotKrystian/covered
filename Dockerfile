@@ -49,6 +49,7 @@ RUN useradd --system --user-group --create-home --home-dir /home/covered covered
 COPY --from=build --chown=covered:covered /app/.next/standalone ./
 COPY --from=build --chown=covered:covered /app/.next/static ./.next/static
 COPY --from=build --chown=covered:covered /app/public ./public
+COPY --from=build --chown=covered:covered /app/extension ./extension
 
 # Playwright's persistent headless profile lives under os.tmpdir(); /tmp is writable.
 USER covered

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       "./node_modules/.pnpm/playwright@*/node_modules/playwright/**/*",
       "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/**/*",
     ],
+    "/ext/covered-reader.zip": ["./extension/**/*"],
   },
 };
 
