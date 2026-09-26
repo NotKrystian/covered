@@ -1,19 +1,58 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #0b0c0e;
+  --foreground: #e6e7ea;
+  --panel: #121316;
+  --panel-raised: #17181c;
+  --line: #26282e;
+  --muted: #8b8f98;
+  /* One accent. Swap this line for Kawuc yellow (#f5c518) later. */
+  --accent: #5fd38a;
+  --accent-soft: rgba(95, 211, 138, 0.12);
+  --danger: #f0555b;
+  --danger-soft: rgba(240, 85, 91, 0.12);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.chosen-glow {
+  animation: chosen-in 600ms ease-out;
+}
+
+@keyframes chosen-in {
+  from {
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  to {
+    box-shadow: 0 0 0 1px var(--accent);
+  }
 }
