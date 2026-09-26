@@ -9,9 +9,10 @@
  *
  * The judge decides identity and seller; the pound comparison is here, in code.
  * A mislisting, a different item, or a private/overseas listing never qualifies,
- * however cheap.
+ * however cheap. The first order must itself be from a UK business: a private
+ * seller owes no cooling-off right, and an overseas one is hard to hold to it.
  */
-import type { Decision, Offer, UserSettings } from "@/lib/types";
+import type { Decision, Offer, SellerType, UserSettings } from "@/lib/types";
 import { isProtected, type ShortlistItem } from "@/lib/decision";
 import type { OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
@@ -31,9 +32,29 @@ export function switchWindowEnds(order: Pick<OrderRecord, "t">): Date {
   return new Date(new Date(order.t).getTime() + SWITCH_WINDOW_DAYS * DAY_MS);
 }
 
-/** True while the order can still be switched: not cancelled and inside the window. */
+/** Why an order bought from this seller has no 14-day switch, or null when the right applies. */
+export function coolingOffBlock(sellerType: SellerType | undefined): string | null {
+  switch (sellerType) {
+    case "uk_business":
+      return null;
+    case "private":
+      return "private seller, so there is no 14-day right to cancel";
+    case "overseas_business":
+      return "overseas seller: the 14-day right is hard to enforce from the UK, so Covered will not switch it";
+    case "unclear":
+    case undefined:
+      return "seller not confirmed as a UK business, so Covered will not switch it";
+    default: {
+      const unhandled: never = sellerType;
+      return unhandled;
+    }
+  }
+}
+
+/** True while the order can still be switched: a UK business order, not cancelled, inside the window. */
 export function isSwitchWatching(order: OrderRecord, now: Date = new Date()): boolean {
   if (order.cancelled_at || order.price_pence <= 0) return false;
+  if (coolingOffBlock(order.seller_type) !== null) return false;
   const ends = switchWindowEnds(order).getTime();
   return Number.isFinite(ends) && now.getTime() < ends;
 }

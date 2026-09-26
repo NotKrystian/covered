@@ -95,6 +95,7 @@ export async function fulfillPurchase(input: FulfillInput): Promise<FulfillOk | 
         section: receipt.section,
         aftercare: [],
         returns: chosenReturns(receipt.chosen),
+        seller_type: receipt.decision.seller_type,
       },
       event: {
         kind: "approve",

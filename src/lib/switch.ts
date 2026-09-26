@@ -25,6 +25,7 @@ import {
   type SwitchCheck,
 } from "@/lib/memory";
 import {
+  coolingOffBlock,
   evaluateSwitch,
   isSwitchWatching,
   returnPostagePence,
@@ -37,8 +38,10 @@ export type SwitchWatch = {
   /** ISO 8601: when the 14-day window closes. */
   ends_at: string;
   postage_pence: number;
-  /** False once switched away or past the window. */
+  /** False once switched away, past the window, or never eligible (see `blocked`). */
   watching: boolean;
+  /** Why this order has no switch at all (private or overseas seller), else null. */
+  blocked: string | null;
 };
 
 /** Orders still inside their window, including ones already switched away (newest first). */
@@ -51,7 +54,16 @@ export function switchWatches(memory: Memory, now: Date = new Date()): SwitchWat
       ends_at: switchWindowEnds(order).toISOString(),
       postage_pence: returnPostagePence(order),
       watching: isSwitchWatching(order, now),
+      blocked: order.cancelled_at ? null : coolingOffBlock(order.seller_type),
     }));
+}
+
+/** Why a switch cannot run on this order right now. */
+function notWatchingError(order: OrderRecord): string {
+  if (order.cancelled_at) return "Order was already switched";
+  const blocked = coolingOffBlock(order.seller_type);
+  if (blocked) return `No 14-day switch: ${blocked}`;
+  return "Order is past its 14-day window";
 }
 
 function patchOrder(memory: Memory, orderId: string, patch: (order: OrderRecord) => OrderRecord): Memory {
@@ -76,7 +88,7 @@ export async function runSwitchCheck(
   const order = current.orders.find((o) => o.id === orderId);
   if (!order) return { ok: false, status: 404, error: "Order not found" };
   if (!isSwitchWatching(order)) {
-    return { ok: false, status: 409, error: order.cancelled_at ? "Order was already switched" : "Order is past its 14-day window" };
+    return { ok: false, status: 409, error: notWatchingError(order) };
   }
 
   const parsed = offers
@@ -141,7 +153,7 @@ export async function acceptSwitch(userId: string, orderId: string): Promise<Swi
   const order = current.orders.find((o) => o.id === orderId);
   if (!order) return { ok: false, status: 404, error: "Order not found" };
   if (!isSwitchWatching(order)) {
-    return { ok: false, status: 409, error: order.cancelled_at ? "Order was already switched" : "Order is past its 14-day window" };
+    return { ok: false, status: 409, error: notWatchingError(order) };
   }
   const offer = order.switch_check?.offer;
   if (!offer) return { ok: false, status: 409, error: "No switch on offer for this order" };

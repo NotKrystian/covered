@@ -16,7 +16,14 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
-import { DecisionSchema, ListingSchema, OfferSchema, ReceiptSectionSchema, UserSettingsSchema } from "@/lib/types";
+import {
+  DecisionSchema,
+  ListingSchema,
+  OfferSchema,
+  ReceiptSectionSchema,
+  SellerTypeSchema,
+  UserSettingsSchema,
+} from "@/lib/types";
 import type { UserSettings } from "@/lib/types";
 import { BEDROCK_REGION } from "@/lib/judge/bedrock";
 
@@ -123,6 +130,8 @@ export const OrderRecordSchema = z.object({
   aftercare: z.array(AftercareEntrySchema).max(AFTERCARE_MAX).default([]),
   /** Returns text shown when it was bought. Free returns mean no postage on a switch. */
   returns: z.string().max(NOTE_MAX).nullable().optional(),
+  /** The judge's seller call at purchase. Only a UK business order has a 14-day switch. */
+  seller_type: SellerTypeSchema.optional(),
   /** Last 14-day price check (price-drop switch). */
   switch_check: SwitchCheckSchema.optional(),
   /** Set when this order was cancelled under the 14-day right to switch. */

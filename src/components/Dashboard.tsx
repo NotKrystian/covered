@@ -24,6 +24,7 @@ import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
 import { ActiveLimits, LimitEditor } from "@/components/LimitControls";
 import { SwitchWatchList } from "@/components/SwitchWatchList";
 import { fetchSwitchWatches, type SwitchWatch } from "@/lib/client/switch";
+import { coolingOffBlock } from "@/lib/switch-rule";
 import { PaySheet } from "@/components/PaySheet";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
@@ -284,6 +285,7 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   );
   const chosenId = result?.verdict.chosen_id ?? null;
   const chosenItem = chosenId ? rows.find((i) => i.id === chosenId) ?? null : null;
+  const paidSwitchBlock = coolingOffBlock(chosenId ? result?.decisions[chosenId]?.seller_type : undefined);
 
   return (
     <div className="min-h-full bg-background text-foreground">
@@ -469,7 +471,15 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                   <p className="mt-1 text-muted">{walletError} Deposit above, then Approve again.</p>
                 </div>
               )}
-              {receipt && (
+              {receipt && paidSwitchBlock && (
+                <>
+                  <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
+                  <p className="rounded-xl border border-line px-5 py-4 text-sm text-muted">
+                    No 14-day price-drop watch on this order: {paidSwitchBlock}.
+                  </p>
+                </>
+              )}
+              {receipt && !paidSwitchBlock && (
                 <>
                   <p className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm">{receipt}</p>
                   <div className="rounded-xl border border-line px-5 py-4">

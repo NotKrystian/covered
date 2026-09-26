@@ -5,6 +5,7 @@ import type { OrderRecord } from "./memory";
 import { offerToItem } from "./decision";
 import {
   RETURN_POSTAGE_PENCE,
+  coolingOffBlock,
   evaluateSwitch,
   isSwitchWatching,
   returnPostagePence,
@@ -25,6 +26,7 @@ function order(partial: Partial<OrderRecord> = {}): OrderRecord {
     section: "browse",
     aftercare: [],
     returns: "Free 14-day returns",
+    seller_type: "uk_business",
     ...partial,
   };
 }
@@ -64,6 +66,19 @@ test("the window is 14 days from purchase, and a cancelled order stops watching"
   assert.equal(isSwitchWatching(o, new Date(new Date(o.t).getTime() + 13 * DAY)), true);
   assert.equal(isSwitchWatching(o, new Date(new Date(o.t).getTime() + 15 * DAY)), false);
   assert.equal(isSwitchWatching({ ...o, cancelled_at: o.t }, new Date(o.t)), false);
+});
+
+test("only an order from a UK business has a 14-day switch", () => {
+  const o = order();
+  const inside = new Date(new Date(o.t).getTime() + DAY);
+  assert.equal(coolingOffBlock("uk_business"), null);
+  assert.equal(isSwitchWatching(o, inside), true);
+  assert.equal(isSwitchWatching({ ...o, seller_type: "private" }, inside), false);
+  assert.match(coolingOffBlock("private") ?? "", /no 14-day right/);
+  assert.equal(isSwitchWatching({ ...o, seller_type: "overseas_business" }, inside), false);
+  assert.match(coolingOffBlock("overseas_business") ?? "", /hard to enforce/);
+  assert.equal(isSwitchWatching({ ...o, seller_type: "unclear" }, inside), false);
+  assert.equal(isSwitchWatching({ ...o, seller_type: undefined }, inside), false);
 });
 
 test("free returns cost nothing to send back; otherwise the postage estimate applies", () => {

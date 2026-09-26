@@ -6,6 +6,7 @@ import type { SearchResult, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse } from "@/lib/decision";
 import { FIXTURE_LISTINGS, FIXTURE_QUERY, isFixtureQuery } from "@/lib/fixtures";
 import { formatPence } from "@/lib/money";
+import { coolingOffBlock } from "@/lib/switch-rule";
 import {
   approveChosen,
   decide,
@@ -233,6 +234,8 @@ export function DevWorkbench() {
     ?? result?.shortlist.find((i) => i.id === result.verdict.chosen_id)
     ?? null;
   const chosenRights = chosenItem ? (result?.decisions[chosenItem.id]?.rights ?? []) : [];
+  const chosenSwitchable =
+    coolingOffBlock(chosenItem ? result?.decisions[chosenItem.id]?.seller_type : undefined) === null;
 
   return (
     <div className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-background text-foreground">
@@ -260,7 +263,7 @@ export function DevWorkbench() {
           }}
           approving={approving}
           receiptLine={receiptLine}
-          watchTeaser={paid ? { switchMinimumPence: settings.switch_minimum_pence } : null}
+          watchTeaser={paid && chosenSwitchable ? { switchMinimumPence: settings.switch_minimum_pence } : null}
         />
         <main className="min-h-0 min-w-0 overflow-x-auto">
           <Shortlist
