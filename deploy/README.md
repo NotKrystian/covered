@@ -23,8 +23,8 @@ The receipts bucket `covered-hack-616532055961` is **not** created or modified
 here (Infra owns it); the role is only granted access to it. Same for the
 `covered-memory` DynamoDB table and Cloudflare DNS.
 
-Current deployment: instance `i-0be6351eb53244b66`, see `deploy/aws/status.sh`
-for the live public IP.
+Current deployment: instance `i-0be6351eb53244b66`, public IP `3.8.77.227`
+(`deploy/aws/status.sh` prints the live value).
 
 ## The three commands
 
@@ -35,7 +35,8 @@ deploy/aws/status.sh    # state, public IP, curl -sI, last 30 container log line
 ```
 
 `redeploy.sh` ships the **working tree** (tracked + untracked, gitignored files
-excluded so `.env*` never leaves the laptop). If Docker is running locally it
+excluded so `.env*` never leaves the laptop); `DEPLOY_REF=HEAD deploy/aws/redeploy.sh`
+ships a committed ref instead. If Docker is running locally it
 builds with `docker buildx build --platform linux/arm64 --push`; if not (the
 default on this Mac, which has no Docker) it tars the source, uploads it to the
 deploy bucket and builds natively on the Graviton box via SSM, then pushes to
@@ -58,7 +59,8 @@ deploy/aws/redeploy.sh
 `Dockerfile` (multi-stage, arm64):
 
 - build: `node:22-bookworm-slim`, corepack `pnpm@10.11.0`, `pnpm install --frozen-lockfile`, `pnpm build` with `output: "standalone"` from `next.config.ts`.
-- runtime: `mcr.microsoft.com/playwright:v1.63.0-noble` (matches `playwright@1.63.0` in `package.json`, so Chromium and its libraries are present). Copies `.next/standalone`, `.next/static`, `public`; runs `node server.js` as `pwuser` on `:3000`, mapped to `:80` on the host with `--shm-size=1g` for Chromium.
+- runtime: `mcr.microsoft.com/playwright:v1.63.0-noble` (matches `playwright@1.63.0` in `package.json`, so Chromium and its libraries are present). Copies `.next/standalone`, `.next/static`, `public`; runs `node server.js` as the non-root `covered` user on `:3000`, mapped to `:80` on the host with `--shm-size=1g` for Chromium. `--build-arg RUNTIME_IMAGE=node:22-slim` gives a browser-less image for `COVERED_READER_DISABLED=1` targets.
+- `next.config.ts` also sets `outputFileTracingIncludes` for `playwright`/`playwright-core`: Next's tracer misses `browsers.json` and the reader crashes in the standalone bundle without it.
 
 On the box: `/opt/covered/run.sh` (pull + restart), `/opt/covered/env`,
 `/opt/covered/build.log` (last remote build), `/opt/covered/src` (last shipped tree).
@@ -76,8 +78,12 @@ curl -sI "http://$IP/"                                              # 200 from N
 curl -s -X POST "http://$IP/api/decide" -H 'content-type: application/json' \
   -d '{"query":"black fleece jacket medium","source":"fixture"}'    # JSON verdict
 curl -s -X POST "http://$IP/api/search" -H 'content-type: application/json' \
-  -d '{"query":"black fleece jacket medium"}'                       # from an AWS IP Google usually answers with a challenge → typed `challenge` error
+  -d '{"query":"black fleece jacket medium"}'                       # from an AWS IP Google serves /sorry/ → typed `challenge` live error → snapshot fallback
 ```
+
+Verified 2026-09-26: `/` 200; `/api/decide` returns a verdict with `mode: "bedrock"`
+(~13 s); `/api/search` returns 200 with `source: "snapshot"` after Chromium hit
+Google's interstitial (visible in `docker logs`).
 
 ## Cost (eu-west-2, on-demand, USD)
 
@@ -114,3 +120,6 @@ bucket, the `covered-memory` table, or Cloudflare.
   than the older placeholder in the brief.
 - DynamoDB permissions were added for the `src/lib/memory` module that landed
   while this was being built.
+- The Dockerfile takes `RUNTIME_IMAGE` as a build arg so the Infra agent's
+  browser-less App Runner build can share it instead of maintaining a second
+  Dockerfile.
