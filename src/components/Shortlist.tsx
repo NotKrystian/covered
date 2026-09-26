@@ -119,12 +119,12 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
   const [tab, setTab] = useState<CentreTab>("shortlist");
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const sortedItems = useMemo(
-    () => sortListings(items, sort, decisions, briefBrand),
-    [items, sort, decisions, briefBrand],
+    () => sortListings(items, sort, decisions, briefBrand, chosenId),
+    [items, sort, decisions, briefBrand, chosenId],
   );
   const sortedAll = useMemo(
-    () => sortListings(all, sort, decisions, briefBrand),
-    [all, sort, decisions, briefBrand],
+    () => sortListings(all, sort, decisions, briefBrand, chosenId),
+    [all, sort, decisions, briefBrand, chosenId],
   );
 
   useEffect(() => {
@@ -198,6 +198,11 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <ListingTitle item={item} className={`truncate font-medium ${strike}`} />
+                    {state === "chosen" && (
+                      <span className="rounded border border-accent px-1 text-[10px] uppercase tracking-wide text-accent">
+                        Recommended
+                      </span>
+                    )}
                     {item.section === "sponsored" && (
                       <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
                         Ad

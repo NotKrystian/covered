@@ -4,7 +4,7 @@
 import { DEFAULT_USER_SETTINGS, ReaderResponseSchema } from "@/lib/types";
 import type { Offer, Receipt, SearchResult, UserSettings } from "@/lib/types";
 import type { DecideResponse } from "@/lib/decision";
-import type { Memory } from "@/lib/memory";
+import type { Limit, Memory } from "@/lib/memory";
 import { isExtensionSearchError, searchViaExtension } from "@/lib/reader/extension";
 
 export type ReceiptBody = Omit<Receipt, "id" | "created_at">;
@@ -188,5 +188,52 @@ export async function depositWallet(amountPence: number): Promise<{ ok: true; ba
     return { ok: true, balance_pence: json.balance_pence };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Deposit failed" };
+  }
+}
+
+export type LimitsResult = { ok: true; limits: Limit[] } | { ok: false; error: string };
+
+export async function fetchLimits(): Promise<Limit[]> {
+  try {
+    const res = await fetch("/api/limits");
+    const json = (await res.json().catch(() => null)) as { ok?: boolean; limits?: Limit[] } | null;
+    if (!res.ok || !json?.ok || !Array.isArray(json.limits)) return [];
+    return json.limits;
+  } catch {
+    return [];
+  }
+}
+
+export async function createLimit(query: string, maxPricePence: number): Promise<LimitsResult> {
+  try {
+    const res = await fetch("/api/limits", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, max_price_pence: maxPricePence }),
+    });
+    const json = (await res.json().catch(() => null)) as
+      | { ok?: boolean; limits?: Limit[]; error?: string }
+      | null;
+    if (!res.ok || !json?.ok || !Array.isArray(json.limits)) {
+      return { ok: false, error: json?.error ?? `Could not save the limit (${res.status})` };
+    }
+    return { ok: true, limits: json.limits };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not save the limit" };
+  }
+}
+
+export async function removeLimit(id: string): Promise<LimitsResult> {
+  try {
+    const res = await fetch(`/api/limits?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const json = (await res.json().catch(() => null)) as
+      | { ok?: boolean; limits?: Limit[]; error?: string }
+      | null;
+    if (!res.ok || !json?.ok || !Array.isArray(json.limits)) {
+      return { ok: false, error: json?.error ?? `Could not remove the limit (${res.status})` };
+    }
+    return { ok: true, limits: json.limits };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not remove the limit" };
   }
 }

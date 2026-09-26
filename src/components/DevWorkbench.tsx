@@ -127,6 +127,7 @@ export function DevWorkbench() {
         orders: [],
         balance_pence: 0,
         deposits: [],
+        limits: [],
         onboarded: false,
         updated_at: new Date().toISOString(),
       },

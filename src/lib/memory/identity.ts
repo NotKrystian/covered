@@ -11,6 +11,14 @@ export const ONBOARDED_COOKIE = "covered_onboarded";
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Read the cookie without minting. Used by background limit polls so they never create users. */
+export async function peekUserId(): Promise<string | null> {
+  const store = await cookies();
+  const existing = store.get(UID_COOKIE)?.value;
+  if (existing && UUID_RE.test(existing)) return existing;
+  return null;
+}
+
 /**
  * Return the caller's anonymous user id, minting and setting the cookie when absent.
  * Must be called from a Route Handler or Server Action (it may write a cookie).

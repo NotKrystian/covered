@@ -6,6 +6,10 @@
  * only; Firefox has no such thing). We open an inactive Shopping tab in this
  * browser session, wait for the content script, close the tab, and reply with
  * offers or `{ error }`. We do not focus the tab, solve captchas, or attach a debugger.
+ *
+ * Limit buys: alarm "covered-limits" re-reads each watching query and POSTs
+ * offers to /api/limits/run. Demo cadence is DEMO_CHECKS_PER_DAY (24 → every
+ * 60 minutes). Production would be once a day: periodInMinutes: 1440.
  */
 
 // Firefox exposes promise-based `browser`; Chrome MV3's `chrome` also returns promises.
@@ -15,6 +19,16 @@ const SEARCH_TIMEOUT_MS = 20_000;
 const QUERY_MAX = 200;
 /** Pages allowed to ask for a search. Mirrors the bridge content script's matches. */
 const COVERED_ORIGINS = ["https://covered.kawuc.uk", "http://localhost:3000", "http://127.0.0.1:3000"];
+const PRODUCTION_ORIGIN = "https://covered.kawuc.uk";
+/** Dev host — same cookie jar as `pnpm dev`. */
+const DEV_ORIGIN = "http://localhost:3000";
+/**
+ * Demo: 24 checks a day. Production would be 1 (periodInMinutes: 1440).
+ * DEMO_CHECKS_PER_DAY is what ships.
+ */
+const DEMO_CHECKS_PER_DAY = 24;
+const ALARM_PERIOD_MINUTES = 1440 / DEMO_CHECKS_PER_DAY;
+const LIMITS_ALARM = "covered-limits";
 
 function gridUrl(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}&udm=28&hl=en&gl=uk`;
@@ -194,4 +208,67 @@ api.runtime.onMessageExternal?.addListener((message, _sender, sendResponse) => {
     return undefined;
   }
   return handleSearch(message, sendResponse);
+});
+
+function ensureLimitsAlarm() {
+  if (!api.alarms) return;
+  Promise.resolve(api.alarms.get(LIMITS_ALARM)).then((existing) => {
+    if (!existing) {
+      api.alarms.create(LIMITS_ALARM, { periodInMinutes: ALARM_PERIOD_MINUTES });
+    }
+  }).catch(() => {
+    api.alarms.create(LIMITS_ALARM, { periodInMinutes: ALARM_PERIOD_MINUTES });
+  });
+}
+
+async function limitsFrom(origin) {
+  const res = await fetch(`${origin}/api/limits`, { credentials: "include" });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json && json.ok && Array.isArray(json.limits) ? json.limits : [];
+}
+
+async function checkOneLimit(origin, limit) {
+  const result = await runSearch(limit.query);
+  if (result && result.error === "challenge") return;
+  if (!result || result.error || !Array.isArray(result.offers)) return;
+  await fetch(`${origin}/api/limits/run`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: limit.id, offers: result.offers }),
+  });
+}
+
+let limitsBusy = false;
+
+async function runLimitChecks() {
+  if (limitsBusy) return;
+  limitsBusy = true;
+  try {
+    for (const origin of [PRODUCTION_ORIGIN, DEV_ORIGIN]) {
+      let watching = [];
+      try {
+        watching = (await limitsFrom(origin)).filter((limit) => limit && limit.status === "watching");
+      } catch {
+        continue;
+      }
+      for (const limit of watching) {
+        try {
+          await checkOneLimit(origin, limit);
+        } catch {
+          // One query failed; keep going so the rest still get a chance.
+        }
+      }
+    }
+  } finally {
+    limitsBusy = false;
+  }
+}
+
+ensureLimitsAlarm();
+api.runtime.onInstalled?.addListener(ensureLimitsAlarm);
+api.runtime.onStartup?.addListener(ensureLimitsAlarm);
+api.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === LIMITS_ALARM) void runLimitChecks();
 });

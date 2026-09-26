@@ -9,12 +9,10 @@
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AWS_REGION, S3_BUCKET, putReceipt, receiptKey } from "@/lib/s3";
-import { ReceiptSchema, type Listing, type Offer, type Receipt } from "@/lib/types";
-import { formatPence, parsePricePence } from "@/lib/money";
+import { AWS_REGION, S3_BUCKET, receiptKey } from "@/lib/s3";
+import { ReceiptSchema, type Receipt } from "@/lib/types";
 import { getUserId } from "@/lib/memory/identity";
-import { debitAndRecordPurchase, getMemory, publicMemory, saveMemory } from "@/lib/memory";
-import { rewriteSummary } from "@/lib/memory/summary";
+import { fulfillPurchase } from "@/lib/fulfill";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,25 +32,6 @@ const ApproveRequestSchema = ReceiptSchema.omit({
 
 type ApproveOk = { ok: true; id: string; key: string; balance_pence: number };
 type ApproveErr = { ok: false; error: string };
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
-
-function chosenTitle(chosen: Offer | Listing): string {
-  return chosen.title;
-}
-
-function chosenMerchant(chosen: Offer | Listing): string {
-  return chosen.merchant;
-}
-
-function chosenPricePence(chosen: Offer | Listing): number | null {
-  if ("price_pence" in chosen && typeof chosen.price_pence === "number") return chosen.price_pence;
-  if ("price" in chosen && typeof chosen.price === "string") return parsePricePence(chosen.price);
-  return null;
-}
 
 export async function POST(
   request: Request,
@@ -75,69 +54,20 @@ export async function POST(
     );
   }
 
-  const pricePence = chosenPricePence(parsed.data.chosen);
-  if (pricePence === null || pricePence < 0) {
-    return NextResponse.json({ ok: false, error: "Chosen listing has no price" }, { status: 400 });
-  }
-
   const { userId } = await getUserId();
-  const wallet = await getMemory(userId);
-  if (wallet.balance_pence < pricePence) {
-    return NextResponse.json(
-      { ok: false, error: `Wallet is short by ${formatPence(pricePence - wallet.balance_pence)}` },
-      { status: 402 },
-    );
+  const done = await fulfillPurchase({
+    userId,
+    query: parsed.data.query,
+    chosen: parsed.data.chosen,
+    decision: parsed.data.decision,
+    section: parsed.data.section,
+    protection_premium_pence: parsed.data.protection_premium_pence,
+    chosen_id: parsed.data.chosen_id,
+  });
+  if (!done.ok) {
+    return NextResponse.json({ ok: false, error: done.error }, { status: done.status });
   }
-
-  const { chosen_id: chosenId, ...receiptFields } = parsed.data;
-  const receipt: Receipt = {
-    id: crypto.randomUUID(),
-    created_at: new Date().toISOString(),
-    ...receiptFields,
-  };
-  const listingId = chosenId ?? ("id" in receipt.chosen ? receipt.chosen.id : undefined);
-
-  try {
-    const { key } = await putReceipt(receipt);
-    const paid = await debitAndRecordPurchase(userId, {
-      pricePence,
-      order: {
-        id: receipt.id,
-        t: receipt.created_at,
-        query: receipt.query,
-        title: chosenTitle(receipt.chosen),
-        merchant: chosenMerchant(receipt.chosen),
-        price_pence: pricePence,
-        section: receipt.section,
-      },
-      event: {
-        kind: "approve",
-        query: receipt.query,
-        chosen_id: listingId,
-        premium_pence: receipt.protection_premium_pence,
-        note: `approved ${listingId ?? chosenMerchant(receipt.chosen)} (${chosenMerchant(receipt.chosen)} ${formatPence(pricePence)})`,
-      },
-    });
-    if (!paid.ok) {
-      return NextResponse.json(
-        { ok: false, error: `Wallet is short by ${formatPence(paid.short_by_pence)}` },
-        { status: 402 },
-      );
-    }
-    const rewritten = await rewriteSummary(paid.memory);
-    const saved = await saveMemory(userId, { ...paid.memory, summary: rewritten.summary });
-    return NextResponse.json({
-      ok: true,
-      id: receipt.id,
-      key,
-      balance_pence: publicMemory(saved).balance_pence,
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: `S3 write failed: ${errorMessage(err)}` },
-      { status: 502 },
-    );
-  }
+  return NextResponse.json(done);
 }
 
 const IdSchema = z.string().uuid();
@@ -177,7 +107,7 @@ export async function GET(
       );
     }
     return NextResponse.json(
-      { ok: false, error: `S3 read failed: ${errorMessage(err)}` },
+      { ok: false, error: `S3 read failed: ${err instanceof Error ? err.message : String(err)}` },
       { status: 502 },
     );
   }

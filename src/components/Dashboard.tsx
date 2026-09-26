@@ -1,21 +1,26 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Decision, UserSettings } from "@/lib/types";
 import { isProtected, type DecideResponse, type ShortlistItem } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import type { Limit } from "@/lib/memory";
 import { DEFAULT_SORT, sortListings, type SortKey } from "@/lib/sort-listings";
 import {
   approveChosen,
+  createLimit,
   decide,
+  fetchLimits,
   liveGridErrorKind,
   liveGridErrorLine,
   patchMemory,
   readLiveGrid,
+  removeLimit,
   type MemoryState,
 } from "@/lib/client/shop";
 import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
+import { ActiveLimits, LimitEditor } from "@/components/LimitControls";
 import { PaySheet } from "@/components/PaySheet";
 import { PoundField } from "@/components/PoundField";
 import { SortControl } from "@/components/SortControl";
@@ -51,12 +56,14 @@ function OfferRow({
   chosen,
   approving,
   onApprove,
+  onLimit,
 }: {
   item: ShortlistItem;
   decision?: Decision;
   chosen: boolean;
   approving: boolean;
   onApprove: () => void;
+  onLimit: () => void;
 }) {
   const rejected = Boolean(decision && (decision.mislisting || !decision.same_item));
   const reason = decision ? (decision.mislisting && decision.photo_reason ? decision.photo_reason : decision.reason) : null;
@@ -76,6 +83,11 @@ function OfferRow({
                   item={item}
                   className={`font-medium ${rejected ? "line-through decoration-danger/70" : ""}`}
                 />
+                {chosen && (
+                  <span className="rounded border border-accent px-1.5 text-[10px] uppercase tracking-wide text-accent">
+                    Recommended
+                  </span>
+                )}
                 {item.section === "sponsored" && (
                   <span className="rounded border border-line px-1.5 text-[10px] uppercase tracking-wide text-muted">Ad</span>
                 )}
@@ -95,16 +107,25 @@ function OfferRow({
               {reason}
             </p>
           )}
-          {chosen && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {chosen && (
+              <button
+                type="button"
+                onClick={onApprove}
+                disabled={approving}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
+              >
+                {approving ? "Approving…" : "Approve"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={onApprove}
-              disabled={approving}
-              className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
+              onClick={onLimit}
+              className="rounded-md border border-line px-3 py-2 text-sm text-muted hover:text-foreground"
             >
-              {approving ? "Approving…" : "Approve"}
+              Limit
             </button>
-          )}
+          </div>
         </div>
       </div>
     </li>
@@ -127,6 +148,32 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   const [payOpen, setPayOpen] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [limits, setLimits] = useState<Limit[]>(memory.limits ?? []);
+  const [limitDraft, setLimitDraft] = useState<{ query: string; defaultPence: number | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLimits().then((next) => {
+      if (!cancelled) setLimits(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveLimit = useCallback(async (pence: number, forQuery: string) => {
+    const q = forQuery.trim();
+    if (!q) throw new Error("Type a product first.");
+    const done = await createLimit(q, pence);
+    if (!done.ok) throw new Error(done.error);
+    setLimits(done.limits);
+    setLimitDraft(null);
+  }, []);
+
+  const cancelLimit = useCallback(async (id: string) => {
+    const done = await removeLimit(id);
+    if (done.ok) setLimits(done.limits);
+  }, []);
 
   const savePrefs = useCallback(async () => {
     const next = await patchMemory({ settings });
@@ -191,7 +238,14 @@ export function Dashboard({ memoryState, onMemory }: Props) {
   }, [result, query, settings]);
 
   const rows = useMemo(
-    () => sortListings(result?.listings ?? [], sort, result?.decisions ?? {}, result?.brief_brand ?? ""),
+    () =>
+      sortListings(
+        result?.listings ?? [],
+        sort,
+        result?.decisions ?? {},
+        result?.brief_brand ?? "",
+        result?.verdict.chosen_id ?? null,
+      ),
     [result, sort],
   );
   const chosenId = result?.verdict.chosen_id ?? null;
@@ -283,7 +337,25 @@ export function Dashboard({ memoryState, onMemory }: Props) {
           >
             {running ? "Searching…" : "Search"}
           </button>
+          <button
+            type="button"
+            onClick={() => setLimitDraft({ query: query.trim(), defaultPence: null })}
+            className="rounded-lg border border-line px-5 py-3 text-sm text-muted hover:text-foreground"
+          >
+            Limit
+          </button>
         </form>
+        {limitDraft && (
+          <div className="mt-3">
+            <LimitEditor
+              query={limitDraft.query}
+              defaultPence={limitDraft.defaultPence}
+              onConfirm={(pence) => saveLimit(pence, limitDraft.query)}
+              onCancel={() => setLimitDraft(null)}
+            />
+          </div>
+        )}
+        <ActiveLimits limits={limits} onRemove={(id) => void cancelLimit(id)} />
 
         <div className="mt-10">
           {running && (
@@ -365,6 +437,12 @@ export function Dashboard({ memoryState, onMemory }: Props) {
                           setPayError(null);
                           setPayOpen(true);
                         }}
+                        onLimit={() =>
+                          setLimitDraft({
+                            query: query.trim(),
+                            defaultPence: item.price_pence,
+                          })
+                        }
                       />
                     ))}
                   </ul>

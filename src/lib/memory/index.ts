@@ -36,6 +36,8 @@ export const MERCHANT_MAX = 120;
 export const WALLET_DEPOSIT_MAX_PENCE = 50_000;
 /** Wallet balance cannot exceed £2,000. */
 export const WALLET_BALANCE_MAX_PENCE = 200_000;
+/** Watch-and-buy limits on the memory item. */
+export const LIMITS_MAX = 10;
 
 export const MemoryEventKindSchema = z.enum(["decision", "approve", "override"]);
 export type MemoryEventKind = z.infer<typeof MemoryEventKindSchema>;
@@ -72,6 +74,21 @@ export const DepositSchema = z.object({
 });
 export type Deposit = z.infer<typeof DepositSchema>;
 
+export const LimitStatusSchema = z.enum(["watching", "filled", "paused"]);
+export type LimitStatus = z.infer<typeof LimitStatusSchema>;
+
+export const LimitSchema = z.object({
+  id: z.string().max(80),
+  query: z.string().max(QUERY_MAX),
+  max_price_pence: z.number().int().nonnegative(),
+  status: LimitStatusSchema,
+  created_at: z.string(),
+  last_checked_at: z.string(),
+  last_result: z.string().max(NOTE_MAX),
+  filled_order_id: z.string().max(80).optional(),
+});
+export type Limit = z.infer<typeof LimitSchema>;
+
 export const MemorySchema = z.object({
   user_id: z.string().min(1).max(64),
   /** Optional name the user typed into the settings strip. */
@@ -87,6 +104,8 @@ export const MemorySchema = z.object({
   balance_pence: z.number().int().nonnegative().default(0),
   /** Newest last. Capped at DEPOSITS_MAX. */
   deposits: z.array(DepositSchema).max(DEPOSITS_MAX).default([]),
+  /** Watch-and-buy limits. Capped at LIMITS_MAX. */
+  limits: z.array(LimitSchema).max(LIMITS_MAX).default([]),
   /** True after the first-visit onboarding flow finishes. */
   onboarded: z.boolean().default(false),
   /** ISO 8601 timestamp. */
@@ -103,6 +122,7 @@ export function emptyMemory(userId: string): Memory {
     orders: [],
     balance_pence: 0,
     deposits: [],
+    limits: [],
     onboarded: false,
     updated_at: new Date().toISOString(),
   };
@@ -187,6 +207,11 @@ export function capMemory(memory: Memory): Memory {
       merchant: o.merchant.slice(0, MERCHANT_MAX),
     })),
     deposits: memory.deposits.slice(-DEPOSITS_MAX),
+    limits: (memory.limits ?? []).slice(-LIMITS_MAX).map((limit) => ({
+      ...limit,
+      query: limit.query.slice(0, QUERY_MAX),
+      last_result: limit.last_result.slice(0, NOTE_MAX),
+    })),
     balance_pence: Math.max(0, Math.min(WALLET_BALANCE_MAX_PENCE, Math.round(memory.balance_pence))),
   });
 }

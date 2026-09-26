@@ -130,11 +130,25 @@ function comparePriceDesc(a: ShortlistItem, b: ShortlistItem): number {
   return (b.price_pence as number) - (a.price_pence as number);
 }
 
+/**
+ * After any sort, the verdict's chosen row sits first. The rest keep the
+ * selected order. No chosen id → no pin. Same row, not a duplicate banner.
+ */
+export function pinChosen(items: ShortlistItem[], chosenId: string | null | undefined): ShortlistItem[] {
+  if (!chosenId) return items;
+  const idx = items.findIndex((item) => item.id === chosenId);
+  if (idx <= 0) return items;
+  const next = items.slice();
+  const [chosen] = next.splice(idx, 1);
+  return [chosen, ...next];
+}
+
 export function sortListings(
   items: ShortlistItem[],
   key: SortKey,
   decisions: Record<string, Decision> = {},
   briefBrand = "",
+  chosenId: string | null = null,
 ): ShortlistItem[] {
   const copy = items.slice();
   copy.sort((a, b) => {
@@ -170,5 +184,5 @@ export function sortListings(
       }
     }
   });
-  return copy;
+  return pinChosen(copy, chosenId);
 }

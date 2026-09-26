@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Covered reader",
-  "version": "1.2.0",
-  "description": "Reads the Google Shopping grid from your own signed-in browser session.",
+  "version": "1.3.0",
+  "description": "Reads the Google Shopping grid from your own signed-in browser session. Demo: checks watch-and-buy limits 24 times a day (every 60 minutes). Production would be once a day (periodInMinutes: 1440).",
   "browser_specific_settings": {
     "gecko": {
       "id": "covered-reader@kawuc.uk",
@@ -55,5 +55,5 @@
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*"
   ],
-  "permissions": ["tabs"]
+  "permissions": ["tabs", "alarms"]
 }

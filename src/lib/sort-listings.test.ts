@@ -6,6 +6,7 @@ import {
   listingBrand,
   protectionRank,
   shippingPence,
+  pinChosen,
   sortListings,
 } from "./sort-listings";
 
@@ -161,5 +162,28 @@ test("sortListings: shipping unknown last, protections strongest first", () => {
   assert.deepEqual(
     sortListings([unknown, paid, collect, free], "protections", decisions).map((i) => i.id),
     ["free", "collect", "paid", "unk"],
+  );
+});
+
+test("sortListings pins chosen_id first; the rest keep the sort", () => {
+  const cheap = item({ id: "cheap", title: "A", price_pence: 1000 });
+  const mid = item({ id: "mid", title: "B", price_pence: 2000 });
+  const dear = item({ id: "dear", title: "C", price_pence: 3000 });
+
+  assert.deepEqual(
+    sortListings([dear, mid, cheap], "price_asc", {}, "", "dear").map((i) => i.id),
+    ["dear", "cheap", "mid"],
+  );
+  assert.deepEqual(
+    sortListings([cheap, mid, dear], "price_desc", {}, "", "cheap").map((i) => i.id),
+    ["cheap", "dear", "mid"],
+  );
+  assert.deepEqual(
+    sortListings([dear, mid, cheap], "price_asc").map((i) => i.id),
+    ["cheap", "mid", "dear"],
+  );
+  assert.deepEqual(
+    pinChosen([cheap, mid, dear], null).map((i) => i.id),
+    ["cheap", "mid", "dear"],
   );
 });
