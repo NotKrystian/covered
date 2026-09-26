@@ -98,3 +98,20 @@ Fallback if the tunnel is down: `cloudflared tunnel --url http://localhost:3000`
 ```bash
 aws s3 ls s3://covered-hack-616532055961/receipts/
 ```
+
+### AWS (App Runner, `eu-west-2`)
+
+The app runs as a container on **AWS App Runner** in London, not on a laptop tunnel.
+
+```bash
+scripts/deploy.sh                                   # build → push → create/update service → wait → URL
+scripts/deploy.sh eu.anthropic.claude-sonnet-4-6    # same, and set BEDROCK_MODEL_ID on the service
+```
+
+- **Service** `covered`: `https://gvykkgiap5.eu-west-2.awsapprunner.com` (ARN `arn:aws:apprunner:eu-west-2:616532055961:service/covered/dfb181f38111470584d5d57c8e0e5d24`). 1 vCPU / 2 GB, port 3000, health check `GET /`, auto-deploys whenever `covered-apprunner:latest` is pushed.
+- **Image**: `Dockerfile` at the repo root (multi-stage `node:22-slim`, `next build` with `output: "standalone"`, non-root user, no Playwright browsers). ECR repo `616532055961.dkr.ecr.eu-west-2.amazonaws.com/covered-apprunner`, tagged with the short git SHA and `latest`. There is no Docker on this Mac, so `deploy.sh` zips the working tree to `s3://covered-hack-616532055961/build/` and the CodeBuild project `covered-image` runs the `docker build --platform linux/amd64` + push (`infra/aws/codebuild/buildspec.yml`). With a local Docker daemon it builds with `docker buildx` instead. `SKIP_BUILD=1 scripts/deploy.sh` only updates the service config.
+- **Env on the service**: `AWS_REGION=eu-west-2`, `S3_BUCKET=covered-hack-616532055961`, `COVERED_READER_DISABLED=1` (Google blocks datacenter IPs; the reader goes straight to the snapshot fallback), `BEDROCK_REGION=eu-west-2`, `BEDROCK_MODEL_ID` (empty = the judge's default), `MEMORY_TABLE` / `COVERED_MEMORY_TABLE=covered-memory`.
+- **Set the model**: `scripts/deploy.sh <model-id>` or `BEDROCK_MODEL_ID=<model-id> SKIP_BUILD=1 scripts/deploy.sh`. The script calls `update-service` with the full env and waits for the rollout. No secrets: the container authenticates with its instance role.
+- **IAM** (`infra/aws/iam/`, created by `infra/aws/setup.sh`): `covered-apprunner-ecr-access` (App Runner pulls from ECR, managed `AWSAppRunnerServicePolicyForECRAccess`), `covered-apprunner-instance` (S3 Put/Get/List on the receipts bucket, DynamoDB Get/Put/Update/Delete/Query on `covered-memory`, `bedrock:InvokeModel*` on `*` because inference profiles need the wildcard), `covered-codebuild` (read `build/*` in the bucket, push to the ECR repo, CloudWatch logs).
+- **Custom domain** `covered.kawuc.uk`: associated with the service (www disabled), status `pending_certificate_dns_validation` until the CNAMEs exist in Cloudflare. `scripts/dns-apply.sh` upserts them (DNS-only, not proxied) using `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID` from `~/.config/covered/cloudflare.env`; the current token cannot edit DNS, so the exact records are in `infra/aws/DNS.md` for manual entry. `scripts/dns-apply.sh --print` shows them and the current status.
+- **Cost** (looked up on the App Runner pricing page, 2026-09-26): $0.064 per vCPU-hour + $0.007 per GB-hour, so 1 vCPU / 2 GB is about **$0.078/hour while serving requests** (≈ $1.87/day, ≈ $56/month if busy 24/7) and about $0.014/hour when idle (provisioned memory only). The page lists those rates for us-east-1/eu-west-1; London is typically a few percent higher. Pause the service from the console or `aws apprunner pause-service` when not demoing. CodeBuild adds a few cents per build.

@@ -1,0 +1,20 @@
+# CodeBuild spec for the `covered-image` project: builds the Dockerfile at the
+# repo root for linux/amd64 and pushes `${IMAGE_TAG}` + `latest` to ECR.
+# Used by scripts/deploy.sh when no local Docker daemon is available.
+# Env vars ECR_URI and IMAGE_TAG are passed per build by the script.
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to ${ECR_URI%%/*}"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "${ECR_URI%%/*}"
+  build:
+    commands:
+      - echo "Building ${ECR_URI}:${IMAGE_TAG} (linux/amd64)"
+      - DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t "${ECR_URI}:${IMAGE_TAG}" -t "${ECR_URI}:latest" .
+  post_build:
+    commands:
+      - docker push "${ECR_URI}:${IMAGE_TAG}"
+      - docker push "${ECR_URI}:latest"
+      - echo "Pushed ${ECR_URI}:${IMAGE_TAG}"
