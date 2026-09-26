@@ -41,10 +41,9 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     NEXT_TELEMETRY_DISABLED=1
 
-# Non-root. uid 1001 is free in both the Playwright image (pwuser=1000) and node:22-slim (node=1000).
-# /ms-playwright is world-readable in the Playwright image, so this user can launch Chromium.
-RUN groupadd --system --gid 1001 covered \
- && useradd --system --uid 1001 --gid covered --create-home --home-dir /home/covered covered
+# Non-root. No fixed uid/gid: the Playwright image already uses 1000/1001.
+# /ms-playwright is world-readable there, so this user can launch Chromium.
+RUN useradd --system --user-group --create-home --home-dir /home/covered covered
 
 # server.js + traced node_modules, then the assets server.js does not copy itself.
 COPY --from=build --chown=covered:covered /app/.next/standalone ./
