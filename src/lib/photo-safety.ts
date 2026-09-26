@@ -10,12 +10,14 @@
  * - Bytes sent to the model must sniff as a raster, whatever the label claimed.
  */
 
-/** Largest data URL kept (a 360 px jpeg at quality 0.6 is ~20–60 KB of base64). */
+/** Largest data URL kept (a 480 px jpeg squeezed to ~40 KB is well under this). */
 export const IMAGE_DATA_URL_MAX = 500_000;
 const IMAGE_URL_MAX = 2048;
 
 const DATA_URL_RE = /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/;
 const GOOGLE_IMAGE_HOST_RE = /^[a-z0-9-]+\.(?:gstatic\.com|googleusercontent\.com|ggpht\.com)$/;
+/** Hosts the same-origin `/api/image` proxy will fetch. Stricter than `isGoogleImageUrl`. */
+const PROXY_IMAGE_HOST_RE = /^[a-z0-9-]+\.(?:gstatic\.com|googleusercontent\.com)$/;
 
 /** The data URL when it is a bounded base64 raster image, else null. */
 export function safeImageDataUrl(value: unknown): string | null {
@@ -40,6 +42,12 @@ export function safeImageUrl(value: unknown): string | null {
 export function isGoogleImageUrl(value: unknown): boolean {
   const safe = safeImageUrl(value);
   return safe !== null && GOOGLE_IMAGE_HOST_RE.test(new URL(safe).hostname);
+}
+
+/** True only for the hosts `/api/image` is allowed to proxy (`*.gstatic.com`, `*.googleusercontent.com`). */
+export function isProxyImageUrl(value: unknown): boolean {
+  const safe = safeImageUrl(value);
+  return safe !== null && PROXY_IMAGE_HOST_RE.test(new URL(safe).hostname);
 }
 
 export type ImageFormatName = "jpeg" | "png" | "gif" | "webp";

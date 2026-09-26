@@ -9,7 +9,8 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { clearUserId, getUserId } from "@/lib/memory/identity";
+import { UserSettingsSchema } from "@/lib/types";
+import { clearUserId, getUserId, setOnboardedCookie } from "@/lib/memory/identity";
 import {
   DISPLAY_NAME_MAX,
   NOTE_MAX,
@@ -93,4 +94,31 @@ export async function DELETE(): Promise<NextResponse<{ ok: true; store: "dynamod
   await deleteMemory(userId);
   await clearUserId();
   return NextResponse.json({ ok: true, store: memoryStore().store });
+}
+
+const PatchSchema = z.object({
+  display_name: z.string().max(DISPLAY_NAME_MAX).optional(),
+  settings: UserSettingsSchema.partial().optional(),
+  onboarded: z.boolean().optional(),
+});
+
+/** Save onboarding / preferences. Does not record a purchase. */
+export async function PATCH(request: Request): Promise<NextResponse<MemoryResponse | { ok: false; error: string }>> {
+  let body: z.infer<typeof PatchSchema>;
+  try {
+    body = PatchSchema.parse(await request.json());
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "invalid body" }, { status: 400 });
+  }
+
+  const { userId } = await getUserId();
+  const current = await getMemory(userId);
+  const next = await saveMemory(userId, {
+    ...current,
+    display_name: body.display_name !== undefined ? body.display_name.trim() || undefined : current.display_name,
+    settings: body.settings ? UserSettingsSchema.parse({ ...current.settings, ...body.settings }) : current.settings,
+    onboarded: body.onboarded ?? current.onboarded,
+  });
+  if (next.onboarded) await setOnboardedCookie();
+  return NextResponse.json({ ok: true, memory: publicMemory(next), store: memoryStore().store });
 }

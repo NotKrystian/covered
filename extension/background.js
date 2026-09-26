@@ -88,9 +88,9 @@ function runSearch(query) {
   });
 }
 
-const PHOTO_CAP = 12;
-const PHOTO_MAX_W = 360;
-const PHOTO_QUALITY = 0.6;
+const PHOTO_MAX_W = 480;
+const PHOTO_MAX_BYTES = 40 * 1024;
+const PHOTO_QUALITIES = [0.7, 0.55, 0.4, 0.28, 0.18];
 
 /** Only Google's image CDNs (what the grid draws from, and what host_permissions allow), https only. */
 function isGoogleImageUrl(value) {
@@ -103,6 +103,12 @@ function isGoogleImageUrl(value) {
   }
 }
 
+function bytesToDataUrl(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return `data:image/jpeg;base64,${btoa(binary)}`;
+}
+
 async function blobToJpegDataUrl(blob) {
   const bitmap = await createImageBitmap(blob);
   const scale = Math.min(1, PHOTO_MAX_W / bitmap.width);
@@ -112,12 +118,16 @@ async function blobToJpegDataUrl(blob) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   ctx.drawImage(bitmap, 0, 0, w, h);
-  const out = await canvas.convertToBlob({ type: "image/jpeg", quality: PHOTO_QUALITY });
-  const buf = await out.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  return `data:image/jpeg;base64,${btoa(binary)}`;
+  let last = null;
+  for (const quality of PHOTO_QUALITIES) {
+    const out = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    const buf = await out.arrayBuffer();
+    if (buf.byteLength <= PHOTO_MAX_BYTES || quality === PHOTO_QUALITIES[PHOTO_QUALITIES.length - 1]) {
+      return bytesToDataUrl(new Uint8Array(buf));
+    }
+    last = buf;
+  }
+  return last ? bytesToDataUrl(new Uint8Array(last)) : null;
 }
 
 async function fetchAsJpegDataUrl(url) {
@@ -128,9 +138,8 @@ async function fetchAsJpegDataUrl(url) {
   return blobToJpegDataUrl(blob);
 }
 
-/** Fill image_data_url for the first 12 offers when the content-script canvas was tainted. */
+/** Fill image_data_url for every offer when the content-script canvas was tainted. Never drop a captured photo. */
 async function attachMissingPhotos(offers) {
-  let kept = 0;
   const out = [];
   for (const offer of offers) {
     if (!offer || typeof offer !== "object") {
@@ -138,29 +147,21 @@ async function attachMissingPhotos(offers) {
       continue;
     }
     if (typeof offer.image_data_url === "string" && offer.image_data_url.length > 0) {
-      if (kept >= PHOTO_CAP) {
-        const copy = { ...offer };
-        delete copy.image_data_url;
-        out.push(copy);
-      } else {
-        kept += 1;
-        out.push(offer);
-      }
+      out.push(offer);
       continue;
     }
-    if (kept >= PHOTO_CAP || !isGoogleImageUrl(offer.image_url)) {
+    if (!isGoogleImageUrl(offer.image_url)) {
       out.push(offer);
       continue;
     }
     try {
       const dataUrl = await fetchAsJpegDataUrl(offer.image_url);
       if (dataUrl) {
-        kept += 1;
         out.push({ ...offer, image_data_url: dataUrl });
         continue;
       }
     } catch {
-      // Tainted or blocked; keep image_url for the UI.
+      // Tainted or blocked; keep image_url for the UI proxy.
     }
     out.push(offer);
   }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Covered reader",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Reads the Google Shopping grid from your own signed-in browser session.",
   "browser_specific_settings": {
     "gecko": {
@@ -43,11 +43,14 @@
   "host_permissions": [
     "https://www.google.com/*",
     "https://www.google.co.uk/*",
+    "https://*.google.com/*",
     "https://*.gstatic.com/*",
     "https://encrypted-tbn0.gstatic.com/*",
     "https://encrypted-tbn1.gstatic.com/*",
     "https://encrypted-tbn2.gstatic.com/*",
     "https://encrypted-tbn3.gstatic.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://*.ggpht.com/*",
     "https://covered.kawuc.uk/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*"

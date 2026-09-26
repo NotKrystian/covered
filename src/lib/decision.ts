@@ -13,7 +13,7 @@ import type {
   Verdict,
 } from "@/lib/types";
 import { formatPence, parsePricePence } from "@/lib/money";
-import { scoreAgainstBrief, type ProductBrief } from "@/lib/judge/research";
+import type { ProductBrief } from "@/lib/judge/research";
 
 /** One row of the shortlist the judge sees and the UI renders. Wraps an `Offer` or a `Listing`. */
 export type ShortlistItem = {
@@ -40,6 +40,8 @@ export type ShortlistItem = {
   image_url?: string | null;
   /** Compressed jpeg captured in the reader, when the canvas was clean. */
   image_data_url?: string | null;
+  /** Merchant product URL when the reader found one. Never a Google /aclk tracker. */
+  product_url?: string | null;
   /** The original record, kept for the receipt. */
   raw: { kind: "offer"; offer: Offer } | { kind: "listing"; listing: Listing };
 };
@@ -54,7 +56,7 @@ export type DecideResponse = {
   verdict: Verdict;
   decisions: Record<string, Decision>;
   shortlist: ShortlistItem[];
-  /** Every distinct offer from the search, including rows not sent to the judge. */
+  /** Every distinct offer from the search, each with a decision. */
   listings: ShortlistItem[];
   mode: JudgeMode;
   /** Bedrock model id when `mode === "bedrock"`, e.g. "eu.anthropic.claude-haiku-4-5-20251001-v1:0"; "mock" otherwise. */
@@ -66,9 +68,8 @@ export type DecideResponse = {
   learned: boolean;
 };
 
-export const SHORTLIST_MAX = 12;
-/** At most this many sponsored rows make the shortlist. Ads are marked, never preferred. */
-export const SHORTLIST_SPONSORED_MAX = 4;
+/** Judge batches this many listings per Bedrock call so the JSON does not truncate. */
+export const JUDGE_BATCH_SIZE = 6;
 
 export function listingToItem(listing: Listing): ShortlistItem {
   return {
@@ -88,6 +89,7 @@ export function listingToItem(listing: Listing): ShortlistItem {
     image_urls: listing.image_urls,
     image_url: listing.image_urls[0] ?? null,
     image_data_url: null,
+    product_url: listing.url ?? null,
     raw: { kind: "listing", listing },
   };
 }
@@ -114,15 +116,9 @@ export function offerToItem(offer: Offer, index: number): ShortlistItem {
     image_urls: offer.image_urls ?? [],
     image_url: offer.image_url ?? null,
     image_data_url: offer.image_data_url ?? null,
+    product_url: offer.product_url ?? null,
     raw: { kind: "offer", offer },
   };
-}
-
-function byPrice(a: ShortlistItem, b: ShortlistItem): number {
-  if (a.price_pence === null && b.price_pence === null) return 0;
-  if (a.price_pence === null) return 1;
-  if (b.price_pence === null) return -1;
-  return a.price_pence - b.price_pence;
 }
 
 function uniqueOffers(offers: Offer[]): Offer[] {
@@ -140,52 +136,13 @@ function uniqueOffers(offers: Offer[]): Offer[] {
   return unique;
 }
 
-function pickByPriceAndReturns(all: ShortlistItem[]): ShortlistItem[] {
-  const sponsored = all.filter((i) => i.section === "sponsored").slice(0, SHORTLIST_SPONSORED_MAX);
-  const browseWithReturns = all.filter((i) => i.section === "browse" && i.returns !== null);
-  const browseNoReturns = all.filter((i) => i.section === "browse" && i.returns === null);
-  const picked: ShortlistItem[] = [...sponsored];
-  for (const pool of [browseWithReturns, browseNoReturns]) {
-    for (const item of pool) {
-      if (picked.length >= SHORTLIST_MAX) break;
-      picked.push(item);
-    }
-  }
-  return picked.slice(0, SHORTLIST_MAX);
-}
-
-/** Rank listings so the real product (model code, brand, size) makes the judge's 12. */
-function pickByBrief(all: ShortlistItem[], brief: ProductBrief): ShortlistItem[] {
-  const ranked = all
-    .map((item) => ({ item, score: scoreAgainstBrief(item.title, brief) }))
-    .sort((a, b) => b.score - a.score || byPrice(a.item, b.item));
-  if (!ranked.some((row) => row.score > 0)) return pickByPriceAndReturns(all);
-
-  const picked: ShortlistItem[] = [];
-  let sponsored = 0;
-  for (const { item } of ranked) {
-    if (picked.length >= SHORTLIST_MAX) break;
-    if (item.section === "sponsored") {
-      if (sponsored >= SHORTLIST_SPONSORED_MAX) continue;
-      sponsored += 1;
-    }
-    picked.push(item);
-  }
-  return picked;
-}
-
 /**
- * Build the shortlist the judge sees from a grid read.
- *
- * Dedupe on `offer_id` (sponsored) or title + merchant. Nothing is dropped for
- * "not the query" — every distinct offer is returned in `all`. The judge still
- * sees at most `SHORTLIST_MAX` rows (at most `SHORTLIST_SPONSORED_MAX` ads).
- * When a product brief is present, those 12 are the best lexical matches
- * (model code, brand, size), not the 12 cheapest random rows.
+ * Every distinct offer, ad or not. The judge sees all of them (in batches).
+ * `brief` is accepted for call-site compatibility; ranking no longer drops ads.
  */
 export function buildShortlistFromOffers(
   offers: Offer[],
-  brief: ProductBrief | null = null,
+  _brief: ProductBrief | null = null,
 ): {
   items: ShortlistItem[];
   all: ShortlistItem[];
@@ -193,9 +150,18 @@ export function buildShortlistFromOffers(
 } {
   const unique = uniqueOffers(offers);
   const all = unique.map(offerToItem);
-  const picked = brief ? pickByBrief(all, brief) : pickByPriceAndReturns([...all].sort(byPrice));
-  picked.sort(byPrice);
-  return { items: picked, all, deduped: offers.length - unique.length };
+  return { items: all, all, deduped: offers.length - unique.length };
+}
+
+/** Listings that survived identity and the photo check — the pound rule's input. */
+export function survivorsForPremium(
+  items: ShortlistItem[],
+  decisions: Record<string, Decision>,
+): ShortlistItem[] {
+  return items.filter((item) => {
+    const d = decisions[item.id];
+    return Boolean(d && !d.mislisting && d.same_item);
+  });
 }
 
 /** A seller you can enforce against at a venue that honours it. A business badge alone is not this. */

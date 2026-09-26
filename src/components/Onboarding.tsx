@@ -1,0 +1,195 @@
+"use client";
+
+import { useState } from "react";
+import { DEFAULT_USER_SETTINGS } from "@/lib/types";
+import type { UserSettings } from "@/lib/types";
+import { formatPence } from "@/lib/money";
+import { depositWallet, patchMemory, type MemoryState } from "@/lib/client/shop";
+import { PoundField } from "@/components/PoundField";
+
+type Props = {
+  onDone: (next: MemoryState, balancePence: number) => void;
+};
+
+const STEPS = 5;
+
+export function Onboarding({ onDone }: Props) {
+  const [step, setStep] = useState(1);
+  const [name, setName] = useState("");
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
+  const [depositPounds, setDepositPounds] = useState("20");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const next = () => setStep((s) => Math.min(STEPS, s + 1));
+  const back = () => setStep((s) => Math.max(1, s - 1));
+
+  const finish = async (amountPence: number) => {
+    setBusy(true);
+    setError(null);
+    const saved = await patchMemory({
+      display_name: name.trim() || undefined,
+      settings,
+      onboarded: true,
+    });
+    if (!saved) {
+      setBusy(false);
+      setError("Could not save your preferences. Try again.");
+      return;
+    }
+    let balance = saved.memory.balance_pence;
+    if (amountPence > 0) {
+      const deposited = await depositWallet(amountPence);
+      if (!deposited.ok) {
+        setBusy(false);
+        setError(deposited.error);
+        return;
+      }
+      balance = deposited.balance_pence;
+    }
+    setBusy(false);
+    onDone(saved, balance);
+  };
+
+  return (
+    <div className="flex min-h-full flex-col bg-background text-foreground">
+      <header className="px-8 pt-10">
+        <p className="text-sm font-semibold tracking-tight">Covered</p>
+      </header>
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-8 py-16">
+        <p className="mb-10 text-xs uppercase tracking-[0.2em] text-muted">
+          {step} / {STEPS}
+        </p>
+
+        {step === 1 && (
+          <section className="space-y-8">
+            <h1 className="text-4xl font-semibold tracking-tight">What should it call you?</h1>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, 40))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") next();
+              }}
+              placeholder="Your name"
+              className="w-full border-b border-line bg-transparent py-3 text-2xl outline-none placeholder:text-muted focus:border-accent"
+            />
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="space-y-8">
+            <h1 className="text-4xl font-semibold tracking-tight">Pay up to this much more to keep UK buyer rights</h1>
+            <p className="text-muted">Default £10. Covered will spend this extra to buy from a shop you can actually enforce against.</p>
+            <PoundField
+              large
+              label="Protection premium in pounds"
+              pence={settings.protection_premium_pence}
+              onPence={(p) => setSettings({ ...settings, protection_premium_pence: p })}
+              onEnter={next}
+            />
+          </section>
+        )}
+
+        {step === 3 && (
+          <section className="space-y-8">
+            <h1 className="text-4xl font-semibold tracking-tight">Inside 14 days, only switch if you clear this after postage</h1>
+            <p className="text-muted">Default £8. A cheaper find has to beat this after you pay to send the first one back.</p>
+            <PoundField
+              large
+              label="Switch minimum in pounds"
+              pence={settings.switch_minimum_pence}
+              onPence={(p) => setSettings({ ...settings, switch_minimum_pence: p })}
+              onEnter={next}
+            />
+          </section>
+        )}
+
+        {step === 4 && (
+          <section className="space-y-8">
+            <h1 className="text-4xl font-semibold tracking-tight">In plain English</h1>
+            <p className="text-lg leading-relaxed text-foreground">
+              You will pay up to {formatPence(settings.protection_premium_pence)} extra for a UK shop with real returns, and only move
+              after delivery if a cheaper listing still clears {formatPence(settings.switch_minimum_pence)} once postage is paid.
+            </p>
+            <p className="text-lg leading-relaxed text-muted">
+              If the cheapest fleece is a private seller at £28 and JD Sports has the same jacket at £36, Covered pays the extra £8
+              (inside your £10) so you keep 14-day cancellation and a 30-day fault refund.
+            </p>
+          </section>
+        )}
+
+        {step === 5 && (
+          <section className="space-y-8">
+            <h1 className="text-4xl font-semibold tracking-tight">Deposit into the bot wallet</h1>
+            <p className="text-muted">
+              Approve spends this ledger. You can skip with £0 — Approve will not spend until there is money.
+            </p>
+            <label className="block text-sm text-muted">
+              Amount
+              <span className="mt-2 flex items-center overflow-hidden rounded-md border border-line bg-panel-raised text-foreground focus-within:border-accent">
+                <span className="pl-3 text-muted">£</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={depositPounds}
+                  onChange={(e) => setDepositPounds(e.target.value)}
+                  className="tnum w-full bg-transparent px-2 py-3 text-xl font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              </span>
+            </label>
+          </section>
+        )}
+
+        {error && <p className="mt-6 text-sm text-danger">{error}</p>}
+
+        <div className="mt-16 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={back}
+            disabled={step === 1 || busy}
+            className="text-sm text-muted hover:text-foreground disabled:opacity-0"
+          >
+            Back
+          </button>
+          {step < STEPS ? (
+            <button
+              type="button"
+              onClick={next}
+              className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background hover:brightness-110"
+            >
+              Continue
+            </button>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void finish(0)}
+                className="rounded-md border border-line px-5 py-2.5 text-sm text-muted hover:text-foreground disabled:opacity-50"
+              >
+                Skip with £0
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const n = Number(depositPounds);
+                  if (!Number.isFinite(n) || n < 0) {
+                    setError("Enter an amount, or skip with £0.");
+                    return;
+                  }
+                  void finish(Math.round(n * 100));
+                }}
+                className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background hover:brightness-110 disabled:opacity-50"
+              >
+                {busy ? "Saving…" : "Save and continue"}
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

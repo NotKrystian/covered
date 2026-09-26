@@ -111,3 +111,30 @@ test("extractGrid reads the displayed img src as image_url", () => {
   assert.equal(result.sponsored[0].image_url, "https://encrypted-tbn0.gstatic.com/images?q=tbn:test");
   assert.equal(result.sponsored[0].image_data_url, undefined);
 });
+
+test("extractGrid unwraps a browse /goto shop href", () => {
+  const row = {
+    getAttribute: (name) => (name === "aria-label" ? "" : null),
+    querySelector: (selector) => {
+      if (selector === ".gkQHve") return { textContent: "Black fleece" };
+      if (selector === ".lmQWe") return { textContent: "£22.00", getAttribute: () => null };
+      if (selector === ".WJMUdc") return { textContent: "JD Sports" };
+      if (selector === "a.plantl.clickable-card" || selector === "a.plantl") {
+        return { getAttribute: (n) => (n === "href" ? "/goto?url=https%3A%2F%2Fwww.jdsports.co.uk%2Fproduct%2Ffleece" : null) };
+      }
+      return null;
+    },
+    querySelectorAll: () => [],
+    textContent: "Black fleece £22.00 JD Sports",
+  };
+  const document = {
+    querySelectorAll: (selector) => {
+      if (selector === "product-viewer-group ul product-viewer-entrypoint") return [row];
+      return [];
+    },
+    querySelector: () => null,
+  };
+  const result = runExtract(document);
+  assert.equal(result.browse.length, 1);
+  assert.equal(result.browse[0].product_url, "https://www.jdsports.co.uk/product/fleece");
+});

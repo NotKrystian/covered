@@ -1,28 +1,13 @@
 /**
- * Cap and hydrate listing photos. One data URL per offer; at most the first
- * 12 that will be shortlisted, so the decide payload stays small.
+ * Hydrate listing photos. Every offer keeps its data URL; missing Google thumbs
+ * are fetched so the judge can receive image bytes.
  */
 import type { Offer } from "@/lib/types";
-import { SHORTLIST_MAX } from "@/lib/decision";
 import { isGoogleImageUrl, sniffImageFormat } from "@/lib/photo-safety";
 
-export const OFFER_PHOTO_CAP = SHORTLIST_MAX;
-
-const FETCH_TIMEOUT_MS = 4_000;
+const FETCH_TIMEOUT_MS = 5_000;
 const MAX_BYTES = 180_000;
-
-/** Keep `image_data_url` on at most `cap` offers; later ones keep `image_url` only. */
-export function capOfferPhotos(offers: Offer[], cap = OFFER_PHOTO_CAP): Offer[] {
-  let kept = 0;
-  return offers.map((offer) => {
-    if (!offer.image_data_url) return offer;
-    if (kept >= cap) {
-      return { ...offer, image_data_url: null };
-    }
-    kept += 1;
-    return offer;
-  });
-}
+const HYDRATE_CONCURRENCY = 8;
 
 /**
  * Server-side fetch, so it only ever touches Google's image CDNs over https, refuses
@@ -48,25 +33,34 @@ async function fetchAsDataUrl(url: string): Promise<string | null> {
   }
 }
 
-/**
- * For offers that have an `image_url` but no data URL, fetch the first `cap`
- * thumbnails (encrypted-tbn is public) so the judge can receive image bytes.
- */
-export async function hydrateOfferPhotos(offers: Offer[], cap = OFFER_PHOTO_CAP): Promise<Offer[]> {
-  let attached = offers.filter((o) => Boolean(o.image_data_url)).length;
-  const out: Offer[] = [];
-  for (const offer of offers) {
-    if (offer.image_data_url || !offer.image_url || attached >= cap) {
-      out.push(offer);
-      continue;
-    }
-    const dataUrl = await fetchAsDataUrl(offer.image_url);
-    if (dataUrl) {
-      attached += 1;
-      out.push({ ...offer, image_data_url: dataUrl });
-    } else {
-      out.push(offer);
+/** Keep every captured data URL. The reader already squeezed each to ~40 KB. */
+export function capOfferPhotos(offers: Offer[]): Offer[] {
+  return offers;
+}
+
+async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      out[i] = await fn(items[i] as T);
     }
   }
-  return capOfferPhotos(out, cap);
+  const n = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return out;
+}
+
+/**
+ * For offers that have an `image_url` but no data URL, fetch the thumbnail
+ * (encrypted-tbn is public) so the judge can receive image bytes.
+ */
+export async function hydrateOfferPhotos(offers: Offer[]): Promise<Offer[]> {
+  return mapPool(offers, HYDRATE_CONCURRENCY, async (offer) => {
+    if (offer.image_data_url || !offer.image_url) return offer;
+    const dataUrl = await fetchAsDataUrl(offer.image_url);
+    return dataUrl ? { ...offer, image_data_url: dataUrl } : offer;
+  });
 }

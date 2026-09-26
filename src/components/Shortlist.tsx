@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import type { Decision, ReaderError, SearchSource } from "@/lib/types";
 import type { ShortlistItem } from "@/lib/decision";
-import { safeImageDataUrl, safeImageUrl } from "@/lib/photo-safety";
+import { ListingThumb, ListingTitle } from "@/components/ListingMedia";
 
 /** Where the rows on screen came from. Shown as a badge so a saved grid is never passed off as live. */
 export type ShortlistSource = {
@@ -94,47 +93,6 @@ function rowState(item: ShortlistItem, decision: Decision | undefined, chosenId:
   return "neutral";
 }
 
-/** First photo that passes the safety checks: a raster data URL, a local fixture path, or plain https. */
-function listingPhoto(item: ShortlistItem): string | null {
-  for (const candidate of [item.image_data_url, item.image_url, item.image_urls[0]]) {
-    if (!candidate) continue;
-    if (candidate.startsWith("/") && !candidate.startsWith("//")) return candidate;
-    const safe = safeImageDataUrl(candidate) ?? safeImageUrl(candidate);
-    if (safe) return safe;
-  }
-  return null;
-}
-
-function Thumb({ item, dim }: { item: ShortlistItem; dim: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const photo = listingPhoto(item);
-  const src = failed ? null : photo;
-  const local = src?.startsWith("/") ?? false;
-  return (
-    <div
-      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-line bg-panel-raised ${dim ? "opacity-40" : ""}`}
-    >
-      {src && local ? (
-        <Image src={src} alt="" width={80} height={80} unoptimized className="h-full w-full object-cover" />
-      ) : src ? (
-        // Live thumbs are data URLs or encrypted-tbn; next/image is not needed.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt=""
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-[#1a1b20] text-[10px] uppercase tracking-wide text-muted">
-          no photo
-        </div>
-      )}
-    </div>
-  );
-}
-
 function sellerLabel(d: Decision): string {
   const seller: Record<Decision["seller_type"], string> = {
     uk_business: "UK business",
@@ -154,7 +112,6 @@ function sellerLabel(d: Decision): string {
 
 export function Shortlist({ items, listings, decisions, chosenId, loading, source }: Props) {
   const all = listings && listings.length > 0 ? listings : items;
-  const judgedIds = new Set(items.map((i) => i.id));
   const [tab, setTab] = useState<CentreTab>("shortlist");
 
   useEffect(() => {
@@ -209,7 +166,6 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
       <ul className="divide-y divide-line">
         {rows.map((item) => {
           const d = decisions[item.id];
-          const sent = judgedIds.has(item.id);
           const state = rowState(item, d, chosenId);
           const rowClass =
             state === "chosen"
@@ -222,10 +178,10 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
           return (
             <li key={item.id} className={`px-5 py-3 ${rowClass}`}>
               <div className="grid grid-cols-[5rem_minmax(0,1fr)_5.5rem_9rem_9rem_9rem_3.5rem] items-start gap-3 text-sm">
-                <Thumb item={item} dim={state === "rejected"} />
+                <ListingThumb item={item} dim={state === "rejected"} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`truncate font-medium ${strike}`}>{item.title}</span>
+                    <ListingTitle item={item} className={`truncate font-medium ${strike}`} />
                     {item.section === "sponsored" && (
                       <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
                         Ad
@@ -233,11 +189,6 @@ export function Shortlist({ items, listings, decisions, chosenId, loading, sourc
                     )}
                     {item.badge && (
                       <span className="rounded border border-line px-1 text-[10px] text-muted">{item.badge}</span>
-                    )}
-                    {tab === "all" && !sent && (
-                      <span className="rounded border border-line px-1 text-[10px] uppercase tracking-wide text-muted">
-                        not sent to the judge
-                      </span>
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted">

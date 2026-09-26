@@ -1,10 +1,12 @@
 /**
  * Judge — owned by Judge+Memory. Amazon Bedrock via the Converse API.
  *
- * One `ConverseCommand` per shortlist (≤ 12 items), fixture photos attached as
- * image content blocks read from `public/`. Output is JSON validated against
- * `DecisionSchema`; on a validation failure we retry once with the error appended,
- * then fall back to the mock for any item still missing. The pound comparison stays in code.
+ * Batches of 6 listings per `ConverseCommand` so the JSON does not truncate.
+ * Fixture and captured photos are attached as image blocks. Output is JSON
+ * validated against `DecisionSchema`; on a validation failure we retry once
+ * with the error appended, then fall back to the mock for that batch only.
+ * A listing is never called a mislisting unless image bytes were sent.
+ * The pound comparison stays in code.
  *
  * Model, region and the per-process mode probe live in `./bedrock`. Mock mode:
  * `COVERED_MOCK=1`, or when the probe fails (credentials / model access), shown in the trace.
@@ -15,7 +17,7 @@ import type { ImageFormat, Message } from "@aws-sdk/client-bedrock-runtime";
 import { z } from "zod";
 import { DecisionSchema } from "@/lib/types";
 import type { Decision, UserSettings } from "@/lib/types";
-import type { JudgeMode, ShortlistItem } from "@/lib/decision";
+import { JUDGE_BATCH_SIZE, type JudgeMode, type ShortlistItem } from "@/lib/decision";
 import { safeImageDataUrl, sniffImageFormat } from "@/lib/photo-safety";
 import { buildUserContent, SYSTEM_PROMPT } from "./prompt";
 import { mockDecision, mockJudge } from "./mock";
@@ -117,24 +119,53 @@ function mockResult(
   return { decisions, summary, mode: "mock", model: "mock", notes };
 }
 
-/** Judge a shortlist. Never throws: any failure degrades to the mock with a note. */
-export async function judge(
+function chunkItems<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let i = 0; i < items.length; i += size) batches.push(items.slice(i, i + size));
+  return batches;
+}
+
+function attachedPhotoIds(items: ShortlistItem[], loadedById: Map<string, LoadedImage[]>): Set<string> {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if ((loadedById.get(item.id)?.length ?? 0) > 0) ids.add(item.id);
+  }
+  return ids;
+}
+
+async function loadPhotos(items: ShortlistItem[]): Promise<Map<string, LoadedImage[]>> {
+  const loadedById = new Map<string, LoadedImage[]>();
+  for (const item of items) {
+    const pics: LoadedImage[] = [];
+    const candidates: string[] = [];
+    if (item.image_data_url) candidates.push(item.image_data_url);
+    for (const url of item.image_urls) candidates.push(url);
+    for (const url of candidates) {
+      const loaded = await loadImage(url);
+      if (loaded) pics.push(loaded);
+    }
+    loadedById.set(item.id, pics);
+  }
+  return loadedById;
+}
+
+function withoutPhotoMislisting(decision: Decision, hadPhoto: boolean): Decision {
+  if (hadPhoto || !decision.mislisting) return decision;
+  return { ...decision, mislisting: false, photo_reason: null };
+}
+
+/** Judge one batch. Never throws: any failure degrades to the mock for that batch only. */
+async function judgeBatch(
   query: string,
   settings: UserSettings,
   items: ShortlistItem[],
-  context: JudgeContext = { memory: null },
+  context: JudgeContext,
+  batchLabel: string,
 ): Promise<JudgeResult> {
-  const { mode, why } = await judgeMode();
-  if (mode === "mock") {
-    console.log(`[covered/judge] mode=mock (${why}) items=${items.length}`);
-    return mockResult(items, settings, [`mock: ${why}`], context.brief ?? null);
-  }
-
-  console.log(`[covered/judge] mode=bedrock (${why}) items=${items.length}`);
-  const notes: string[] = [`bedrock: ${why}`];
+  const notes: string[] = [];
   const content = await buildUserContent(query, settings, items, loadImage, context.memory, context.brief ?? null);
   const images = content.filter((b) => "image" in b).length;
-  notes.push(`sent ${items.length} items, ${images} photos${context.memory ? ", buyer memory" : ""}`);
+  notes.push(`${batchLabel}: sent ${items.length} items, ${images} photos${context.memory ? ", buyer memory" : ""}`);
 
   const messages: Message[] = [{ role: "user", content }];
   const started = Date.now();
@@ -146,19 +177,17 @@ export async function judge(
       const out = await converse(messages, { system: SYSTEM_PROMPT, maxTokens: JUDGE_MAX_TOKENS, temperature: 0.2 });
       raw = out.text;
       if (out.stopReason === "max_tokens") {
-        notes.push(`attempt ${attempt}: output hit the ${JUDGE_MAX_TOKENS} token cap`);
+        notes.push(`${batchLabel} attempt ${attempt}: output hit the ${JUDGE_MAX_TOKENS} token cap`);
       }
       parsed = parseResponse(raw);
     } catch (err) {
       const message = errorLabel(err);
-      console.warn(`[covered/judge] attempt ${attempt} failed: ${message}`);
-      notes.push(`attempt ${attempt} failed: ${message.slice(0, 160)}`);
+      console.warn(`[covered/judge] ${batchLabel} attempt ${attempt} failed: ${message}`);
+      notes.push(`${batchLabel} attempt ${attempt} failed: ${message.slice(0, 160)}`);
       if (isAccessError(err)) {
-        console.warn("[covered/judge] credentials/access error, falling back to mock");
-        notes.push("mock: Bedrock credentials or model access missing");
+        notes.push(`${batchLabel} mock: Bedrock credentials or model access missing`);
         return mockResult(items, settings, notes, context.brief ?? null);
       }
-      // With a bad body, retry with the error appended. Without one (network, empty), retry as-is.
       if (attempt === 1 && raw) {
         messages.push({ role: "assistant", content: [{ text: raw }] });
         messages.push({
@@ -172,19 +201,23 @@ export async function judge(
       }
     }
   }
-  notes.push(`bedrock took ${Date.now() - started} ms`);
+  notes.push(`${batchLabel}: bedrock took ${Date.now() - started} ms`);
 
+  const photos = await loadPhotos(items);
+  const withBytes = attachedPhotoIds(items, photos);
   const decisions: Record<string, Decision> = {};
   let summary: string;
   if (parsed) {
     for (const d of parsed.decisions) {
       const { id, ...decision } = d;
-      if (items.some((i) => i.id === id)) decisions[id] = decision;
+      if (items.some((i) => i.id === id)) {
+        decisions[id] = withoutPhotoMislisting(decision, withBytes.has(id));
+      }
     }
     summary = parsed.summary;
   } else {
     summary = mockJudge(items, settings, context.brief ?? null).summary;
-    notes.push("bedrock unusable; mock for every item");
+    notes.push(`${batchLabel}: bedrock unusable; mock for this batch`);
   }
 
   let filled = 0;
@@ -194,17 +227,58 @@ export async function judge(
       filled += 1;
     }
   }
-  if (filled > 0 && parsed) notes.push(`${filled} item${filled === 1 ? "" : "s"} missing from the model, mock filled`);
+  if (filled > 0 && parsed) {
+    notes.push(`${batchLabel}: ${filled} item${filled === 1 ? "" : "s"} missing from the model, mock filled`);
+  }
 
-  const resultMode: JudgeMode = parsed ? "bedrock" : "mock";
-  console.log(
-    `[covered/judge] done mode=${resultMode} model=${shortModelName(BEDROCK_MODEL_ID)} mockFilled=${filled} in ${Date.now() - started} ms`,
-  );
   return {
     decisions,
     summary,
-    mode: resultMode,
+    mode: parsed ? "bedrock" : "mock",
     model: parsed ? BEDROCK_MODEL_ID : "mock",
+    notes,
+  };
+}
+
+/** Judge every listing. Batches of `JUDGE_BATCH_SIZE`. A failed batch mocks only that batch. */
+export async function judge(
+  query: string,
+  settings: UserSettings,
+  items: ShortlistItem[],
+  context: JudgeContext = { memory: null },
+): Promise<JudgeResult> {
+  const { mode, why } = await judgeMode();
+  if (mode === "mock") {
+    console.log(`[covered/judge] mode=mock (${why}) items=${items.length}`);
+    return mockResult(items, settings, [`mock: ${why}`], context.brief ?? null);
+  }
+
+  const batches = chunkItems(items, JUDGE_BATCH_SIZE);
+  console.log(`[covered/judge] mode=bedrock (${why}) items=${items.length} batches=${batches.length}`);
+  const notes: string[] = [`bedrock: ${why}`, `judging ${items.length} listings in ${batches.length} batch${batches.length === 1 ? "" : "es"} of ${JUDGE_BATCH_SIZE}`];
+  const decisions: Record<string, Decision> = {};
+  const summaries: string[] = [];
+  let bedrockBatches = 0;
+  const started = Date.now();
+
+  for (const [index, batch] of batches.entries()) {
+    const label = `batch ${index + 1}/${batches.length}`;
+    const result = await judgeBatch(query, settings, batch, context, label);
+    Object.assign(decisions, result.decisions);
+    notes.push(...result.notes);
+    summaries.push(result.summary);
+    if (result.mode === "bedrock") bedrockBatches += 1;
+  }
+
+  const resultMode: JudgeMode = bedrockBatches > 0 ? "bedrock" : "mock";
+  console.log(
+    `[covered/judge] done mode=${resultMode} model=${shortModelName(BEDROCK_MODEL_ID)} batches=${batches.length} bedrock=${bedrockBatches} in ${Date.now() - started} ms`,
+  );
+  return {
+    decisions,
+    summary: summaries[0] ?? mockJudge(items, settings, context.brief ?? null).summary,
+    mode: resultMode,
+    model: resultMode === "bedrock" ? BEDROCK_MODEL_ID : "mock",
     notes,
   };
 }

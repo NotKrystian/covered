@@ -2,9 +2,9 @@
  * POST /api/decide — owned by Judge+Memory.
  *
  * Body: `{ query, settings?, display_name?, source: "fixture" }` or `{ query, settings?, offers: Offer[] }`.
- * Researches the product, builds the shortlist (top 12 by brief, all listings kept),
- * loads this buyer's memory (read-only), asks the Bedrock judge (or the mock),
- * applies the pound rule in code, and returns `DecideResponse` with a visible trace.
+ * Researches the product once, judges every distinct offer (ads included, batches of 6),
+ * loads this buyer's memory (read-only), applies the pound rule to the survivors,
+ * and returns `DecideResponse` with a visible trace.
  * Decide never writes memory. Only approve/override events are purchases.
  */
 import { NextResponse } from "next/server";
@@ -17,11 +17,13 @@ import {
   buildShortlistFromOffers,
   listingToItem,
   premiumPaid,
+  survivorsForPremium,
   type DecideResponse,
   type ShortlistItem,
   type TraceEvent,
 } from "@/lib/decision";
 import { formatPence } from "@/lib/money";
+import { hydrateOfferPhotos } from "@/lib/reader/photos";
 import { getUserId } from "@/lib/memory/identity";
 import {
   DISPLAY_NAME_MAX,
@@ -34,7 +36,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const BodySchema = z.object({
   query: z.string().min(1),
@@ -101,16 +103,15 @@ export async function POST(request: Request) {
     listings = items;
     log("read_fixtures", `${items.length} listings for "${body.query}"`);
   } else {
-    const offers = body.offers ?? [];
+    const offers = await hydrateOfferPhotos(body.offers ?? []);
     const built = buildShortlistFromOffers(offers, researched.brief);
     items = built.items;
-    const judgedIds = new Set(items.map((i) => i.id));
-    listings = built.all.map((item) => (judgedIds.has(item.id) ? item : { ...item, image_data_url: null }));
+    listings = built.all;
     const sponsored = items.filter((i) => i.section === "sponsored").length;
     const withPhotos = items.filter((i) => Boolean(i.image_data_url) || i.image_urls.length > 0).length;
     log(
       "read_grid",
-      `${gridLabel(body.grid)}: ${offers.length} offers → ${listings.length} listings, ${items.length} sent to the judge (${built.deduped} duplicates dropped, ${sponsored} ads marked, ${withPhotos} with photos)`,
+      `${gridLabel(body.grid)}: ${offers.length} offers → ${listings.length} listings, all sent to the judge (${built.deduped} duplicates dropped, ${sponsored} ads included, ${withPhotos} with photos)`,
     );
   }
 
@@ -146,17 +147,18 @@ export async function POST(request: Request) {
     `${kept} kept, ${mislistings} mislisting${mislistings === 1 ? "" : "s"}${notItem ? `, ${notItem} not the item` : ""} [${judged.mode}: ${judged.model}]`,
   );
 
-  const verdict = applyPremium(items, judged.decisions, settings);
-  const chosen = items.find((i) => i.id === verdict.chosen_id);
+  const survivors = survivorsForPremium(listings, judged.decisions);
+  const verdict = applyPremium(listings, judged.decisions, settings);
+  const chosen = listings.find((i) => i.id === verdict.chosen_id);
   log(
     "apply_premium",
-    `${formatPence(settings.protection_premium_pence)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"}`,
+    `${formatPence(settings.protection_premium_pence)} → ${chosen ? `${chosen.id} (${chosen.merchant} ${chosen.price_label})` : "nothing"} (${survivors.length} survivors)`,
   );
 
   const response: DecideResponse = {
     verdict,
     decisions: judged.decisions,
-    shortlist: items,
+    shortlist: survivors,
     listings,
     mode: judged.mode,
     model: judged.model,

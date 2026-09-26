@@ -177,6 +177,7 @@ http {
   types_hash_max_size 4096;
   sendfile on;
   keepalive_timeout 65;
+  client_max_body_size 8m;
   server {
     listen 443 ssl;
     listen [::]:443 ssl;

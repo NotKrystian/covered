@@ -7,6 +7,7 @@
 import { cookies } from "next/headers";
 
 export const UID_COOKIE = "covered_uid";
+export const ONBOARDED_COOKIE = "covered_onboarded";
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,4 +34,16 @@ export async function getUserId(): Promise<{ userId: string; isNew: boolean }> {
 export async function clearUserId(): Promise<void> {
   const store = await cookies();
   store.delete(UID_COOKIE);
+  store.delete(ONBOARDED_COOKIE);
+}
+
+export async function setOnboardedCookie(): Promise<void> {
+  const store = await cookies();
+  store.set(ONBOARDED_COOKIE, "1", {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: ONE_YEAR_SECONDS,
+  });
 }

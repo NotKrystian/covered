@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { OfferSchema } from "./types";
-import { IMAGE_DATA_URL_MAX, isGoogleImageUrl, safeImageDataUrl, safeImageUrl, sniffImageFormat } from "./photo-safety";
+import { IMAGE_DATA_URL_MAX, isGoogleImageUrl, isProxyImageUrl, safeImageDataUrl, safeImageUrl, sniffImageFormat } from "./photo-safety";
 
 const JPEG_DATA_URL = `data:image/jpeg;base64,${"A".repeat(400)}`;
 const TBN = "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcQ";
@@ -32,6 +32,13 @@ test("safeImageUrl keeps plain https only", () => {
   ]) {
     assert.equal(safeImageUrl(bad), null, bad);
   }
+});
+
+test("isProxyImageUrl is only gstatic and googleusercontent", () => {
+  assert.equal(isProxyImageUrl(TBN), true);
+  assert.equal(isProxyImageUrl("https://lh3.googleusercontent.com/abc=w200"), true);
+  assert.equal(isProxyImageUrl("https://lh3.ggpht.com/abc"), false);
+  assert.equal(isProxyImageUrl("https://cdn.shop.co.uk/fleece.jpg"), false);
 });
 
 test("isGoogleImageUrl gates what the server will fetch", () => {

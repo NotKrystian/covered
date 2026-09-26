@@ -87,6 +87,8 @@ export const MemorySchema = z.object({
   balance_pence: z.number().int().nonnegative().default(0),
   /** Newest last. Capped at DEPOSITS_MAX. */
   deposits: z.array(DepositSchema).max(DEPOSITS_MAX).default([]),
+  /** True after the first-visit onboarding flow finishes. */
+  onboarded: z.boolean().default(false),
   /** ISO 8601 timestamp. */
   updated_at: z.string(),
 });
@@ -101,6 +103,7 @@ export function emptyMemory(userId: string): Memory {
     orders: [],
     balance_pence: 0,
     deposits: [],
+    onboarded: false,
     updated_at: new Date().toISOString(),
   };
 }

@@ -17,10 +17,11 @@ export type OfferSection = z.infer<typeof OfferSectionSchema>;
  * One offer read from the Google Shopping grid (`udm=28`) first paint.
  * Mirrors the Record in the plan. `price` is the string as shown ("£249.00");
  * `price_pence` is the parsed integer when the string parsed cleanly.
- * Browse records omit `offer_id`, `merchant_domain`, `specs`, `product_url`.
- * `image_urls` is fixtures (and any extra remote thumbs). Live/extension rows also
- * carry `image_url` (the displayed src, including encrypted-tbn) and optionally
- * `image_data_url` (a compressed jpeg captured in the reader's page).
+ * Browse records often omit `offer_id`, `merchant_domain`, `specs`. Live rows
+ * carry `product_url` when the reader can unwrap a shop href (plantl, `/goto?url=`,
+ * or the product viewer). `image_urls` is fixtures (and any extra remote thumbs).
+ * Live/extension rows also carry `image_url` (the displayed src, including
+ * encrypted-tbn) and `image_data_url` (a compressed jpeg captured in the reader).
  */
 export const OfferSchema = z.object({
   section: OfferSectionSchema,
@@ -58,7 +59,7 @@ export const OfferSchema = z.object({
   rating_count: z.string().nullable(),
   /** Sponsored only: spec chips with the "·" separators dropped. */
   specs: z.array(z.string()).optional(),
-  /** Sponsored only: shop URL from the clickable card. Never the /aclk tracker. */
+  /** Shop URL from the clickable card (sponsored plantl, browse /goto, or viewer). Never the /aclk tracker. */
   product_url: z.string().optional(),
   /** Browse only: "& more" text meaning this price is one of several. */
   more_merchants: z.string().nullable().optional(),

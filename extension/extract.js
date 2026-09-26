@@ -111,6 +111,41 @@ function extractGrid() {
     return undefined;
   };
 
+  /** Shop href from a card: plantl, `/goto?url=`, or the product viewer as last resort. */
+  const findProductUrl = (root) => {
+    const hrefs = [];
+    const add = (el) => {
+      if (!el) return;
+      const href = el.getAttribute("href");
+      if (href) hrefs.push(href);
+    };
+    add(root.querySelector("a.plantl.clickable-card"));
+    add(root.querySelector("a.plantl"));
+    for (const a of Array.from(root.querySelectorAll('a[href*="/goto"], a[href*="adurl="], a[href*="/url?"]'))) {
+      add(a);
+    }
+    add(root.querySelector("a[href*='/shopping/product']"));
+    if (typeof root.getAttribute === "function" && root.getAttribute("href")) add(root);
+    for (const href of hrefs) {
+      const unwrapped = unwrapProductUrl(href);
+      if (unwrapped) return unwrapped;
+    }
+    for (const href of hrefs) {
+      try {
+        const url = new URL(href, location.href);
+        if (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          /\/shopping\/product/i.test(url.pathname)
+        ) {
+          return url.toString();
+        }
+      } catch {
+        // Ignore unparseable hrefs.
+      }
+    }
+    return undefined;
+  };
+
   const bump = (hits, key, matched) => {
     if (matched) hits[key] = (hits[key] ?? 0) + 1;
   };
@@ -148,11 +183,12 @@ function extractGrid() {
     return fallback;
   };
 
-  /** Scale to max width 360 and export jpeg. Returns null if the canvas is tainted or the img is not loaded. */
+  /** Scale to max width 480 and export jpeg, lowering quality until ~40 KB. */
   const captureJpegDataUrl = (img) => {
     try {
       if (!img || !img.complete || !img.naturalWidth || img.naturalWidth < 8) return null;
-      const maxW = 360;
+      const maxW = 480;
+      const maxBytes = 40 * 1024;
       const scale = Math.min(1, maxW / img.naturalWidth);
       const w = Math.max(1, Math.round(img.naturalWidth * scale));
       const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -162,8 +198,17 @@ function extractGrid() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return null;
       ctx.drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-      return dataUrl && dataUrl.startsWith("data:image/jpeg") ? dataUrl : null;
+      const qualities = [0.7, 0.55, 0.4, 0.28, 0.18];
+      let last = null;
+      for (const q of qualities) {
+        const dataUrl = canvas.toDataURL("image/jpeg", q);
+        if (!dataUrl || !dataUrl.startsWith("data:image/jpeg")) continue;
+        last = dataUrl;
+        const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        const bytes = Math.floor(b64.length * 0.75);
+        if (bytes <= maxBytes) return dataUrl;
+      }
+      return last;
     } catch {
       return null;
     }
@@ -175,18 +220,6 @@ function extractGrid() {
     offer.image_url = found.src;
     const dataUrl = captureJpegDataUrl(found.img);
     if (dataUrl) offer.image_data_url = dataUrl;
-  };
-
-  const capDataUrls = (offers, max) => {
-    let kept = 0;
-    for (const offer of offers) {
-      if (!offer.image_data_url) continue;
-      if (kept >= max) {
-        delete offer.image_data_url;
-      } else {
-        kept += 1;
-      }
-    }
   };
 
   // ---- sponsored row ----------------------------------------------------
@@ -302,7 +335,7 @@ function extractGrid() {
 
     const card = unit.querySelector("a.plantl.clickable-card");
     bump(sponsoredHits, "card:a.plantl.clickable-card", card !== null);
-    const productUrl = unwrapProductUrl(card?.getAttribute("href") ?? null);
+    const productUrl = findProductUrl(unit) ?? unwrapProductUrl(card?.getAttribute("href") ?? null);
     bump(sponsoredHits, "product_url:unwrapped", productUrl !== undefined);
 
     if (!title && !price) continue; // Not an offer card (e.g. a header inside the group).
@@ -343,6 +376,7 @@ function extractGrid() {
     "returns:.l9Ycjb",
     "rating:.yi40Hd",
     "rating_count:.RDApEe",
+    "product_url:shop",
   ]);
   let browseRows = Array.from(
     document.querySelectorAll("product-viewer-group ul product-viewer-entrypoint"),
@@ -414,6 +448,9 @@ function extractGrid() {
       merchant = m ? clean(m[1]) : null;
     }
 
+    const productUrl = findProductUrl(row);
+    bump(browseHits, "product_url:shop", productUrl !== undefined);
+
     if (!title && !price) continue;
 
     const browseOffer = {
@@ -430,14 +467,13 @@ function extractGrid() {
       more_merchants: moreMerchants,
       summary,
     };
+    if (productUrl) browseOffer.product_url = productUrl;
     attachCardPhoto(row, browseOffer);
     browse.push(browseOffer);
   }
 
   const more = document.querySelector("a.o5sVme");
   const moreHref = more?.getAttribute("href") ?? null;
-
-  capDataUrls([...sponsored, ...browse], 12);
 
   return {
     sponsored,

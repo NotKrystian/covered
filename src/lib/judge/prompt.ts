@@ -20,7 +20,7 @@ RIGHTS CARD (UK):
 - Overseas business: statutory rights may exist on paper but enforcement is weak. Say that. Do not say there are no rights. A "business" or "shop" badge is not extra protection. Buyer-pays-return-to-overseas-warehouse means a refund is unlikely in practice.
 - Marketplace third-party UK business: the contract is with that trader, so CRA and cooling-off apply. Platform buyer-protection (eBay Money Back, Amazon A-to-z) is extra, not a substitute; its absence does not remove the statute. Name the platform policy only as extra.
 - Marketplace with a written money-back / buyer-protection policy (e.g. eBay Money Back Guarantee): that is venue policy, not statute. Say which one you are relying on as extra.
-- Sponsored rows are ads. A "Sale" badge, a struck-through price, or the top slot is never a reason to buy.
+- Sponsored rows are ads. Set sponsored=true and you may mention that in the sentence. Never skip, downgrade, or refuse to analyse a listing because it is an ad. A "Sale" badge, a struck-through price, or the top slot is never a reason to buy — and being an ad is never a reason to skip.
 
 PRODUCT: a "Product we are buying" block may be present. That is the researched identity of the request — use it, do not treat the query as an unknown string. A listing is the same item if it is that product, even when the title uses a marketing name or a longer model code (UE85N990F, "85 inch Neo QLED") instead of the exact string the user typed. Do not reject a television because the title does not contain the raw query. Reject only when category, size, or model family actually conflicts. Size must match (85 vs 75 is not the same). A case, cover, soundbar, stand or mount is not the product unless the request is for that accessory.
 
