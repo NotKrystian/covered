@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+*.env
+playwright-report
+test-results
+tsconfig.tsbuildinfo
+next-env.d.ts
+deploy
+infra
+scripts
+.cursor
+.DS_Store
+README.md
