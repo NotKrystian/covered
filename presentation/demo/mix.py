@@ -67,7 +67,7 @@ def main():
     two = (f"{ln}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
            f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
     mix = OUT / "mix.wav"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(pre), "-af", two + ",aresample=48000", "-c:a", "pcm_s24le", str(mix)], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(pre), "-af", two + ",aresample=192000,alimiter=limit=0.708:attack=1:release=50:level=false,aresample=48000", "-c:a", "pcm_s24le", str(mix)], check=True)
 
     video = OUT / "video.mp4"
     final = ROOT / "out" / "covered-demo.mp4"
