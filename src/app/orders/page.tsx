@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { OrderRecord } from "@/lib/memory";
 import { formatPence } from "@/lib/money";
@@ -33,6 +33,8 @@ export default function OrdersPage() {
   const [balancePence, setBalancePence] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Row whose order id, query and section are shown (one at a time). */
+  const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -93,42 +95,71 @@ export default function OrdersPage() {
                   <thead className="bg-panel text-[11px] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-4 py-2 font-medium">Time</th>
-                      <th className="px-4 py-2 font-medium">Order</th>
-                      <th className="px-4 py-2 font-medium">Query</th>
                       <th className="px-4 py-2 font-medium">Title</th>
                       <th className="px-4 py-2 font-medium">Merchant</th>
-                      <th className="px-4 py-2 font-medium">Section</th>
                       <th className="px-4 py-2 text-right font-medium">Price</th>
+                      <th className="px-4 py-2">
+                        <span className="sr-only">Details</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {orders.map((o) => (
-                      <tr
-                        key={o.id}
-                        className={`cursor-pointer ${o.id === selectedId ? "bg-accent-soft" : "bg-background"}`}
-                        onClick={() => setSelectedId(o.id)}
-                      >
-                        <td className="tnum whitespace-nowrap px-4 py-2.5 text-muted">{when(o.t)}</td>
-                        <td className="max-w-[8rem] truncate px-4 py-2.5 font-mono text-xs text-muted" title={o.id}>
-                          {o.id}
-                        </td>
-                        <td className="max-w-[12rem] truncate px-4 py-2.5 text-muted" title={o.query}>
-                          {o.query}
-                        </td>
-                        <td className="max-w-[16rem] truncate px-4 py-2.5" title={o.title}>
-                          {o.cancelled_at ? (
-                            <span className="text-muted">
-                              <span className="line-through">{o.title}</span> · switched
-                            </span>
-                          ) : (
-                            o.title
+                    {orders.map((o) => {
+                      const open = detailsId === o.id;
+                      const rowTone = o.id === selectedId ? "bg-accent-soft" : "bg-background";
+                      return (
+                        <Fragment key={o.id}>
+                          <tr className={`cursor-pointer ${rowTone}`} onClick={() => setSelectedId(o.id)}>
+                            <td className="tnum whitespace-nowrap px-4 py-2.5 text-muted">{when(o.t)}</td>
+                            {/* w-full + max-w-0: the title takes whatever width is left and truncates. */}
+                            <td className="w-full max-w-0 truncate px-4 py-2.5" title={o.title}>
+                              {o.cancelled_at ? (
+                                <span className="text-muted">
+                                  <span className="line-through">{o.title}</span> · switched
+                                </span>
+                              ) : (
+                                o.title
+                              )}
+                            </td>
+                            <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted" title={o.merchant}>
+                              {o.merchant}
+                            </td>
+                            <td className="tnum px-4 py-2.5 text-right font-semibold">{formatPence(o.price_pence)}</td>
+                            <td className="px-4 py-2.5 text-right">
+                              <button
+                                type="button"
+                                aria-expanded={open}
+                                onClick={(e) => {
+                                  e.stopPropagation(); // details only; leave the chat's selected order alone
+                                  setDetailsId(open ? null : o.id);
+                                }}
+                                className="text-xs text-muted hover:text-foreground"
+                              >
+                                {open ? "Hide" : "Details"}
+                              </button>
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr className={rowTone}>
+                              <td colSpan={5} className="px-4 pb-3 pt-0">
+                                <dl className="grid gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-[auto_minmax(0,1fr)]">
+                                  <dt>Order</dt>
+                                  <dd className="truncate font-mono text-foreground" title={o.id}>
+                                    {o.id}
+                                  </dd>
+                                  <dt>Query</dt>
+                                  <dd className="truncate text-foreground" title={o.query}>
+                                    {o.query}
+                                  </dd>
+                                  <dt>Section</dt>
+                                  <dd className="text-foreground">{o.section}</dd>
+                                </dl>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted">{o.merchant}</td>
-                        <td className="px-4 py-2.5 text-muted">{o.section}</td>
-                        <td className="tnum px-4 py-2.5 text-right font-semibold">{formatPence(o.price_pence)}</td>
-                      </tr>
-                    ))}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
